@@ -240,20 +240,23 @@ The public landing/marketing page (built 2026-06-15). **Not part of the app desi
 [README](./README.md) the system is scoped to the app, so this page reuses the brand tokens (`background`,
 `card`, `primary`/ember, `border`, `muted-foreground`) and Geist/Geist Mono **but adopts a larger marketing
 type scale** (62px hero, 38px section heads) outside the 14-style app ramp. Single `Landing` wrapper frame
-(`730:3`, 1440-wide vertical auto-layout) holding the sections below in order. Hero + onboarding previews are
-**rasterized exports** of real app screens (`54:3` home, `703:1335` onboarding) set as `IMAGE` fills — not
-live instances, so they won't auto-update if those screens change (re-export to refresh).
+(`730:3`, 1440-wide vertical auto-layout) holding the sections below in order. The two previews are
+**rasterized exports** of real app screens (`54:3` home, `320:4252` history) set as `IMAGE` fills — not
+live instances, so they won't auto-update if those screens change (re-export to refresh). **Copy de-brands
+deliberately** — no `chezmoi` / `GitHub` / `host` / `machine` mentions (per
+[brand-and-vocabulary](../brand-and-vocabulary.md): the product stands on its own; chezmoi credit lives in
+the repo README only). The GitHub octocat icon is kept as a neutral "source" mark; its label is "View source".
 
-| Section              | ID         | Holds                                                                                       |
-| -------------------- | ---------- | ------------------------------------------------------------------------------------------- |
-| Nav                  | `731:2`    | `Wordmark` (imported) + links + GitHub/Download buttons                                     |
-| Hero                 | `732:2`    | eyebrow pill · two-tone headline (`any environment` in ember) · subline · dual CTA          |
-| Hero media           | `733:2`    | `App preview` (`743:690`) — exported `54:3` home as image fill, border + ember glow         |
-| Value props          | `737:2`    | 3 cards (ember icon tiles): Private by design / Every environment in sync / No command line |
-| Feature — Onboarding | `745:129`  | text + green-check list left · `Onboarding preview` (exported `703:1335`) right             |
-| How it works         | `737:9546` | 3 numbered ember-badge steps                                                                |
-| CTA band             | `738:2`    | raised card + ember glow · "your environment, anywhere." · dual CTA                         |
-| Footer               | `739:2`    | `Wordmark` clone · tagline · 3 link columns · legal/credit row                              |
+| Section            | ID         | Holds                                                                                           |
+| ------------------ | ---------- | ----------------------------------------------------------------------------------------------- |
+| Nav                | `731:2`    | `Wordmark` (imported) + links + View source / Download buttons                                  |
+| Hero               | `732:2`    | eyebrow pill · two-tone headline (`any environment` in ember) · subline · dual CTA              |
+| Hero media         | `733:2`    | `App preview` (`743:690`) — exported `54:3` home as image fill, border + ember glow             |
+| Value props        | `737:2`    | 3 cards (ember icon tiles): Private by design / Every environment in sync / No command line     |
+| Feature — Managing | `745:129`  | ongoing-management copy + green-check list left · `History preview` (exported `320:4252`) right |
+| How it works       | `737:9546` | 3 numbered ember-badge steps                                                                    |
+| CTA band           | `738:2`    | raised card + ember glow · "your environment, anywhere." · dual CTA                             |
+| Footer             | `739:2`    | `Wordmark` clone · tagline · 3 link columns · legal/credit row                                  |
 
 > Icons are inline `createNodeFromSvg` lucide vectors (download/github/shield/refresh/app-window/check),
 > not Nova instances — acceptable here since marketing is outside the app icon convention.
