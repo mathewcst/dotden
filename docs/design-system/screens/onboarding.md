@@ -62,11 +62,13 @@ The screen is one component with a `State` variant; the preflight result drives 
 | State                | Trigger                          | Surface                                                                                                                                                                                                                                                                                           |
 | -------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Idle**             | default                          | URL `Input` (placeholder `https://… or git@…`) + disabled-until-nonempty **Connect**                                                                                                                                                                                                              |
-| **Checking**         | submit → `git ls-remote` running | spinner + "Checking access to `<host>`…", input locked                                                                                                                                                                                                                                            |
-| **Reachable**        | `ls-remote` ok                   | brief ✓ "Connected to `<host>`" → auto-advances to clone/branch                                                                                                                                                                                                                                   |
-| **Credential error** | `ls-remote` auth/host failure    | **`Banner` Error tone** (reuse Batch-C/E `Banner`): provider-agnostic _"dotden couldn't reach `<host>` with your git credentials. Set up an SSH key or token for `<host>`, then retry."_ + **Retry** + a "▸ git credentials help" expander. dotden **does not** try to fix auth itself (V1-Lean). |
+| **Checking**         | submit → `git ls-remote` running | spinner + "Checking access to `<host>`…", input locked, **+ a `Cancel` button** (the preflight has a timeout and must be user-cancellable — it may block on a GUI credential prompt; ADR 0020 says prevent hangs with timeout/cancel, never by suppressing prompts).                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Reachable**        | `ls-remote` ok                   | brief ✓ "Connected to `<host>`" → auto-advances to clone/branch                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Credential error** | `ls-remote` auth/host failure    | **`Banner` Error tone** (reuse Batch-C/E `Banner`): provider-agnostic headline _"dotden couldn't reach `<host>` with your git credentials."_ Then **enumerate likely causes, never assert one** (the error is genuinely ambiguous — e.g. GitHub returns `Repository not found` for both wrong-URL and no-access): a short bulleted list — _the URL is wrong · the repo doesn't exist · your active credentials don't have access._ Recovery: _"Set up an SSH key or token for `<host>`, then retry."_ Plus a **static** GitHub-CLI hint (v1 — no detection): _"Using the GitHub CLI? Check `gh auth status` and switch with `gh auth switch`."_ Controls: **Retry** + **Cancel/back** + a **"▸ Details"** disclosure exposing the sanitized non-secret diagnostics — **host, URL scheme, exit code, sanitized stderr** (read-only mono block). dotden **does not** try to fix auth itself, holds no token, and never auto-runs `gh auth switch` (V1-Lean). _(The dynamic "authenticating as account `X`" enrichment is **v1.1** — now built as the **`State=CredentialErrorGhCli`** variant of `OBContent/ConnectURL` (`717:1474`); see _v1.1 onboarding-gate surfaces_ below.)_ |
 
 ### Post-clone branching (auto-detect — no upfront new/returning question)
+
+> **Scope (per ADR 0022, decided 2026-06-15):** **v1 ships only the _empty_ (greenfield) and _already-has-a-Den_ (returning) routes** below. The **benign-adopt (C1, user picks which files to track)** and **foreign-chezmoi hard-refuse (C2)** routes are the **feature-detection gate scheduled for v1.1**. C1/C2 **Figma designs are now built** (2026-06-15) — see _v1.1 onboarding-gate surfaces_ below. C1 is **locked** as a per-file pick (the auto-`.chezmoiignore` shortcut in the greenfield bullet below is **not** the C1 treatment); the picker's **default selection (unchecked vs checked) + grouping are still being grilled** and the built screen is a clean first draft (unchecked-by-default + Select-all), flagged on-canvas.
 
 After a successful clone dotden inspects the source dir and routes:
 
@@ -83,6 +85,50 @@ After a successful clone dotden inspects the source dir and routes:
   age-encrypted, `.chezmoiexternal`)\* → **blocked**: a `Banner`/dialog _"This repo already has a chezmoi
   setup. Adopting an existing chezmoi repo is coming in a later version — connect an empty repo for
   now."_ This is the v1↔v2 boundary (CONTEXT "greenfield-only"); only _who creates the empty repo_ moved.
+
+### v1.1 onboarding-gate surfaces (built 2026-06-15)
+
+> Built per the v1.1 handoff (ADR 0022). All three are **additive** — v1's A+B screens were not
+> touched. They live in a dedicated **`v1.1 · Onboarding gate`** section (`703:1333`) on page
+> `04 · Screens — Onboarding`, below the v1 sections; new/edited components live in the **Onboarding**
+> section of page `02 · Components`. Each screen reuses `OnboardingShell` with the nested menu swapped to
+> **`OnboardingMenu/V1`** at the relevant step.
+
+- **C2 — foreign-chezmoi hard-refuse.** Screen `703:1334` (Connect step, menu `Step=3`): the
+  `ConnectURL` backdrop dimmed under a **`Scrim`** (black @0.45) + a **`Dialog`** (`Tone=Default` — a
+  _boundary_, not destructive-red) `704:1395`. Title _"This repo already has a chezmoi setup"_; body
+  _"dotden doesn't manage those features yet — full adoption is coming in a later version. Connect an
+  empty repo, or keep managing this one with the chezmoi CLI for now."_ **One** primary action **Connect
+  a different repo** (back to ConnectURL); the Dialog's second (Cancel) button is hidden — **no
+  proceed-anyway** (hard refuse). Reuses `Dialog`; no new component.
+- **C1 — benign-adopt per-file picker.** New component **`OBContent/AdoptExisting`** (`706:1582`),
+  forked from `OBContent/Discover` (detach→edit→promote, so all token bindings survive). Screen
+  `713:1414` (menu `Step=4`, the Discover-equivalent slot). Lists the repo's existing **benign** files as
+  `ListRow` instances with `HasCheckbox` (`DOTFILES` + `REPO FILES` groups), **all unchecked by default**
+  + a **Select all** affordance; ember **Track selected** advance. _Default-selection + grouping are
+  still being grilled_ — flagged in an on-canvas draft note (`708:9436`). No `Warn`/secret rows (C1 is
+  benign-only by definition; anything foreign → C2).
+- **gh-CLI account enrichment on CredentialError.** New variant **`State=CredentialErrorGhCli`**
+  (`717:1474`) appended to the `OBContent/ConnectURL` set (`607:1309`) — a variant/addition, not a new
+  screen. Screen `717:9517` (menu `Step=3`). This variant **replaces the inline `Banner` with a single
+  unified error box** (`Error` frame `725:1485`) so the reasons read as one error, not a banner + a
+  separate callout: a headline row (red `TriangleAlert` + _"Can't reach the repository"_ in `dd/ink/100`)
+  on top, then a **bulleted reasons list**:
+  - _"Set up an SSH key or token for `<host>`, then retry."_ (the recovery line)
+  - _"git is authenticating to `<host>` via the GitHub CLI as **`<account>`** — if the repo belongs to a
+    different account, run `gh auth switch` and retry."_ — the v1.1 enrichment, **one lead among the
+    causes, never a verdict**. **Read-only**: `gh auth switch` is mono text only; dotden never auto-runs
+    it. Account + command emphasized in `dd/ink/100` + `Geist Mono`; everything else muted-foreground.
+    Layout is provider-generic (no GitHub branding) so a future `glab` fits the same slot.
+
+  The box is the **same deep error surface as the v1 Banner** (`dd/red/950` `18:18` fill + faint
+  `destructive` `22:16` @30% border, muted-foreground body) — readable on the dark-red surface. Do
+  **not** use the bright `destructive` red as a fill (it's a stroke/icon/text token — it blew out
+  readability in an early pass). The `▸ git credentials help` disclosure stays below the box. _(The v1
+  `CredentialError` variant keeps the plain `Banner`; only this gh variant uses the unified box.)_ `gh auth switch` is shown as **mono text only**;
+  dotden never auto-runs it. Body text is neutral muted-foreground; only the account + command are
+  emphasized in `dd/ink/100` + `Geist Mono` (no GitHub branding in layout) so a future `glab` etc. fits
+  the same slot.
 
 **Screen-level reusable components built for this flow:**
 

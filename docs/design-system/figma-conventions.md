@@ -419,3 +419,54 @@ replicates the _host OS_, not the design system. Consequences for QA:
   near-white SOLID fills are intentional _glyphs_ (the menubar tray dot, the notification app-icon dot)
   — `type==='ELLIPSE'`, never an opaque-white _container/frame_ fill. Each set's `.description` states
   the exception so it's discoverable in Dev Mode.
+
+### SECTION children are section-RELATIVE under the plugin API (and ride along when you move the section) — refinement of the "doesn't move children" gotcha above (learned building the v1.1 gate, 2026-06-15)
+
+The earlier "_Moving a `SECTION` does NOT move its children_" gotcha did **not** reproduce in v2.2.50 for
+**API-appended** children. Building the `v1.1 · Onboarding gate` section: after `sec.appendChild(child)`
++ `child.x = 100`, the child's `child.y` getter returned a **section-relative** value (`100`) while its
+`absoluteBoundingBox.y` was `section.y + 100`. Setting `sec.y = 1980` then moved the child's
+`absoluteBoundingBox.y` by the same delta (children rode along; `child.y` stayed `100`). So for children
+you add via the API, treat coords as **section-relative** and just move the section. (The old gotcha may
+still hold for children that pre-existed with stored absolute coords, or for an older API — so **don't
+trust either blindly: read `absoluteBoundingBox` before _and_ after a test move** and adjust only if they
+didn't follow.) Also note `get_metadata` reports section-child coords relative to the section, which
+matches the plugin getter — but page-level sections report absolute.
+
+### Add a new variant VALUE to a live COMPONENT_SET via detach → promote → append
+
+To add `State=CredentialErrorGhCli` to the live `OBContent/ConnectURL` set: instance the closest existing
+variant (`CredentialError`) → `detachInstance()` (keeps all token bindings, unlike `clone()`) → edit →
+`figma.createComponentFromNode(frame)` → name it `State=<NewValue>` → `set.appendChild(component)`. Figma
+folds it in as a new value of the existing `State` axis (the set went 4→5 variants, one shared `State`
+prop). Existing on-screen instances are untouched. Pairs with the detach-preserves-bindings recipe below.
+
+### A Button instance keeps its baked FIXED width when you override the label → set `layoutSizingHorizontal='HUG'` to re-fit
+
+Overriding a footer Button instance's `Label#39:0` from "Track" to "Connect a different repo" left the
+instance at its **baked 58px width**, clipping the new label ("Connect a differe…"). The instance's own
+internal layout hugs the label, but its width **within the parent auto-layout** was `FIXED`. Fix: set the
+instance's `layoutSizingHorizontal = 'HUG'` (it's an auto-layout frame child, so HUG is valid) and it
+re-fits to the longer label.
+
+### `setBoundVariableForPaint` resets the paint's `opacity` to 1 — set `.opacity` AFTER binding, then assign
+
+Despite the earlier "set opacity in the object before binding" note, in practice
+`setBoundVariableForPaint({…, opacity: 0.09}, 'color', v)` returned a paint with **`opacity: 1`** (a 9%
+tint rendered as a full-strength blowout). Reliable recipe: build → bind → **mutate `.opacity` on the
+returned paint object** → assign the array (no spread):
+```js
+let p = { type:'SOLID', color:{r:.85,g:.36,b:.27}, opacity:.09 }
+p = figma.variables.setBoundVariableForPaint(p, 'color', destructiveVar)
+p.opacity = 0.09            // re-assert AFTER binding (binding cleared it)
+node.fills = [p]            // assign directly — a spread here would drop it again
+```
+
+### `destructive` (bright red `22:16`) is a stroke/icon/text token — error SURFACES use `dd/red/950` (`18:18`)
+
+The bright `destructive` red is for icon strokes, borders, and text — **never a fill** for an error
+surface. Using it as a background (even tinted) blows out readability of text on top. The canonical
+error-**background** is `dd/red/950` (`18:18`, deep warm-dark red) — the `Banner` `Tone=Error` uses
+`18:18` fill + muted-foreground (`22:13`) body text. Match that for any "this relates to the error"
+callout (the v1.1 gh-CLI hint box does). Mirrors the icon-color convention (semantic color on the
+icon/stroke, dark semantic surface behind).
