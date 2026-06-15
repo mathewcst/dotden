@@ -46,6 +46,30 @@ export class CommandFailedError extends Error {
   }
 }
 
+/**
+ * Thrown by {@link runCommand} when dotden aborts a still-running child process.
+ *
+ * This is distinct from {@link CommandFailedError}: the tool did not choose a
+ * non-zero exit on its own; dotden killed it because the caller cancelled the
+ * operation or a timeout fired. Remote credential checks depend on this shape so
+ * missing SSH/PAT credentials can become a clear timeout/cancel diagnostic
+ * instead of hanging onboarding forever.
+ */
+export class CommandAbortedError extends Error {
+  /**
+   * Create an aborted-process error with the partial process output captured so far.
+   *
+   * @param reason Whether the abort came from the configured timeout or an AbortSignal.
+   * @param result Snapshot of command/args/stdout/stderr at the moment the child closed.
+   */
+  constructor(
+    readonly reason: 'timeout' | 'cancelled',
+    readonly result: CommandResult,
+  ) {
+    super(`${result.command} ${result.args.join(' ')} ${reason}`)
+  }
+}
+
 /** Optional execution context for {@link runCommand}. */
 export interface RunCommandOptions {
   /** Directory to run the process in. Defaults to the parent process's cwd when omitted. */
@@ -55,6 +79,10 @@ export interface RunCommandOptions {
    * child inherits PATH/HOME/etc. and these entries override or extend them.
    */
   readonly env?: NodeJS.ProcessEnv
+  /** Kill the process after this many milliseconds to prevent credential prompts from hanging. */
+  readonly timeoutMs?: number
+  /** Caller cancellation; the child is killed and the promise rejects with CommandAbortedError. */
+  readonly signal?: AbortSignal
 }
 
 /**
@@ -93,6 +121,33 @@ export async function runCommand(
 
     let stdout = ''
     let stderr = ''
+    let aborted: 'timeout' | 'cancelled' | undefined
+    let timeout: NodeJS.Timeout | undefined
+
+    const finish = (exitCode: number | null) => {
+      if (timeout) clearTimeout(timeout)
+      options.signal?.removeEventListener('abort', abort)
+      const result = { command, args, cwd: options.cwd, exitCode: exitCode ?? 1, stdout, stderr }
+      // Preserve a separate error class for caller-driven termination so higher layers can
+      // distinguish "git says credentials failed" from "dotden killed a hung credential prompt".
+      if (aborted) reject(new CommandAbortedError(aborted, result))
+      else resolve(result)
+    }
+    const abort = () => {
+      aborted = 'cancelled'
+      child.kill('SIGTERM')
+    }
+
+    // AbortSignal is the explicit user/caller cancellation path (e.g. leaving an onboarding step).
+    if (options.signal?.aborted) abort()
+    else options.signal?.addEventListener('abort', abort, { once: true })
+    if (options.timeoutMs !== undefined) {
+      timeout = setTimeout(() => {
+        aborted = 'timeout'
+        // SIGTERM gives git/chezmoi a chance to unwind; close still produces the captured output.
+        child.kill('SIGTERM')
+      }, options.timeoutMs)
+    }
 
     child.stdout.setEncoding('utf8')
     child.stderr.setEncoding('utf8')
@@ -100,10 +155,7 @@ export async function runCommand(
     child.stderr.on('data', (chunk: string) => (stderr += chunk))
     // Spawn-level errors (e.g. ENOENT for a missing binary) reject the promise directly.
     child.on('error', reject)
-    child.on('close', (exitCode) => {
-      // exitCode is null when the process was terminated by a signal; treat that as a failure (1).
-      resolve({ command, args, cwd: options.cwd, exitCode: exitCode ?? 1, stdout, stderr })
-    })
+    child.on('close', finish)
   })
 
   if (result.exitCode !== 0) throw new CommandFailedError(result)

@@ -5,9 +5,11 @@
  * wiring, and cross-platform app lifecycle (re-create the window on macOS
  * "activate", quit when all windows close everywhere except macOS).
  */
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { join } from 'node:path'
+import { RemoteClient } from './foundation/remote-client.js'
+import { resolveBundledTools } from './foundation/tools.js'
 
 /**
  * Creates the app's single BrowserWindow and loads the renderer into it.
@@ -20,6 +22,41 @@ import { join } from 'node:path'
  * loads the Vite dev-server URL for HMR; in a packaged build it loads the
  * bundled `index.html` from disk.
  */
+let remoteClient: Promise<RemoteClient> | undefined
+
+async function getRemoteClient(): Promise<RemoteClient> {
+  remoteClient ??= resolveBundledTools().then(
+    (tools) =>
+      new RemoteClient({
+        chezmoiBin: tools.chezmoi,
+        gitBin: tools.git,
+        sourceDir: join(app.getPath('userData'), 'chezmoi-source'),
+        destinationDir: app.getPath('home'),
+      }),
+  )
+  return remoteClient
+}
+
+function registerIpcBridge(): void {
+  ipcMain.handle(
+    'remote:preflight',
+    async (_event, payload: { url: string; _trace: { traceId: string } }) =>
+      (await getRemoteClient()).preflightRemote(payload.url, { _trace: payload._trace }),
+  )
+  ipcMain.handle(
+    'remote:connect',
+    async (_event, payload: { url: string; _trace: { traceId: string } }) =>
+      (await getRemoteClient()).connectExistingRemote(payload.url, { _trace: payload._trace }),
+  )
+  ipcMain.handle(
+    'remote:latest-sha',
+    async (_event, payload: { url: string; branch?: string; _trace: { traceId: string } }) =>
+      (await getRemoteClient()).latestRemoteSha(payload.url, payload.branch, {
+        _trace: payload._trace,
+      }),
+  )
+}
+
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1100,
@@ -51,6 +88,7 @@ function createWindow(): void {
 // App bootstrap: spin up the window once Electron is ready, then arm the
 // updater and the macOS re-activation handler.
 app.whenReady().then(() => {
+  registerIpcBridge()
   createWindow()
 
   // Scaffold has no published update feed, so this resolves/rejects with nothing

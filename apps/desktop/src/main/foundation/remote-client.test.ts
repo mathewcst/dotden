@@ -1,0 +1,150 @@
+/**
+ * RemoteClient behavior tests.
+ *
+ * These tests stay at the public RemoteClient boundary and assert the load-bearing
+ * V1-Lean guarantees: preflight uses chezmoi's effective git command, preserves
+ * the user's credential environment, reports sanitized Provider-agnostic auth
+ * diagnostics, gates `chezmoi init` behind a successful preflight, and reads the
+ * poller SHA with `git ls-remote` instead of a Provider API or full fetch.
+ */
+import { describe, expect, it } from 'vitest'
+import { CommandFailedError, type CommandResult, type RunCommandOptions } from './process.js'
+import { RemoteClient, RemotePreflightError } from './remote-client.js'
+
+const trace = { traceId: 'trace-remote-client-test' }
+
+function result(command: string, args: readonly string[], stdout = '', stderr = ''): CommandResult {
+  return { command, args, exitCode: 0, stdout, stderr }
+}
+
+function createClient(
+  run: (
+    command: string,
+    args: readonly string[],
+    options?: RunCommandOptions,
+  ) => Promise<CommandResult>,
+) {
+  return new RemoteClient({
+    chezmoiBin: '/bin/chezmoi',
+    gitBin: '/bin/git',
+    sourceDir: '/tmp/source',
+    destinationDir: '/tmp/home',
+    timeoutMs: 123,
+    run,
+  })
+}
+
+describe('RemoteClient', () => {
+  it('preflights a pasted Remote URL with chezmoi effective git.command and preserves credential environment', async () => {
+    const calls: Array<{ command: string; args: readonly string[]; options?: RunCommandOptions }> =
+      []
+    const client = createClient(async (command, args, options) => {
+      calls.push({ command, args, options })
+      if (command === '/bin/chezmoi') return result(command, args, '/custom/git\n')
+      return result(command, args)
+    })
+
+    await expect(
+      client.preflightRemote('git@github.com:owner/private.git', { _trace: trace }),
+    ).resolves.toMatchObject({ reachable: true, gitCommand: '/custom/git' })
+
+    expect(calls[1]).toMatchObject({
+      command: '/custom/git',
+      args: ['ls-remote', 'git@github.com:owner/private.git'],
+    })
+    expect(calls[1]?.options?.env).toBeUndefined()
+    expect(calls[1]?.options?.timeoutMs).toBe(123)
+  })
+
+  it('returns provider-agnostic sanitized credential diagnostics for private-repo failures', async () => {
+    const client = createClient(async (command, args) => {
+      if (command === '/bin/chezmoi') return result(command, args, '')
+      throw new CommandFailedError({
+        command,
+        args,
+        exitCode: 128,
+        stdout: '',
+        stderr:
+          'remote: Repository not found. token ghp_1234567890SECRET https://user:pass@example.com/private.git\n',
+      })
+    })
+
+    await expect(
+      client.preflightRemote('https://github.com/owner/private.git', { _trace: trace }),
+    ).resolves.toEqual({
+      reachable: false,
+      gitCommand: '/bin/git',
+      diagnostics: {
+        host: 'github.com',
+        scheme: 'https',
+        exitCode: 128,
+        stderr:
+          'remote: Repository not found. token <redacted-token> https://<redacted>@example.com/private.git\n',
+        help: 'Set up your git credentials (SSH key or token) for github.com, then try again. If this is a private repo and the Provider says “Repository not found”, your credentials may not have access.',
+      },
+    })
+  })
+
+  it('runs chezmoi init only after a successful preflight', async () => {
+    const calls: Array<{ command: string; args: readonly string[]; options?: RunCommandOptions }> =
+      []
+    const client = createClient(async (command, args, options) => {
+      calls.push({ command, args, options })
+      if (command === '/bin/chezmoi' && args.includes('execute-template'))
+        return result(command, args, '')
+      return result(command, args)
+    })
+
+    await expect(
+      client.connectExistingRemote('ssh://git@example.com/dotden.git', { _trace: trace }),
+    ).resolves.toEqual({ gitCommand: '/bin/git', sourceDir: '/tmp/source' })
+
+    expect(calls.map((call) => [call.command, call.args])).toEqual([
+      ['/bin/chezmoi', ['--no-tty', 'execute-template', '{{ .chezmoi.config.git.command }}']],
+      ['/bin/git', ['ls-remote', 'ssh://git@example.com/dotden.git']],
+      [
+        '/bin/chezmoi',
+        [
+          '--source',
+          '/tmp/source',
+          '--destination',
+          '/tmp/home',
+          '--no-tty',
+          '--force',
+          'init',
+          'ssh://git@example.com/dotden.git',
+        ],
+      ],
+    ])
+    expect(calls[2]?.options?.env).toBeUndefined()
+  })
+
+  it('does not run chezmoi init after failed preflight', async () => {
+    const calls: string[] = []
+    const client = createClient(async (command, args) => {
+      calls.push(`${command} ${args.join(' ')}`)
+      if (command === '/bin/chezmoi') return result(command, args, '')
+      throw new CommandFailedError({ command, args, exitCode: 128, stdout: '', stderr: 'denied' })
+    })
+
+    await expect(
+      client.connectExistingRemote('git@gitlab.com:owner/private.git', { _trace: trace }),
+    ).rejects.toBeInstanceOf(RemotePreflightError)
+
+    expect(calls).toEqual([
+      '/bin/chezmoi --no-tty execute-template {{ .chezmoi.config.git.command }}',
+      '/bin/git ls-remote git@gitlab.com:owner/private.git',
+    ])
+  })
+
+  it('reads latest Remote branch SHA via git ls-remote without fetching or Provider APIs', async () => {
+    const client = createClient(async (command, args) => {
+      if (command === '/bin/chezmoi') return result(command, args, '')
+      return result(command, args, '0123456789abcdef0123456789abcdef01234567\trefs/heads/trunk\n')
+    })
+
+    await expect(
+      client.latestRemoteSha('https://git.example.test/owner/den.git', 'trunk', { _trace: trace }),
+    ).resolves.toBe('0123456789abcdef0123456789abcdef01234567')
+  })
+})
