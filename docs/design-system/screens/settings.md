@@ -22,7 +22,7 @@ on **`03 · Screens — App`** (`54:2`), a 4+3 grid below `Secret & errors`.
 ## The 7 tabs
 
 1. **Automation** (`542:6204`) — the headline. A **risk-graded ladder** of 4 `SelectRow`s, one per
-   automation level from `CONTEXT.md` §101–106: **Manual** (default, Selected — ember radio + "Default"
+   automation level from the [Automation levels](../../adr/0006-sync-model-transport-not-commit.md) ladder (see also [scope-v1](../../scope-v1.md) "What v1 delivers / automation ladder"): **Manual** (default, Selected — ember radio + "Default"
    pill), **Auto-sync** (auto-push + fetch, Apply stays manual), **Auto-apply** (Amber **"Warned"**
    pill), **YOLO mode** (Red **"Strongly warned"** pill). Warned/strongly-warned use functional
    _status_ tones on the trailing `Pill` only — never an interactive control, preserving ember as the
@@ -31,10 +31,10 @@ on **`03 · Screens — App`** (`54:2`), a 4+3 grid below `Secret & errors`.
 2. **Commit** (`542:6537`) — the commit-message template (`[$os-sync-$year-$month-$day]`, mono field +
    "Reset to default"), a live preview (`[macos-sync-2026-06-14]`), and insertable variable `Kbd` chips
    (`$os $arch $hostname $environment $year …`). Maps to chezmoi `git.commitMessageTemplate`
-   (`CONTEXT.md` §143).
+   (see [scope-v1](../../scope-v1.md) "Customizable commit-message template").
 3. **Sync & polling** (`542:6712`) — a card of `Switch` rows (background tray poller, start at login) +
-   a poll-cadence row (2–5 min active · 15–30 min idle, `CONTEXT.md` §145) + a "what Sync now does"
-   note (push + fetch + review, never auto-applies — §107).
+   a poll-cadence row (2–5 min active · 15–30 min idle, see [scope-v1](../../scope-v1.md) "Poll cadence") + a "what Sync now does"
+   note (push + fetch + review, never auto-applies — see [ADR 0006](../../adr/0006-sync-model-transport-not-commit.md)).
 4. **Repository** (`542:6866`, `SettingsContent/Repository` `534:1160`) — the connected git remote and
    the secret password-manager choice. **V1-Lean (ADR 0020): no provider login, no token, no keychain.**
    Two cards:
@@ -50,10 +50,11 @@ on **`03 · Screens — App`** (`54:2`), a 4+3 grid below `Secret & errors`.
      convenience layer (ADR 0020).
 5. **Privacy & telemetry** (`542:7068`) — three opt-in `Switch` rows, **all off by default** (analytics
    / crash reports / diagnostic logs), + a `Shield` note: telemetry is Wide-events only — paths,
-   contents, secrets, repo URLs can't be represented by construction (`CONTEXT.md` §83/§149).
+   contents, secrets, repo URLs can't be represented by construction (only the **Allowlisted attribute
+   key** set, see [CONTEXT.md](../../../CONTEXT.md); Wide-events rationale in [ADR 0007](../../adr/0007-observability-wide-events-local-traces.md)).
 6. **Environments** (`542:7228`) — the environment registry (this-mac / work-laptop / home-pc: OS ·
    subscribed Workspaces · sync state + a status `Pill` + an `⋯` menu). Reassign/retire live in each
-   row's menu (`CONTEXT.md` §140).
+   row's menu (see [ADR 0024](../../adr/0024-synced-vs-local-data-architecture.md) "Environment registry & lifecycle").
 7. **About** (`542:7429`) — version + "Check for updates", update channel + auto-update `Switch`,
    resource links, and the chezmoi/git attribution ("dotden is the GUI; your Den stays a plain chezmoi
    repo").

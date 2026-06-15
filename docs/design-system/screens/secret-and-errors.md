@@ -2,10 +2,10 @@
 
 > Phase 5 — Batch E. The commit-time **secret** 2-step flow + the **offline-queue** and
 > **apply-failure** states. New `Secret & errors` SECTION (`343:5185`) on `05 · Screens — App`.
-> Part of the [design system](../README.md). Domain: `CONTEXT.md` — secrets **warn + Convert to a
-> Secret reference**, _soft_-block not hard-block (L119/L203); a Secret reference is an `op://…`
-> placeholder resolved from the vault at **Apply** (L41); **Offline → commit locally + queue, retry on
-> reconnect** (L110); apply is per-file, some files can fail to write.
+> Part of the [design system](../README.md). Domain: secrets **warn + Convert to a
+> Secret reference**, _soft_-block not hard-block (see [scope-v1 "Secrets"](../../scope-v1.md)); a **Secret reference** is an `op://…`
+> placeholder resolved from the vault at **Apply** (see [CONTEXT.md](../../../CONTEXT.md)); **Offline → commit locally + queue, retry on
+> reconnect** (see [ADR 0006](../../adr/0006-sync-model-transport-not-commit.md)); apply is per-file, some files can fail to write.
 
 Four screens, left→right in the section (section-relative x = `48 / 1560 / 3072 / 4584`, y `88`):
 
@@ -34,7 +34,7 @@ remedy is non-destructive; functional-color discipline reserves red for failure/
   exactly what was flagged without re-exposing it.
 - a single **`SelectRow` choice group** _(radio `Lead`; was `RadioRow` pre-M4)_ (mutually exclusive): **Convert to a Secret reference**
   (selected default) / **Commit the secret anyway**. Under Commit, a **"Don't warn me about this file
-  again"** checkbox — the per-environment "sync anyway" allowlist decision (`CONTEXT.md` L203),
+  again"** checkbox — the per-environment "sync anyway" allowlist decision (see [scope-v1 "Secrets"](../../scope-v1.md); the allowlist is synced metadata, see [ADR 0024](../../adr/0024-synced-vs-local-data-architecture.md)),
   file-scoped (not a global kill-switch for the scanner).
 - footer: **Cancel** (Outline) / **Continue** (Primary). Continue → step 2 when _Convert_ is chosen;
   → the commit when _Commit anyway_ is chosen.
@@ -46,7 +46,7 @@ Only the password-manager chooser. ember `lock` badge + **"Choose your password 
 **`pass`** (**not found** → "Install pass to use this option", disabled). A **"Remember my choice for
 the future"** checkbox. footer: **Back** (Ghost) / **Convert to Secret reference** (Primary, `lock`
 lead) — the actual conversion. The synced result is a reference like `op://vault/item/field`; the real
-secret stays in the vault and only the reference syncs (`CONTEXT.md` L41).
+secret stays in the vault and only the reference syncs (a **Secret reference**, see [CONTEXT.md](../../../CONTEXT.md)).
 
 Both steps render over the **scrim-dimmed home** (the [confirm-dialog](./confirm-dialogs.md)
 precedent). The home inspector's "Secrets · None detected" stays **consistent** — the scan catches the
@@ -56,7 +56,7 @@ secret _at the door_, before it ever enters the Den.
 
 The Batch-C banner-insert technique (see [sync states](./sync-states.md)): clone home → detach the
 `AppShell` → `insertChild(1, Banner Offline)` (body `FILL` shrinks, nothing covered). Banner copy:
-"Offline — changes queued · Will sync when you reconnect" (`CONTEXT.md` L110). Self-consistency
+"Offline — changes queued · Will sync when you reconnect" (see [ADR 0006](../../adr/0006-sync-model-transport-not-commit.md)). Self-consistency
 overrides: titlebar status glyph → **cloud** + "Offline"; inspector **this-mac** env row → "Offline"
 
 - muted dot (it's the offline environment). work-laptop's incoming card is **kept** — already-fetched
@@ -94,7 +94,7 @@ center per-file **Apply** stays for the clean file.
 
 ## Reconciliation — onboarding hard-block → soft warn
 
-`CONTEXT.md` L203 turns secrets from block→warn. The onboarding discovery row's state `Blocked` (red
+The [roadmap "Soft-block detected secrets … (v1.5)"](../../roadmap.md) refinement turns secrets from block→warn. The onboarding discovery row's state `Blocked` (red
 `alert-triangle` in the checkbox slot + "Secret · excluded", **no** checkbox — a hard exclude) was
 **renamed `Warn`** and softened: a **real unchecked `Checkbox`** (the file is now _selectable_), an
 **amber** `WarnIcon` + "Secret · review at commit". _(M4: the `DiscoverRow` itself was folded into

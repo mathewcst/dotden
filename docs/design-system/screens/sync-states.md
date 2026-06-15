@@ -2,11 +2,13 @@
 
 > Phase 5 — Batch C. The main-window states for dotden's **Sync** transport, surfaced via the new
 > `Banner` primitive ([components.md](../components.md)) + titlebar/inspector overrides on `AppShell`.
-> Part of the [design system](../README.md). Domain rules: `CONTEXT.md` — **Sync = transport** §68/§88
+> Part of the [design system](../README.md). Domain rules: the **Sync** glossary term
+> (see [CONTEXT.md](../../../CONTEXT.md)) and the **Sync model: transport not commit** decision
+> (see [ADR 0006](../../adr/0006-sync-model-transport-not-commit.md)) — **Sync = transport**
 > (moves already-Committed changes + checks for incoming; never auto-Commits/Applies by default), push
-> is manual via **"Sync now"** §99, **"Sync now" = push pending + fetch + present incoming for review**
-> §107, incoming → notify → review/Apply §100/§137, **Offline → commit locally + queue, retry on
-> reconnect** §110.
+> is manual via **"Sync now"**, **"Sync now" = push pending + fetch + present incoming for review**,
+> incoming → notify → review/Apply, **Offline → commit locally + queue, retry on reconnect**
+> (all per [ADR 0006](../../adr/0006-sync-model-transport-not-commit.md)).
 
 Four screens in a **`Sync states`** SECTION (`297:3139`) on `05 · Screens — App`, laid out 2×2. Each is
 a clone of the home backdrop whose `AppShell` instance is **detached** so a full-width `Banner` can be
@@ -58,6 +60,7 @@ White-fill + binding audits on `Banner` clean (0 flags).
 ## Relationship to the rest of Phase 5
 
 The `Incoming` banner's **Review & Apply** routes to the existing
-[returning · Review & Apply](./returning-environment.md) Apply-diff surface (§137). The `Push`/ahead
+[returning · Review & Apply](./returning-environment.md) Apply-diff surface (per
+[ADR 0006](../../adr/0006-sync-model-transport-not-commit.md)). The `Push`/ahead
 state is also shown — from the _commit_ angle — by the [commit flow](./commit.md)'s "Committed · 1 ahead
 to push" screen; here it's shown from the _sync_ angle (a banner reminder to **Sync now**).

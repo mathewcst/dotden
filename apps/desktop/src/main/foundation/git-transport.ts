@@ -30,20 +30,17 @@ export class GitTransport {
   constructor(private readonly options: GitTransportOptions) {}
 
   /**
-   * Initialize a fresh repo in `repoDir` on the `main` branch and pin a
-   * deterministic commit identity.
+   * Initialize a fresh repo in `repoDir` on the `main` branch.
    *
-   * Maps to `git init --initial-branch=main` followed by two `git config`
-   * calls. The fixed test identity (`dotden tests` / `dotden@example.invalid`)
-   * keeps commit hashes and author metadata reproducible across runs.
+   * Maps to `git init --initial-branch=main`. Commit identity is intentionally
+   * NOT set here — the author of a commit is the user's own (global/per-repo)
+   * git config, not something this foundation pins.
    *
-   * @throws CommandFailedError if any git invocation exits non-zero.
+   * @throws CommandFailedError if git exits non-zero.
    */
   async init(): Promise<void> {
     await mkdir(this.options.repoDir, { recursive: true })
     await this.git(['init', '--initial-branch=main'])
-    await this.git(['config', 'user.name', 'dotden tests'])
-    await this.git(['config', 'user.email', 'dotden@example.invalid'])
   }
 
   /**
@@ -57,6 +54,26 @@ export class GitTransport {
    */
   async commitAll(message: string): Promise<void> {
     await this.git(['add', '--all'])
+    await this.git(['commit', '--message', message])
+  }
+
+  /**
+   * Stage EXACTLY the given paths and record a commit — the selective Commit
+   * verb (record only the chosen Files, not everything dirty in the tree).
+   *
+   * Maps to `git add -- <…paths>` then `git commit --message <message>`. The `--`
+   * separator plus explicit paths is git's "record exactly these" operation: only
+   * the listed paths are staged, so unrelated dirty paths in the source tree stay
+   * out of the commit.
+   *
+   * @param paths Repo-relative or absolute paths to stage (the committed Files'
+   *   source-state files); passed verbatim to `git add` after `--`.
+   * @param message Commit message to record.
+   * @throws CommandFailedError if staging or committing exits non-zero
+   * (e.g. nothing to commit).
+   */
+  async commit(paths: readonly string[], message: string): Promise<void> {
+    await this.git(['add', '--', ...paths])
     await this.git(['commit', '--message', message])
   }
 
@@ -141,15 +158,15 @@ export class GitTransport {
  * Clone the `main` branch of `remoteUrl` into `destination` and return a
  * {@link GitTransport} bound to the cloned repo.
  *
- * Maps to `git clone --branch main <remoteUrl> <destination>`, then pins the
- * same deterministic commit identity as {@link GitTransport.init} so commits
- * made through the returned transport are reproducible.
+ * Maps to `git clone --branch main <remoteUrl> <destination>`. Commit identity is
+ * intentionally NOT pinned here (it's the user's own git config); a caller that
+ * commits through the returned transport is responsible for configuring identity.
  *
  * @param gitBin Path to the git binary (typically the bundled `git`).
  * @param remoteUrl Repository URL to clone.
  * @param destination Local directory to clone into; becomes the transport's repoDir.
  * @returns A configured transport for the freshly cloned repo.
- * @throws CommandFailedError if the clone or either config call exits non-zero.
+ * @throws CommandFailedError if the clone exits non-zero.
  */
 export async function cloneRepo(
   gitBin: string,
@@ -157,8 +174,5 @@ export async function cloneRepo(
   destination: string,
 ): Promise<GitTransport> {
   await runCommand(gitBin, ['clone', '--branch', 'main', remoteUrl, destination])
-  const transport = new GitTransport({ gitBin, repoDir: destination })
-  await runCommand(gitBin, ['config', 'user.name', 'dotden tests'], { cwd: destination })
-  await runCommand(gitBin, ['config', 'user.email', 'dotden@example.invalid'], { cwd: destination })
-  return transport
+  return new GitTransport({ gitBin, repoDir: destination })
 }

@@ -2,10 +2,11 @@
 
 > Phase 5 — Batch D. The per-File **version history** + **restore-forward** flow, surfaced in the Diff
 > pane's existing **History** tab. Part of the [design system](../README.md). Domain rules:
-> `CONTEXT.md` — **History in v1 = per-File version list + restore-forward** §142 (each Commit is a git
-> commit; "restore this version" _captures that old version forward_ as a new commit — non-destructive,
-> history stays continuous), **History diff → `PatchDiff`** (read-only) §126, environment claim keeps
-> history/attribution continuous §140.
+> **History in v1 = per-File version list + restore-forward** (see
+> [scope-v1.md](../../scope-v1.md) — "What v1 delivers / History"; each Commit is a git commit;
+> "restore this version" _captures that old version forward_ as a new commit — non-destructive, history
+> stays continuous), **History diff → `PatchDiff`** (read-only), environment claim keeps
+> history/attribution continuous.
 
 Two screens in a **`File history`** SECTION (`320:4250`) on `05 · Screens — App`, laid out 2×1 below
 the Sync-states section.
@@ -42,11 +43,11 @@ is the restore glyph (new this batch; stroke copied from `Icon/sync` to keep the
 
 | Call                                                 | Decision                                                                                                                                                                                                                                                                                                                                                                                                 |
 | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Tab, not new pane**                                | History reuses the Diff pane's existing `Changes / History / Scope` tabs (§107 the tab already existed) — `AppPane/History` is the **History-tab body**, swapped into `AppShell`'s center slot (`Center#114:1`), not a separate window.                                                                                                                                                                  |
+| **Tab, not new pane**                                | History reuses the Diff pane's existing `Changes / History / Scope` tabs (the tab already existed) — `AppPane/History` is the **History-tab body**, swapped into `AppShell`'s center slot (`Center#114:1`), not a separate window.                                                                                                                                                                       |
 | **Master-detail, scroll/fixed split**                | The list scrolls; the preview is pinned on a distinct surface and swaps to the selected row — with a draggable **resize handle** between (user feedback: use a shadcn panel resizer). Chosen over an inline accordion (long diffs would shove rows) and over a side-by-side split (redundant column inside an already 3-pane window).                                                                    |
 | **Restore is one filled panel button**               | A single **filled ember Primary** `Restore this version` lives in the preview panel — it restores the version you're previewing, so the target is unambiguous _and_ it's obviously a button at rest. (Superseded an earlier per-row ghost-text button: text-styled actions failed the "what's clickable before I move the mouse?" test, and a row button + panel button = two restores for one version.) |
 | **Legible to non-devs too (affordance rules)**       | Project baseline locked here: **actions are filled** (presentation is flat text), **selection is loud** (ember rail + tint), **two distinct surfaces** (list vs raised panel), **disclosure chevrons** on interactive rows, and a plain-language **reassurance** line. The goal: open the screen and instinctively know what's clickable vs presentation.                                                |
-| **Restore-forward ⇒ non-destructive ⇒ Default tone** | The confirm `Dialog` is **`Tone=Default`**, _not_ Destructive: restoring captures the old version forward as a new commit (§142), so nothing is lost — the copy says "Saved as a new commit; your current version stays in history." A red/destructive treatment would misrepresent the action.                                                                                                          |
+| **Restore-forward ⇒ non-destructive ⇒ Default tone** | The confirm `Dialog` is **`Tone=Default`**, _not_ Destructive: restoring captures the old version forward as a new commit, so nothing is lost — the copy says "Saved as a new commit; your current version stays in history." A red/destructive treatment would misrepresent the action.                                                                                                                 |
 
 ## The two screens
 
@@ -66,4 +67,4 @@ components clean (0 flags).
 History sits alongside [commit](./commit.md) (where versions are _created_) and
 [sync states](./sync-states.md) (where they're _transported_). The restore confirm reuses the same
 `Dialog` modal as the [confirm dialogs](./confirm-dialogs.md). Full timeline/branching UI is explicitly
-deferred past v1 (§142).
+deferred past v1.

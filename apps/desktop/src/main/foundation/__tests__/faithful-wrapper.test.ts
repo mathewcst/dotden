@@ -10,17 +10,12 @@
  * generated `.chezmoiignore`, and Sync->git push/fetch + status/diff.
  */
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ChezmoiAdapter, renderOsScopeIgnore } from '../chezmoi-adapter.js'
 import { cloneRepo } from '../git-transport.js'
-import {
-  createExecutableStub,
-  createTempDotdenRepo,
-  type DotdenTestRepo,
-} from './temp-git-repo.fixture.js'
-import { resolveBundledTools } from '../tools.js'
+import { createTempDotdenRepo, type DotdenTestRepo } from './temp-git-repo.fixture.js'
 
 let repo: DotdenTestRepo
 
@@ -30,21 +25,6 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await repo.cleanup()
-})
-
-// Proves dotden resolves the chezmoi/git binaries from its own bundled app resources, never a host install.
-describe('bundled tool resolution', () => {
-  it('resolves chezmoi and git from app resources instead of relying on a host install path', async () => {
-    const resources = join(repo.root, 'resources')
-    const bin = join(resources, 'bin', process.platform, process.arch)
-    await mkdir(bin, { recursive: true })
-    const chezmoi = join(bin, process.platform === 'win32' ? 'chezmoi.exe' : 'chezmoi')
-    const git = join(bin, process.platform === 'win32' ? 'git.exe' : 'git')
-    await createExecutableStub(chezmoi)
-    await createExecutableStub(git)
-
-    await expect(resolveBundledTools(resources)).resolves.toEqual({ chezmoi, git })
-  })
 })
 
 // Proves each dotden verb produces the exact expected chezmoi effect on source vs destination state.

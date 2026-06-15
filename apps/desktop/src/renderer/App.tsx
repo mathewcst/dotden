@@ -20,17 +20,26 @@ export function App() {
   async function checkRemote() {
     setStatus('checking')
     setMessage(`Checking credentials for ${hostFromRemote(remoteUrl)}…`)
-    const result = await window.dotden.remote.preflight(remoteUrl)
-    if (result.reachable) {
-      setStatus('reachable')
-      setMessage(
-        `Reachable with ${result.gitCommand}. dotden will use your existing git credentials.`,
-      )
-    } else {
+    try {
+      const result = await window.dotden.remote.preflight(remoteUrl)
+      if (result.reachable) {
+        setStatus('reachable')
+        setMessage(
+          `Reachable with ${result.gitCommand}. dotden will use your existing git credentials.`,
+        )
+      } else {
+        setStatus('credential-error')
+        setMessage(
+          result.diagnostics?.help ??
+            `Set up your git credentials for ${hostFromRemote(remoteUrl)}.`,
+        )
+      }
+    } catch (error) {
+      // A rejected preflight invoke (e.g. getRemoteClient could not resolve
+      // bundled tools) must leave a recoverable state — never strand the UI in
+      // the disabled 'checking' state — so the Check button re-enables for retry.
       setStatus('credential-error')
-      setMessage(
-        result.diagnostics?.help ?? `Set up your git credentials for ${hostFromRemote(remoteUrl)}.`,
-      )
+      setMessage(error instanceof Error ? error.message : 'Remote check failed.')
     }
   }
 
@@ -46,6 +55,10 @@ export function App() {
       setMessage(error instanceof Error ? error.message : 'Remote connection failed.')
     }
   }
+
+  // True while any IPC operation is in flight. Used to disable Check so a user
+  // cannot race a preflight against an in-flight connect on the same source dir.
+  const busy = status === 'checking' || status === 'connecting'
 
   return (
     <main className="bg-background text-foreground min-h-screen p-8">
@@ -77,10 +90,7 @@ export function App() {
           </label>
 
           <div className="flex flex-wrap items-center gap-3">
-            <Button
-              disabled={!remoteUrl || status === 'checking'}
-              onClick={() => void checkRemote()}
-            >
+            <Button disabled={!remoteUrl || busy} onClick={() => void checkRemote()}>
               {status === 'checking' ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (

@@ -9,6 +9,19 @@
 import { spawn } from 'node:child_process'
 
 /**
+ * Grace period between the polite SIGTERM and the unconditional SIGKILL.
+ *
+ * SIGTERM is only a *request* to exit: it is catchable and ignorable, so a child
+ * (or a grandchild credential helper — askpass / 1Password / Git Credential
+ * Manager, the very tools ADR 0020 names) can swallow it and keep holding the
+ * stdout/stderr pipes open forever. Without a hard follow-up the 'close' event
+ * never fires and the promise hangs, defeating the entire point of `timeoutMs`.
+ * After this many ms we send SIGKILL, which the OS delivers and cannot be
+ * trapped — that is the actual guarantee behind timeout/cancel.
+ */
+const SIGKILL_GRACE_MS = 2_000
+
+/**
  * Outcome of a finished child process, captured by {@link runCommand}.
  *
  * Returned on success and also carried inside {@link CommandFailedError} on failure, so
@@ -123,38 +136,56 @@ export async function runCommand(
     let stderr = ''
     let aborted: 'timeout' | 'cancelled' | undefined
     let timeout: NodeJS.Timeout | undefined
+    let killTimer: NodeJS.Timeout | undefined
+
+    // Tear down every timer and listener this promise armed. Shared by the success/close
+    // path (finish) and the spawn-error path so neither can leak the timeout timer, the
+    // SIGKILL grace timer, or the AbortSignal listener — a leaked timer keeps the Node
+    // event loop (and thus the parent process / test runner) alive after we settle.
+    const cleanup = () => {
+      if (timeout) clearTimeout(timeout)
+      if (killTimer) clearTimeout(killTimer)
+      options.signal?.removeEventListener('abort', abort)
+    }
 
     const finish = (exitCode: number | null) => {
-      if (timeout) clearTimeout(timeout)
-      options.signal?.removeEventListener('abort', abort)
+      cleanup()
       const result = { command, args, cwd: options.cwd, exitCode: exitCode ?? 1, stdout, stderr }
       // Preserve a separate error class for caller-driven termination so higher layers can
       // distinguish "git says credentials failed" from "dotden killed a hung credential prompt".
       if (aborted) reject(new CommandAbortedError(aborted, result))
       else resolve(result)
     }
-    const abort = () => {
-      aborted = 'cancelled'
+
+    // Single escalation path for both timeout and cancellation: ask politely with SIGTERM,
+    // then arm a SIGKILL fallback. SIGTERM lets git/chezmoi unwind and flush captured output;
+    // SIGKILL is the hard guarantee for children that ignore SIGTERM (see SIGKILL_GRACE_MS).
+    // If 'close' fires within the grace window, cleanup() cancels killTimer so SIGKILL is moot.
+    const terminate = (reason: 'timeout' | 'cancelled') => {
+      aborted = reason
       child.kill('SIGTERM')
+      killTimer = setTimeout(() => child.kill('SIGKILL'), SIGKILL_GRACE_MS)
     }
+    const abort = () => terminate('cancelled')
 
     // AbortSignal is the explicit user/caller cancellation path (e.g. leaving an onboarding step).
     if (options.signal?.aborted) abort()
     else options.signal?.addEventListener('abort', abort, { once: true })
     if (options.timeoutMs !== undefined) {
-      timeout = setTimeout(() => {
-        aborted = 'timeout'
-        // SIGTERM gives git/chezmoi a chance to unwind; close still produces the captured output.
-        child.kill('SIGTERM')
-      }, options.timeoutMs)
+      timeout = setTimeout(() => terminate('timeout'), options.timeoutMs)
     }
 
     child.stdout.setEncoding('utf8')
     child.stderr.setEncoding('utf8')
     child.stdout.on('data', (chunk: string) => (stdout += chunk))
     child.stderr.on('data', (chunk: string) => (stderr += chunk))
-    // Spawn-level errors (e.g. ENOENT for a missing binary) reject the promise directly.
-    child.on('error', reject)
+    // Spawn-level errors (e.g. ENOENT for a missing binary) reject with the raw Node error,
+    // not CommandFailedError. Run the same cleanup first so a failed spawn cannot leak the
+    // timeout timer, the SIGKILL grace timer, or the abort listener.
+    child.on('error', (error) => {
+      cleanup()
+      reject(error)
+    })
     child.on('close', finish)
   })
 

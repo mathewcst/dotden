@@ -2,9 +2,11 @@
 
 > The two **OS-chrome** surfaces the background **tray poller** drives even when the main window is
 > closed: the menubar **tray dropdown** and the **OS notification** toast. Part of the
-> [design system](../README.md); grounded in `CONTEXT.md` §109 (tray poller in v1 scope), §100/§108
-> (notify → diff → click; poller only _detects/notifies_, never acts), §145 (poll cadence), §123
-> (Electron, pixel-identical UI). Components live on `02 · Components` (section **`571:1299`**); screens
+> [design system](../README.md); grounded in [scope-v1.md](../../scope-v1.md) — "Poll cadence"
+> (tray poller in v1 scope; poll cadence) and [ADR 0006](../../adr/0006-sync-model-transport-not-commit.md)
+> (notify → diff → click; the poller only _detects/notifies_, never acts), plus
+> [ADR 0004](../../adr/0004-electron-desktop-runtime.md) (Electron, pixel-identical UI). Components live on
+> `02 · Components` (section **`571:1299`**); screens
 > on `03 · Screens — App` (section **`563:7125`**).
 
 ## The one decision that shapes everything: native chrome, not the dotden theme
@@ -38,8 +40,8 @@ A dark-mode macOS menu (radius 10, 1px white@0.10 hairline, drop shadow, 256w). 
 - ─ separator (white@0.10, inset)
 - **Sync now** + `⌘S` shortcut (right-aligned, secondary)
 - **Review & Apply** — bright with a **count** when incoming, else grayed/disabled
-- ─ separator · **Auto-sync: Manual** + `›` submenu arrow (the §109 quick toggle of the automation
-  level) · ─ separator
+- ─ separator · **Auto-sync: Manual** + `›` submenu arrow (the quick toggle of the automation
+  level — see [ADR 0006](../../adr/0006-sync-model-transport-not-commit.md)) · ─ separator
 - **Open dotden** · **Quit dotden** + `⌘Q`
 
 `State` is the **whole API** (same pattern as `Banner`) — each variant bakes its dot color, status
@@ -72,8 +74,9 @@ right-aligned **action button** (translucent white@0.13 pill).
 **Applied** is the **auto-apply confirmation** (informational, no action) — its `actionRow.visible =
 false` collapses cleanly under auto-layout, so the card shrinks. Content mirrors the in-app `Banner`
 tones (Incoming/Error/UpToDate) but in native chrome — the closed-window counterpart to the in-app
-strip. Faithful to §108: the poller **notifies**; the action ("Review & Apply" / "Resolve") opens the
-app where the user decides — the poller never applies.
+strip. Faithful to [ADR 0006](../../adr/0006-sync-model-transport-not-commit.md): the poller
+**notifies**; the action ("Review & Apply" / "Resolve") opens the app where the user decides — the
+poller never applies.
 
 ## Screens — `Tray & notification (macOS)` section (`563:7125`, page 03)
 

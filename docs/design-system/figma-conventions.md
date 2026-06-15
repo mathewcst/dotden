@@ -405,7 +405,7 @@ re-measure — switch the family to Inter.
 
 ### Native OS-chrome is the one documented exception to the dd/\* token rule
 
-Batch G's `TrayMenu` + `OSNotification` (`CONTEXT.md` §109 tray poller) are **faithful macOS mocks**,
+Batch G's `TrayMenu` + `OSNotification` (the tray poller, see [Poll cadence](../scope-v1.md)) are **faithful macOS mocks**,
 not dotden-themed UI — the user chose native-per-OS chrome over a branded popover. They therefore bind
 **no `dd/*` variables**; they use **literal macOS system colors** (menu `#1F1F22`, text `#F6F6F7`,
 secondary `#9E9EA6`, system blue `#0A84FF`, green `#30D158`, etc.). This is the **single allowed
@@ -424,14 +424,15 @@ replicates the _host OS_, not the design system. Consequences for QA:
 
 The earlier "_Moving a `SECTION` does NOT move its children_" gotcha did **not** reproduce in v2.2.50 for
 **API-appended** children. Building the `v1.1 · Onboarding gate` section: after `sec.appendChild(child)`
-+ `child.x = 100`, the child's `child.y` getter returned a **section-relative** value (`100`) while its
-`absoluteBoundingBox.y` was `section.y + 100`. Setting `sec.y = 1980` then moved the child's
-`absoluteBoundingBox.y` by the same delta (children rode along; `child.y` stayed `100`). So for children
-you add via the API, treat coords as **section-relative** and just move the section. (The old gotcha may
-still hold for children that pre-existed with stored absolute coords, or for an older API — so **don't
-trust either blindly: read `absoluteBoundingBox` before _and_ after a test move** and adjust only if they
-didn't follow.) Also note `get_metadata` reports section-child coords relative to the section, which
-matches the plugin getter — but page-level sections report absolute.
+
+- `child.x = 100`, the child's `child.y` getter returned a **section-relative** value (`100`) while its
+  `absoluteBoundingBox.y` was `section.y + 100`. Setting `sec.y = 1980` then moved the child's
+  `absoluteBoundingBox.y` by the same delta (children rode along; `child.y` stayed `100`). So for children
+  you add via the API, treat coords as **section-relative** and just move the section. (The old gotcha may
+  still hold for children that pre-existed with stored absolute coords, or for an older API — so **don't
+  trust either blindly: read `absoluteBoundingBox` before _and_ after a test move** and adjust only if they
+  didn't follow.) Also note `get_metadata` reports section-child coords relative to the section, which
+  matches the plugin getter — but page-level sections report absolute.
 
 ### Add a new variant VALUE to a live COMPONENT_SET via detach → promote → append
 
@@ -455,11 +456,12 @@ Despite the earlier "set opacity in the object before binding" note, in practice
 `setBoundVariableForPaint({…, opacity: 0.09}, 'color', v)` returned a paint with **`opacity: 1`** (a 9%
 tint rendered as a full-strength blowout). Reliable recipe: build → bind → **mutate `.opacity` on the
 returned paint object** → assign the array (no spread):
+
 ```js
-let p = { type:'SOLID', color:{r:.85,g:.36,b:.27}, opacity:.09 }
+let p = { type: 'SOLID', color: { r: 0.85, g: 0.36, b: 0.27 }, opacity: 0.09 }
 p = figma.variables.setBoundVariableForPaint(p, 'color', destructiveVar)
-p.opacity = 0.09            // re-assert AFTER binding (binding cleared it)
-node.fills = [p]            // assign directly — a spread here would drop it again
+p.opacity = 0.09 // re-assert AFTER binding (binding cleared it)
+node.fills = [p] // assign directly — a spread here would drop it again
 ```
 
 ### `destructive` (bright red `22:16`) is a stroke/icon/text token — error SURFACES use `dd/red/950` (`18:18`)

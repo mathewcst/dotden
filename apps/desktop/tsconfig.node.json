@@ -4,5 +4,11 @@
     "types": ["node", "electron-vite/node"],
     "noEmit": true
   },
-  "include": ["src/main/**/*.ts", "src/preload/**/*.ts", "electron.vite.config.ts"]
+  // `src/shared` holds the DotdenApi IPC contract the preload is checked against.
+  "include": [
+    "src/main/**/*.ts",
+    "src/preload/**/*.ts",
+    "src/shared/**/*.ts",
+    "electron.vite.config.ts"
+  ]
 }

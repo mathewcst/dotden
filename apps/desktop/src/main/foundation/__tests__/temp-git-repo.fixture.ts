@@ -75,6 +75,11 @@ export async function createTempDotdenRepo(): Promise<DotdenTestRepo> {
   const gitBin = await requireTool('git', 'DOTDEN_GIT_BIN')
   const git = new GitTransport({ gitBin, repoDir: source })
   await git.init()
+  // Pin a deterministic commit identity on the source repo so chezmoi.commit()
+  // (which records via `git commit`) works without depending on the host's git
+  // config. This belongs in the test fixture, not production GitTransport.init().
+  await runCommand(gitBin, ['config', 'user.name', 'dotden tests'], { cwd: source })
+  await runCommand(gitBin, ['config', 'user.email', 'dotden@example.invalid'], { cwd: source })
   // Bare remote = a valid push/fetch target with no working tree of its own.
   await runCommand(gitBin, ['init', '--bare', remote])
   await git.addRemote('origin', remote)

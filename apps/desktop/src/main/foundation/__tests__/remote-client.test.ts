@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { CommandFailedError, type CommandResult, type RunCommandOptions } from '../process.js'
-import { RemoteClient, RemotePreflightError } from '../remote-client.js'
+import { RemoteClient, RemoteConnectError, RemotePreflightError } from '../remote-client.js'
 
 const trace = { traceId: 'trace-remote-client-test' }
 
@@ -50,7 +50,7 @@ describe('RemoteClient', () => {
 
     expect(calls[1]).toMatchObject({
       command: '/custom/git',
-      args: ['ls-remote', 'git@github.com:owner/private.git'],
+      args: ['ls-remote', '--end-of-options', 'git@github.com:owner/private.git'],
     })
     expect(calls[1]?.options?.env).toBeUndefined()
     expect(calls[1]?.options?.timeoutMs).toBe(123)
@@ -101,7 +101,7 @@ describe('RemoteClient', () => {
 
     expect(calls.map((call) => [call.command, call.args])).toEqual([
       ['/bin/chezmoi', ['--no-tty', 'execute-template', '{{ .chezmoi.config.git.command }}']],
-      ['/bin/git', ['ls-remote', 'ssh://git@example.com/dotden.git']],
+      ['/bin/git', ['ls-remote', '--end-of-options', 'ssh://git@example.com/dotden.git']],
       [
         '/bin/chezmoi',
         [
@@ -133,7 +133,7 @@ describe('RemoteClient', () => {
 
     expect(calls).toEqual([
       '/bin/chezmoi --no-tty execute-template {{ .chezmoi.config.git.command }}',
-      '/bin/git ls-remote git@gitlab.com:owner/private.git',
+      '/bin/git ls-remote --end-of-options git@gitlab.com:owner/private.git',
     ])
   })
 
@@ -146,5 +146,89 @@ describe('RemoteClient', () => {
     await expect(
       client.latestRemoteSha('https://git.example.test/owner/den.git', 'trunk', { _trace: trace }),
     ).resolves.toBe('0123456789abcdef0123456789abcdef01234567')
+  })
+
+  it('surfaces a sanitized, URL-free RemoteConnectError when chezmoi init fails after a passing preflight', async () => {
+    // Preflight passes (execute-template + ls-remote succeed); only the committed `init` step throws.
+    const initStderr =
+      'fatal: clone failed token ghp_INITSECRET1234567890 https://user:pass@example.com/private.git\n'
+    const client = createClient(async (command, args) => {
+      if (command === '/bin/chezmoi' && args.includes('execute-template'))
+        return result(command, args, '')
+      if (command === '/bin/git') return result(command, args)
+      // command === '/bin/chezmoi' with `init` — the only failing call.
+      throw new CommandFailedError({
+        command,
+        args,
+        exitCode: 128,
+        stdout: '',
+        stderr: initStderr,
+      })
+    })
+
+    const url = 'https://user:pass@example.com/private.git'
+    const error = await client
+      .connectExistingRemote(url, { _trace: trace })
+      .catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(RemoteConnectError)
+    const connectError = error as RemoteConnectError
+    // The sanitized stderr keeps host context but drops the token and the basic-auth credentials.
+    expect(connectError.diagnostics.stderr).toBe(
+      'fatal: clone failed token <redacted-token> https://<redacted>@example.com/private.git\n',
+    )
+    expect(connectError.diagnostics.host).toBe('example.com')
+    // No raw URL or token survives on either the message or the diagnostics that cross IPC.
+    const surfaced = `${connectError.message} ${JSON.stringify(connectError.diagnostics)}`
+    expect(surfaced).not.toContain('user:pass')
+    expect(surfaced).not.toContain('ghp_INITSECRET1234567890')
+    expect(surfaced).not.toContain('https://user:pass@example.com/private.git')
+  })
+
+  it('rejects a leading-dash Remote URL in preflight without spawning ls-remote', async () => {
+    const lsRemoteCalls: string[] = []
+    const client = createClient(async (command, args) => {
+      if (command === '/bin/chezmoi' && args.includes('execute-template'))
+        return result(command, args, '')
+      if (args.includes('ls-remote')) lsRemoteCalls.push(`${command} ${args.join(' ')}`)
+      return result(command, args)
+    })
+
+    await expect(
+      client.preflightRemote('--upload-pack=evil.sh', { _trace: trace }),
+    ).resolves.toMatchObject({ reachable: false })
+    // The guard short-circuits before any ls-remote spawn.
+    expect(lsRemoteCalls).toEqual([])
+  })
+
+  it('throws on a leading-dash Remote URL in latestRemoteSha (defense in depth)', async () => {
+    const client = createClient(async (command, args) => result(command, args))
+
+    await expect(
+      client.latestRemoteSha('--upload-pack=evil.sh', 'main', { _trace: trace }),
+    ).rejects.toThrow('Invalid Remote URL')
+  })
+
+  it('redacts non-GitHub credential shapes in stderr (http basic-auth and GitLab PAT)', async () => {
+    const client = createClient(async (command, args) => {
+      if (command === '/bin/chezmoi') return result(command, args, '')
+      throw new CommandFailedError({
+        command,
+        args,
+        exitCode: 128,
+        stdout: '',
+        stderr:
+          'remote: denied http://user:pass@example.com/repo.git token glpat-ABCDEF1234567890\n',
+      })
+    })
+
+    const preflight = await client.preflightRemote('https://gitlab.com/owner/private.git', {
+      _trace: trace,
+    })
+
+    expect(preflight.reachable).toBe(false)
+    expect(preflight.diagnostics?.stderr).toBe(
+      'remote: denied http://<redacted>@example.com/repo.git token <redacted-token>\n',
+    )
   })
 })

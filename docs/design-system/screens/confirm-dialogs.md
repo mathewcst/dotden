@@ -2,8 +2,9 @@
 
 > Phase 5 — Batch A. The three deletion/tracking confirms, built from the `Dialog` modal primitive
 > ([components.md](../components.md)) overlaid on a scrim-dimmed app window. Part of the
-> [design system](../README.md). Domain rules: `CONTEXT.md` (Track §44, Untrack §47,
-> Delete-everywhere §50, "deletions are separate intents, confirm the destructive ones" §141).
+> [design system](../README.md). Domain rules: the **Track**, **Untrack**, and **Delete everywhere**
+> verbs (see [CONTEXT.md](../../../CONTEXT.md)); deletions are separate intents, so only the
+> destructive ones are confirmed.
 
 These are **main-app** modals — a `Dialog` instance centered over a dimmed `AppShell` home window,
 not a wizard. They live in a **`Confirm dialogs`** SECTION (`268:1694`) on `05 · Screens — App`,
@@ -33,11 +34,11 @@ deliberately avoiding the VERTICAL-auto-layout-backdrop overlay gotcha (where ov
 
 ## The three screens
 
-| Screen                             | Tone        | Confirm             | Copy intent (grounded in CONTEXT)                                                                                                                                               |
-| ---------------------------------- | ----------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Track** (`268:1695`)             | Default     | `Track`             | §44 — start managing an untracked file; it joins the Den and syncs to other environments.                                                                                       |
-| **Untrack** (`268:2033`)           | Default     | `Untrack`           | §47 — safe; copy **must** say the file _stays on disk on every environment, nothing is deleted_, and can be tracked again.                                                      |
-| **Delete everywhere** (`268:2342`) | Destructive | `Delete everywhere` | §50/§141 — destructive; removes from the Den **and** deletes the real path on **every environment where it applies** (names this-mac, work-laptop, home-pc); "can't be undone". |
+| Screen                             | Tone        | Confirm             | Copy intent (grounded in CONTEXT)                                                                                                                                                                                                             |
+| ---------------------------------- | ----------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Track** (`268:1695`)             | Default     | `Track`             | The **Track** verb (see [CONTEXT.md](../../../CONTEXT.md)) — start managing an untracked file; it joins the Den and syncs to other environments.                                                                                              |
+| **Untrack** (`268:2033`)           | Default     | `Untrack`           | The **Untrack** verb (see [CONTEXT.md](../../../CONTEXT.md)) — safe; copy **must** say the file _stays on disk on every environment, nothing is deleted_, and can be tracked again.                                                           |
+| **Delete everywhere** (`268:2342`) | Destructive | `Delete everywhere` | The **Delete everywhere** verb (see [CONTEXT.md](../../../CONTEXT.md)) — destructive; removes from the Den **and** deletes the real path on **every environment where it applies** (names this-mac, work-laptop, home-pc); "can't be undone". |
 
 Functional-color discipline holds: only the destructive screen uses red (badge `alert-triangle` +
 `Destructive` Confirm). The safe Track/Untrack confirms use the ember Primary Confirm — Untrack is

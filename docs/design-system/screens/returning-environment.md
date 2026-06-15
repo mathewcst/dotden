@@ -4,7 +4,7 @@
 > off to the app's Apply surface (reuses `AppShell` + panes). Part of the
 > [design system](../README.md).
 
-The "second environment" journey from `CONTEXT.md` (Onboarding / discovery): **connect the repo
+The "second environment" journey from [scope-v1](../../scope-v1.md) (**Onboarding & discovery**; the auth/repo floor is in [ADR 0020](../../adr/0020-provider-agnostic-pure-git-floor-v1-lean-auth.md)): **connect the repo
 (paste the same Remote URL → `git ls-remote` preflight → clone) → detect the existing Den → pick which
 Workspaces this environment subscribes to → review & Apply the incoming Files**. The initial
 materialization is always a _reviewed_ Apply; a File that already exists locally routes through the

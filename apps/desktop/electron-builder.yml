@@ -41,7 +41,7 @@ mac:
   target:
     - dmg
   category: public.app-category.productivity
-  # v1 ships unsigned per CONTEXT.md / ADR 0010; remove once signing is enabled.
+  # v1 ships unsigned per docs/scope-v1.md (Distribution) / ADR 0010; remove once signing is enabled.
   identity: null
   hardenedRuntime: true
 

@@ -15,6 +15,6 @@ The Electron security split — `main` / `preload` / `renderer` — is already f
 
 ## Consequences
 
-- The `foundation/`-never-imports-`electron` rule is a convention today (see `CONVENTIONS.md`); it is cheap to make mechanical later via `no-restricted-imports` in `@dotden/eslint-config` scoped to `foundation/**`, and that is the recommended follow-up the day a contributor first reaches for `electron` inside an adapter.
+- The `foundation/`-never-imports-`electron` rule is a convention today (see `../conventions.md`); it is cheap to make mechanical later via `no-restricted-imports` in `@dotden/eslint-config` scoped to `foundation/**`, and that is the recommended follow-up the day a contributor first reaches for `electron` inside an adapter.
 - New main-process code chooses its layer by its dependencies: needs a binary or domain logic and no Electron → `foundation/`; needs `ipcMain`/`app`/`BrowserWindow` → `ipc/` or `index.ts`.
 - This keeps the ADR 0008 invariant-ownership story coherent: the orchestration seam where the four safety invariants compose will sit in the Electron-free layer (or just above it), testable without the Electron runtime.

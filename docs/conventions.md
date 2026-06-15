@@ -1,7 +1,7 @@
 # Conventions
 
 Day-to-day development patterns for dotden. This is the practical "how we write
-code here" companion to the decisions captured in `docs/adr/`. `CONTEXT.md` is the
+code here" companion to the decisions captured in `adr/`. `../CONTEXT.md` is the
 domain glossary (what words mean); this file is craft (how we build). When a rule
 here is also a hard, irreversible decision, it links to its ADR.
 

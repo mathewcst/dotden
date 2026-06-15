@@ -190,7 +190,7 @@ Local component sets, all token-bound, mirroring shadcn anatomy:
   **master-detail** layout: a **scrollable `list-region`** of `CommitRow`s on the base background, a
   **shadcn-style `resize-handle`** (grip on a divider — the split is draggable), and a **fixed
   `preview-panel`** on a raised `card` surface that swaps to the selected version — read-only `DiffLine`
-  patch (the `PatchDiff` role, `CONTEXT.md` §126) + a "kept in history — nothing is deleted"
+  patch (the `PatchDiff` role; full spec in [file history](./screens/file-history.md)) + a "kept in history — nothing is deleted"
   reassurance line + one **filled ember Primary `Restore this version`** button. Built by **detaching**
   an `AppPane/Diff` instance (`detachInstance()` preserves variable bindings — unlike `clone()`),
   switching the History `Tab` to active, and stripping the read-only-irrelevant header controls
@@ -221,9 +221,26 @@ Local component sets, all token-bound, mirroring shadcn anatomy:
   gotcha). **Size:** 16px default (`size-4` in code); 14/20 where a component calls for it. In code:
   **lucide-react** (shadcn default). _(M8 done 2026-06-14 — the legacy local `Icon/_` set is fully retired; every icon is now a Nova Lucide instance.)\*
 
-Two-axis file status (per `CONTEXT.md`): **local** git status as a letter lane (M/A/D/R/U/Ignored)
+## Two-axis file status (owned here · domain terms in [CONTEXT.md](../../CONTEXT.md))
 
-- **remote** axis as a row decoration (`↓` incoming / `!`/`⚠` conflict), shown together.
+A file carries **two independent status axes**, rendered together on the tree row:
+
+- **Local axis** = the tree's built-in git-status lane, driven by `setGitStatus([{path,status}])`
+  (union `added|modified|deleted|ignored|renamed|untracked`) computed from `chezmoi status`. Mapping:
+  uncommitted edit → `modified` (M); new-not-committed → `added` (A); discovered candidate not yet
+  managed → `untracked` (U); locally deleted → `deleted` (D); moved → `renamed` (R); File OS-Scoped out
+  of this environment → `ignored` (styled muted). A Folder/Workspace with changed descendants gets the
+  automatic folder dot. (beta.4 renders a coloured **M/A/D/R/U** letter in a fixed-width git lane at the
+  row's trailing edge, plus tints icon + filename.)
+- **Remote axis (incoming) + Conflict** = dedicated surfaces (top-level "N incoming" → Apply diff;
+  conflicts → Resolve view) **and** a per-row `renderRowDecoration` overlay glyph (`↓` incoming /
+  `⚠` conflict) shown **left of the status letter**. Spike #00 = GO: the glyph lands directly left of the
+  status letter with a gap (`↓ M` / `⚠ U` / `⚠ M`), no overlap/clipping at compact/default/relaxed
+  density; drive it with `renderRowDecoration` returning a text glyph — **no `unsafeCSS`, no
+  `setGitStatus` overload**. `renderRowDecoration` is a separate lane
+  (`[data-item-section='decoration']`, `flex:1; justify-content:flex-end`); per-row actions use
+  `renderContextMenu` (Commit/Apply/Untrack/Delete everywhere). Verified against
+  `@pierre/trees@1.0.0-beta.4`.
 
 ## AppShell & default panes (the main-app scaffold)
 
@@ -280,7 +297,8 @@ pattern, applied to settings tabs). See [settings](./screens/settings.md).
   their bespoke controls. The lone exception is Repository's mono Remote-URL row (bespoke):
   - **`Automation`** (`530:1115`) — the **risk-graded ladder** via 4 `SelectRow`s: **Manual** (Selected,
     Neutral "Default" pill) / **Auto-sync** / **Auto-apply** (Amber "Warned" trailing `Pill`) / **YOLO
-    mode** (Red "Strongly warned"). Subtitles from `CONTEXT.md` §101–106. A `Shield` note states the two
+    mode** (Red "Strongly warned"). Subtitles from the automation levels in
+    [ADR 0006](../adr/0006-sync-model-transport-not-commit.md). A `Shield` note states the two
     never-relax invariants (conflicts never auto-resolve; deletions always confirm).
   - **`Commit`** (`532:1146`) — mono message-template field (`[$os-sync-$year-$month-$day]`) + "Reset to
     default" + a live preview line + a wrapped row of insertable variable `Kbd` chips.
@@ -302,7 +320,9 @@ pattern, applied to settings tabs). See [settings](./screens/settings.md).
 
 ## Platform chrome — macOS (Phase 5 — Batch G) · **the one dd/\* token-binding exception**
 
-The background **tray poller**'s two closed-window surfaces (`CONTEXT.md` §109/§108/§145). Asked
+The background **tray poller**'s two closed-window surfaces (poll cadence in
+[scope-v1](../scope-v1.md); automation levels + notify-don't-apply in
+[ADR 0006](../adr/0006-sync-model-transport-not-commit.md)). Asked
 "branded popover vs. native-per-OS chrome," the user chose **native chrome** — so these are faithful
 **macOS** mocks (dark-mode system menu / Notification-Center card), **not** the warm-dark ember theme.
 **They bind no `dd/*` variables** — literal macOS system colors instead (the single documented
@@ -314,11 +334,13 @@ Live in section `571:1299` on page 02. Full spec: [tray-and-notification](./scre
   (256w, radius 10, white@0.10 hairline, drop shadow): `dotden` header + a status line with a leading
   **status dot** (green up-to-date / blue incoming·syncing / gray offline), then `Sync now ⌘S`,
   `Review & Apply` (bright **with count** when incoming, else grayed/disabled), `Auto-sync: Manual ›`
-  (the §109 level quick-toggle), `Open dotden`, `Quit dotden ⌘Q`. **`State` is the whole API** (same
+  (the automation-level quick-toggle, see [ADR 0006](../adr/0006-sync-model-transport-not-commit.md)),
+  `Open dotden`, `Quit dotden ⌘Q`. **`State` is the whole API** (same
   pattern as `Banner`) — each variant bakes its dot/copy/enabled-rows; disabled rows = secondary @ 0.5.
 - **`OSNotification`** (`562:1299`) SET `State=Incoming|Conflict|Applied` — the macOS notification toast
   (360w, radius 16): ember **app-icon** (gradient square + white dot) + `dotden`/`now` header + title +
   body + a right-aligned translucent **action button**. Incoming → **Review & Apply**, Conflict →
   **Resolve**, **Applied** = the auto-apply confirmation (informational, **action row hidden** so the
   card shrinks). Mirrors the in-app `Banner` content, in native chrome — the closed-window counterpart.
-  Faithful to §108: the poller **notifies**; the action opens the app — it never applies.
+  Faithful to the notify-don't-apply rule ([ADR 0006](../adr/0006-sync-model-transport-not-commit.md)):
+  the poller **notifies**; the action opens the app — it never applies.

@@ -2,9 +2,10 @@
 
 > Phase 5 — Batch B. Recording an environment's edited Files into the Den, then pushing. Built on
 > `AppShell` + the new `AppPane/Commit` ([components.md](../components.md)). Part of the
-> [design system](../README.md). Domain rules: `CONTEXT.md` — **Commit** verb §62, commit is always
-> manual / no silent auto-commit §98, push is manual ("Sync now") so a commit is local until pushed
-> §99/§107, customizable commit-message template §143.
+> [design system](../README.md). Domain rules: the **Commit** verb (see [CONTEXT.md](../../../CONTEXT.md)), commit is always
+> manual / no silent auto-commit, push is manual ("Sync now") so a commit is local until pushed
+> ([ADR 0006](../../adr/0006-sync-model-transport-not-commit.md)), customizable commit-message template
+> ([scope-v1](../../scope-v1.md)).
 
 Two screens in a **`Commit`** SECTION (`283:2644`) on `05 · Screens — App`, each an `AppShell`
 instance reusing **Left/Workspaces** (the M/A/D tree) and **Center/Diff**, with the **Right** slot
@@ -19,12 +20,13 @@ swapped to an `AppPane/Commit` variant.
   be committed, editable;
 - the **template hint** shows the **unresolved** template (`[$os-sync-$year-$month-$day]`) in a code
   block, so the user knows the _base_ their message came from, plus an **Edit template** link
-  (→ Settings, §143).
+  (→ Settings; commit-message template in [scope-v1](../../scope-v1.md)).
 
-The primary action is **Commit changes** (the exact label, §62). A helper line — "Commits locally —
-push later with Sync now" — encodes §99 (commit is local until pushed). After committing, the
+The primary action is **Commit changes** (the exact label; see the **Commit** verb in
+[CONTEXT.md](../../../CONTEXT.md)). A helper line — "Commits locally —
+push later with Sync now" — encodes the commit-is-local-until-pushed rule ([ADR 0006](../../adr/0006-sync-model-transport-not-commit.md)). After committing, the
 composer flips to **Committed**: success callout, the new commit (amber SHA), a **TO PUSH · 1 commit
-ahead** line, and a **Sync now** push button (§107 — Sync now = push pending + fetch).
+ahead** line, and a **Sync now** push button (Sync now = push pending + fetch; see [ADR 0006](../../adr/0006-sync-model-transport-not-commit.md)).
 
 ## The two screens
 

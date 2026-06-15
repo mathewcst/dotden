@@ -12,32 +12,50 @@ import { RemoteClient } from './foundation/remote-client.js'
 import { resolveBundledTools } from './foundation/tools.js'
 
 /**
- * Creates the app's single BrowserWindow and loads the renderer into it.
+ * Lazily-built, process-wide {@link RemoteClient}.
  *
- * The window is hardened against the renderer: `contextIsolation` + no
- * `nodeIntegration` + `sandbox` keep untrusted renderer code off Node, so the
- * only main<->renderer bridge is the preload script's exposed API surface.
+ * Building it requires resolving the bundled chezmoi/git binaries, so it is
+ * created on first IPC use and reused thereafter (one client per app run).
  *
- * Renderer source is chosen by build context: in dev (`!app.isPackaged`) it
- * loads the Vite dev-server URL for HMR; in a packaged build it loads the
- * bundled `index.html` from disk.
+ * Retry-on-failure: only a *resolved* promise is memoized. If construction
+ * rejects (e.g. missing bundled binaries), the catch in {@link getRemoteClient}
+ * clears the memo so the next IPC call retries from scratch — without this, a
+ * single early failure would brick all Remote IPC until the app restarts.
  */
 let remoteClient: Promise<RemoteClient> | undefined
 
+/**
+ * Get the shared {@link RemoteClient}, building it lazily on first use.
+ *
+ * Lazy-singleton on success (the promise is cached and reused); retry on
+ * failure (a rejection clears the cache before rethrowing, so the next call
+ * gets a fresh attempt rather than a permanently-rejected memo).
+ */
 async function getRemoteClient(): Promise<RemoteClient> {
-  remoteClient ??= resolveBundledTools().then(
-    (tools) =>
-      new RemoteClient({
-        chezmoiBin: tools.chezmoi,
-        gitBin: tools.git,
-        sourceDir: join(app.getPath('userData'), 'chezmoi-source'),
-        destinationDir: app.getPath('home'),
-      }),
-  )
+  remoteClient ??= buildRemoteClient().catch((error: unknown) => {
+    // Drop the rejected promise so the next IPC call retries instead of
+    // resolving this same failure forever.
+    remoteClient = undefined
+    throw error
+  })
   return remoteClient
 }
 
+/** Resolve bundled tools and construct a {@link RemoteClient} for this environment. */
+async function buildRemoteClient(): Promise<RemoteClient> {
+  const tools = await resolveBundledTools()
+  return new RemoteClient({
+    chezmoiBin: tools.chezmoi,
+    gitBin: tools.git,
+    sourceDir: join(app.getPath('userData'), 'chezmoi-source'),
+    destinationDir: app.getPath('home'),
+  })
+}
+
 function registerIpcBridge(): void {
+  // Per-operation cancellation (AbortSignal) is not yet wired across IPC — a
+  // signal cannot cross Electron's structured-clone boundary — so v1 relies on
+  // the RemoteClient's per-call timeout as the guarantee against a hung call.
   ipcMain.handle(
     'remote:preflight',
     async (_event, payload: { url: string; _trace: { traceId: string } }) =>
@@ -57,6 +75,17 @@ function registerIpcBridge(): void {
   )
 }
 
+/**
+ * Creates the app's single BrowserWindow and loads the renderer into it.
+ *
+ * The window is hardened against the renderer: `contextIsolation` + no
+ * `nodeIntegration` + `sandbox` keep untrusted renderer code off Node, so the
+ * only main<->renderer bridge is the preload script's exposed API surface.
+ *
+ * Renderer source is chosen by build context: in dev (`!app.isPackaged`) it
+ * loads the Vite dev-server URL for HMR; in a packaged build it loads the
+ * bundled `index.html` from disk.
+ */
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1100,

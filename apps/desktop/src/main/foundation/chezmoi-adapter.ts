@@ -63,15 +63,20 @@ export class ChezmoiAdapter {
    * (`chezmoi add`). The git commit is delegated so this adapter stays a pure
    * chezmoi wrapper.
    *
+   * Staging is SELECTIVE: each target's source-state file (via {@link sourcePath})
+   * is resolved and only those paths are committed, so the commit records exactly
+   * the chosen Files — unrelated dirty paths in the source tree are not swept in.
+   *
    * @param targetPaths Destination-relative dotfile paths to capture.
    * @param message Commit message forwarded verbatim to `git commit`.
-   * @param git Collaborator that stages and commits the source repo via `git add --all` + `git commit` (GitTransport.commitAll).
+   * @param git Collaborator that stages exactly the committed Files' source paths and
+   *   commits them via `git add -- <…paths>` + `git commit` (GitTransport.commit).
    * @throws CommandFailedError if any chezmoi invocation exits non-zero.
    */
   async commit(
     targetPaths: readonly string[],
     message: string,
-    git: { commitAll(message: string): Promise<void> },
+    git: { commit(paths: readonly string[], message: string): Promise<void> },
   ): Promise<void> {
     for (const targetPath of targetPaths) {
       // re-add only refreshes an EXISTING source entry; new files must go through add.
@@ -81,7 +86,12 @@ export class ChezmoiAdapter {
         await this.track(targetPath)
       }
     }
-    await git.commitAll(message)
+    // Resolve each target to its source-state file so git stages exactly those paths
+    // (after the add/re-add loop above, every target is managed and resolvable).
+    const sourcePaths = await Promise.all(
+      targetPaths.map((targetPath) => this.sourcePath(targetPath)),
+    )
+    await git.commit(sourcePaths, message)
   }
 
   /**
