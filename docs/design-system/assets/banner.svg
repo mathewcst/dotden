@@ -1,0 +1,17 @@
+<svg width="1280" height="380" viewBox="0 0 1280 380" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="dotden — your environment, anywhere.">
+  <defs>
+    <radialGradient id="ember" cx="100%" cy="0%" r="95%" gradientUnits="userSpaceOnUse" fx="1280" fy="0">
+      <stop offset="0%" stop-color="#E76A33" stop-opacity="0.42"/>
+      <stop offset="40%" stop-color="#E76A33" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#E76A33" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="380" rx="16" fill="#1A1208"/>
+  <rect width="1280" height="380" rx="16" fill="url(#ember)"/>
+  <g transform="translate(96,72)">
+    <rect width="72" height="72" rx="20" fill="#E76A33"/>
+    <circle cx="36" cy="36" r="13" fill="#1A1208"/>
+  </g>
+  <text x="94" y="248" font-family="'Geist','Segoe UI',-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif" font-size="88" font-weight="700" letter-spacing="-3" fill="#FBF7F2">dotden</text>
+  <text x="98" y="306" font-family="'Geist','Segoe UI',-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif" font-size="30" font-weight="400" letter-spacing="0.2" fill="#E76A33">your environment, anywhere.</text>
+</svg>

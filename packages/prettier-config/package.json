@@ -1,0 +1,15 @@
+{
+  "name": "@dotden/prettier-config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./tailwind": "./tailwind.js",
+    "./astro": "./astro.js"
+  },
+  "dependencies": {
+    "prettier-plugin-astro": "catalog:prettier-plugins",
+    "prettier-plugin-tailwindcss": "catalog:prettier-plugins"
+  }
+}

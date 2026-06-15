@@ -1,0 +1,70 @@
+appId: app.dotden.desktop
+productName: dotden
+electronVersion: 42.4.0
+copyright: Copyright © 2026 dotden contributors
+icon: resources/packaging/icon.png
+
+# Packaged app metadata. The workspace package remains @dotden/desktop.
+extraMetadata:
+  name: dotden
+  description: Keep your setup in sync — private, portable, yours.
+  homepage: https://dotden.app
+  repository:
+    type: git
+    url: git+https://github.com/mathewcst/dotden.git
+
+directories:
+  output: release
+  buildResources: resources/packaging
+
+files:
+  - out/**
+  - package.json
+
+extraResources:
+  - from: resources/bin
+    to: bin
+    filter:
+      - '**/*'
+
+asar: true
+compression: maximum
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+
+publish:
+  provider: github
+  owner: mathewcst
+  repo: dotden
+  releaseType: release
+
+mac:
+  target:
+    - dmg
+  category: public.app-category.productivity
+  # v1 ships unsigned per CONTEXT.md / ADR 0010; remove once signing is enabled.
+  identity: null
+  hardenedRuntime: true
+
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+win:
+  target:
+    - nsis
+
+nsis:
+  artifactName: ${productName}-setup-${version}-${arch}.${ext}
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: dotden
+
+linux:
+  target:
+    - AppImage
+  category: Utility
+  syncDesktopName: true
+  maintainer: dotden contributors
+  executableName: dotden
+  synopsis: dotden
+  description: Keep your setup in sync — private, portable, yours.

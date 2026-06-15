@@ -1,0 +1,53 @@
+{
+  "name": "@dotden/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "author": "dotden contributors",
+  "desktopName": "dotden",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build && node scripts/check-compiler.mjs",
+    "check:types": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "check:lint": "eslint .",
+    "test": "vitest run --testTimeout=30000",
+    "package": "electron-vite build && electron-builder"
+  },
+  "dependencies": {
+    "@base-ui/react": "catalog:desktop",
+    "@fontsource-variable/geist": "catalog:desktop",
+    "@fontsource-variable/geist-mono": "catalog:desktop",
+    "class-variance-authority": "catalog:desktop",
+    "clsx": "catalog:desktop",
+    "electron-updater": "^6.6.2",
+    "lucide-react": "catalog:desktop",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19",
+    "tailwind-merge": "catalog:desktop"
+  },
+  "devDependencies": {
+    "@babel/core": "catalog:desktop",
+    "@babel/plugin-transform-runtime": "catalog:desktop",
+    "@babel/runtime": "catalog:desktop",
+    "@dotden/eslint-config": "workspace:*",
+    "@dotden/prettier-config": "workspace:*",
+    "@dotden/typescript-config": "workspace:*",
+    "@rolldown/plugin-babel": "catalog:desktop",
+    "@tailwindcss/vite": "catalog:desktop",
+    "@types/node": "catalog:desktop",
+    "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19",
+    "@vitejs/plugin-react": "catalog:desktop",
+    "babel-plugin-react-compiler": "catalog:desktop",
+    "electron": "catalog:desktop",
+    "electron-builder": "catalog:desktop",
+    "electron-vite": "catalog:desktop",
+    "eslint": "catalog:",
+    "eslint-plugin-react-hooks": "catalog:",
+    "tailwindcss": "catalog:desktop",
+    "typescript": "catalog:",
+    "vite": "catalog:desktop",
+    "vitest": "catalog:desktop"
+  },
+  "prettier": "@dotden/prettier-config/tailwind"
+}

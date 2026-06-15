@@ -1,0 +1,36 @@
+{
+  "name": "@dotden/eslint-config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./base": {
+      "types": "./base.d.ts",
+      "default": "./base.js"
+    },
+    "./react-app": {
+      "types": "./react-app.d.ts",
+      "default": "./react-app.js"
+    },
+    "./astro": {
+      "types": "./astro.d.ts",
+      "default": "./astro.js"
+    }
+  },
+  "scripts": {
+    "check:lint": "eslint ."
+  },
+  "dependencies": {
+    "@eslint/js": "catalog:",
+    "eslint-config-prettier": "catalog:",
+    "eslint-plugin-astro": "catalog:",
+    "eslint-plugin-react-hooks": "catalog:",
+    "eslint-plugin-turbo": "catalog:",
+    "globals": "catalog:",
+    "typescript-eslint": "catalog:"
+  },
+  "devDependencies": {
+    "eslint": "catalog:"
+  },
+  "prettier": "@dotden/prettier-config"
+}

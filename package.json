@@ -1,0 +1,33 @@
+{
+  "name": "dotden",
+  "private": true,
+  "description": "Keep your setup in sync — private, portable, yours.",
+  "license": "MIT",
+  "homepage": "https://dotden.app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mathewcst/dotden.git"
+  },
+  "packageManager": "pnpm@11.6.0",
+  "engines": {
+    "node": ">=24",
+    "pnpm": ">=11"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "check": "turbo run check:types check:lint",
+    "check:types": "turbo run check:types",
+    "check:lint": "turbo run check:lint",
+    "format": "prettier --write \"**/*.{ts,tsx,astro,css,md,json}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,astro,css,md,json}\"",
+    "package": "turbo run package"
+  },
+  "devDependencies": {
+    "@dotden/prettier-config": "workspace:*",
+    "prettier": "catalog:",
+    "turbo": "catalog:",
+    "typescript": "catalog:"
+  },
+  "prettier": "@dotden/prettier-config"
+}

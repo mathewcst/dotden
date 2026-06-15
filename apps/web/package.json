@@ -1,0 +1,27 @@
+{
+  "name": "@dotden/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "check:types": "astro check",
+    "check:lint": "eslint ."
+  },
+  "dependencies": {
+    "astro": "catalog:astro",
+    "tailwindcss": "catalog:astro"
+  },
+  "devDependencies": {
+    "@astrojs/check": "catalog:astro",
+    "@dotden/eslint-config": "workspace:*",
+    "@dotden/prettier-config": "workspace:*",
+    "@dotden/typescript-config": "workspace:*",
+    "@tailwindcss/vite": "catalog:astro",
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:astro"
+  },
+  "prettier": "@dotden/prettier-config/astro"
+}
