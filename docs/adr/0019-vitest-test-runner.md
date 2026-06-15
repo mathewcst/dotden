@@ -11,5 +11,10 @@ The first suite intentionally exercises **real processes** for chezmoi and git t
 ## Consequences
 
 - Adapter tests are integration-style: temp destination directory + temp source git repo + real chezmoi/git commands, not mocks.
-- The reusable temp-git-repo fixture lives beside the main-process foundation code until a dedicated test package exists.
 - New test scripts should run through `vitest run`; UI/browser tests can be added later without changing the runner decision.
+
+## Amendment — 2026-06-15: test files and fixtures live in a per-directory `__tests__/`
+
+Originally this ADR placed the reusable temp-git-repo fixture _beside_ the main-process foundation code, and the first suite co-located `*.test.ts` next to the modules under test. That co-location is **superseded**: test files **and** their fixtures now live in a `__tests__/` directory **adjacent to the code they test** — one `__tests__/` per source directory (e.g. `src/main/foundation/__tests__/remote-client.test.ts`, `…/__tests__/temp-git-repo.fixture.ts`), not a single repo-wide tree.
+
+Rationale: production source directories stay free of test-only files (clearer at a glance what ships), while tests stay close enough to their subjects that imports only step up one level (`./remote-client.js` → `../remote-client.js`). Fixtures are test-only, so they belong with the tests, not beside the shipping code. Vitest's default globs pick up `**/__tests__/**` with no config change. See `CONVENTIONS.md` for the day-to-day rule.

@@ -1,4 +1,4 @@
-import { defineConfig, externalizeDepsPlugin, loadEnv } from 'electron-vite'
+import { defineConfig, loadEnv } from 'electron-vite'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 import tailwindcss from '@tailwindcss/vite'
@@ -15,8 +15,10 @@ export default defineConfig(async ({ mode }) => {
   const reactCompiler = await babel({ presets: [reactCompilerPreset()] })
 
   return {
-    main: { plugins: [externalizeDepsPlugin()] },
-    preload: { plugins: [externalizeDepsPlugin()] },
+    // electron-vite v5 externalizes deps via build.externalizeDeps (enabled by
+    // default), so the old externalizeDepsPlugin is no longer needed.
+    main: {},
+    preload: {},
     renderer: {
       root: 'src/renderer',
       base: './',

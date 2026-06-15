@@ -13,14 +13,14 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ChezmoiAdapter, renderOsScopeIgnore } from './chezmoi-adapter.js'
-import { cloneRepo } from './git-transport.js'
+import { ChezmoiAdapter, renderOsScopeIgnore } from '../chezmoi-adapter.js'
+import { cloneRepo } from '../git-transport.js'
 import {
   createExecutableStub,
   createTempDotdenRepo,
   type DotdenTestRepo,
 } from './temp-git-repo.fixture.js'
-import { resolveBundledTools } from './tools.js'
+import { resolveBundledTools } from '../tools.js'
 
 let repo: DotdenTestRepo
 

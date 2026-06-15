@@ -12,9 +12,9 @@
 import { chmod, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
-import { ChezmoiAdapter } from './chezmoi-adapter.js'
-import { GitTransport } from './git-transport.js'
-import { runCommand } from './process.js'
+import { ChezmoiAdapter } from '../chezmoi-adapter.js'
+import { GitTransport } from '../git-transport.js'
+import { runCommand } from '../process.js'
 
 /**
  * A fully-provisioned, disposable dotden environment for integration tests.

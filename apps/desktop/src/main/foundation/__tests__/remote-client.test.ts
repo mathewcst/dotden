@@ -8,8 +8,8 @@
  * poller SHA with `git ls-remote` instead of a Provider API or full fetch.
  */
 import { describe, expect, it } from 'vitest'
-import { CommandFailedError, type CommandResult, type RunCommandOptions } from './process.js'
-import { RemoteClient, RemotePreflightError } from './remote-client.js'
+import { CommandFailedError, type CommandResult, type RunCommandOptions } from '../process.js'
+import { RemoteClient, RemotePreflightError } from '../remote-client.js'
 
 const trace = { traceId: 'trace-remote-client-test' }
 
