@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
-import { ArrowRight, MonitorSmartphone, Sparkles } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Workspace } from '@/components/Workspace'
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell'
 import { ReturningShell } from '@/components/returning/ReturningShell'
 import { SettingsShell } from '@/components/settings/SettingsShell'
+import { Button } from '@/components/ui/button'
+import { Workspace } from '@/components/Workspace'
 import { applyTheme } from '@/lib/apply-theme'
+import { ArrowRight, MonitorSmartphone, Sparkles } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 /**
  * The top-level route: a landing chooser, the first-run onboarding, the second-environment
@@ -87,20 +87,6 @@ export function App() {
 
   return (
     <div className="relative">
-      <div className="bg-card border-border absolute top-1 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border px-1 py-1 text-xs shadow-sm">
-        <button
-          className={`rounded-full px-3 py-0.5 ${role === 'a' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
-          onClick={() => setRole('a')}
-        >
-          Environment A
-        </button>
-        <button
-          className={`rounded-full px-3 py-0.5 ${role === 'b' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
-          onClick={() => setRole('b')}
-        >
-          Environment B
-        </button>
-      </div>
       {/* Key by role so switching environments remounts the Workspace and resets all
           of its state (the React `key` reset pattern), keeping the A/B thread clean. */}
       <Workspace key={role} role={role} onOpenSettings={() => setRoute('settings')} />

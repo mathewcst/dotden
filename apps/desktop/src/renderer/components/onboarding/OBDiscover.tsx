@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, Plus, ScanSearch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Loader2, Plus, ScanSearch } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { DiscoverySuggestion } from '../../../main/foundation/discovery-scanner'
 import { ListRow } from './ListRow'
 import { warnedPathsFromFindings } from './secret-warn'
-import type { DiscoverySuggestion } from '../../../main/foundation/discovery-scanner'
 
 /** Human-friendly size for a row's meta slot, or "Folder" for a directory. */
 function metaFor(suggestion: DiscoverySuggestion): string {
@@ -57,15 +57,15 @@ export function OBDiscover({
       try {
         const found = await window.dotden.discover.scan()
         if (cancelled) return
-        setSuggestions(found)
-        setPicked(new Set(found.map((s) => s.targetPath)))
+        setSuggestions(found.suggestions)
+        setPicked(new Set(found.suggestions.map((s) => s.targetPath)))
         // Reconcile the SecretScanner into Discover (issue 2-07): run the SAME commit-time
         // scanner (`den.scanCommit`, issue 2-03 — no parallel detector) over the discovered
         // Files and flag the secret-bearing ones for the amber `Warn` row. Best-effort: a
         // failed secret scan must never block discovery (the Files stay neutral, still
         // Trackable, and the commit-time warn step still catches secrets later).
         await refreshWarnings(
-          found.map((s) => s.targetPath),
+          found.suggestions.map((s) => s.targetPath),
           () => cancelled,
         )
       } catch (caught) {

@@ -53,7 +53,10 @@ import type {
   ClaimSuggestion,
   EnvironmentWithAttribution,
 } from '../main/foundation/environment-registry.js'
-import type { DiscoverySuggestion } from '../main/foundation/discovery-scanner.js'
+import type {
+  DiscoveryScanResult,
+  DiscoverySuggestion,
+} from '../main/foundation/discovery-scanner.js'
 import type { AutomationLevel } from '../main/foundation/automation-policy.js'
 import type { SyncSettings } from '../main/foundation/sync-settings.js'
 import type { PrivacySettings } from '../main/foundation/privacy-settings.js'
@@ -500,8 +503,9 @@ export interface DotdenApi {
     /**
      * Scan this environment's home dir for config Files of known tools, returning
      * the ones that exist for the Discover onboarding step to offer for Tracking.
+     * Resolves to the full {@link DiscoveryScanResult} (suggestions under `.suggestions`).
      */
-    scan(): Promise<readonly DiscoverySuggestion[]>
+    scan(): Promise<DiscoveryScanResult>
     /**
      * Inspect an arbitrary home-relative path the user dragged in or browsed for, so
      * Files the catalog missed can be Tracked too ("manage anything"). Resolves to

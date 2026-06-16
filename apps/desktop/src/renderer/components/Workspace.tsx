@@ -1,11 +1,26 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FileTree, useFileTree } from '@pierre/trees/react'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { ConflictResolver } from '@/components/ConflictResolver'
+import { EnvironmentBadge } from '@/components/EnvironmentBadge'
+import { FileHistory } from '@/components/FileHistory'
+import { FileRow } from '@/components/FileRow'
+import { IncomingBanner } from '@/components/IncomingBanner'
+import { OfflineBanner } from '@/components/OfflineBanner'
+import { ReviewApply } from '@/components/ReviewApply'
+import { RowContextMenu, type RowVerb } from '@/components/RowContextMenu'
+import { ScopeEditor } from '@/components/ScopeEditor'
+import { SecretPicker } from '@/components/SecretPicker'
+import { SecretWarning } from '@/components/SecretWarning'
+import { StatusTag, type FileStatus } from '@/components/StatusTag'
+import { Button } from '@/components/ui/button'
+import { WorkspaceSidebar } from '@/components/WorkspaceSidebar'
+import { remoteAxisDecoration } from '@/lib/remote-axis'
+import { PatchDiff } from '@pierre/diffs/react'
 import type {
   FileTreeRenameEvent,
   FileTreeRowDecorationRenderer,
   GitStatusEntry,
 } from '@pierre/trees'
-import { PatchDiff } from '@pierre/diffs/react'
+import { FileTree, useFileTree } from '@pierre/trees/react'
 import {
   AlertTriangle,
   Bell,
@@ -20,25 +35,8 @@ import {
   Search,
   Settings,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { StatusTag, type FileStatus } from '@/components/StatusTag'
-import { EnvironmentBadge } from '@/components/EnvironmentBadge'
-import { RowContextMenu, type RowVerb } from '@/components/RowContextMenu'
-import { ConfirmDialog } from '@/components/ConfirmDialog'
-import { WorkspaceSidebar } from '@/components/WorkspaceSidebar'
-import { FileRow } from '@/components/FileRow'
-import { ScopeEditor } from '@/components/ScopeEditor'
-import { IncomingBanner } from '@/components/IncomingBanner'
-import { OfflineBanner } from '@/components/OfflineBanner'
-import { ReviewApply } from '@/components/ReviewApply'
-import { ConflictResolver } from '@/components/ConflictResolver'
-import { SecretWarning } from '@/components/SecretWarning'
-import { SecretPicker } from '@/components/SecretPicker'
-import { FileHistory } from '@/components/FileHistory'
-import { remoteAxisDecoration } from '@/lib/remote-axis'
-import type { SecretFinding } from '../../main/foundation/secret-scanner'
-import type { DetectedPasswordManager } from '../../main/foundation/pm-detect'
-import type { PmPreference } from '../../main/foundation/pm-preference'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { AutomationLevel } from '../../main/foundation/automation-policy'
 import type {
   AffectedEnvironment,
   ConvertSecretRequest,
@@ -47,8 +45,10 @@ import type {
   RemoteAxisMarker,
 } from '../../main/foundation/den-service'
 import type { Workspace as WorkspaceModel } from '../../main/foundation/myenv-store'
-import type { AutomationLevel } from '../../main/foundation/automation-policy'
 import type { Scope } from '../../main/foundation/os-scope'
+import type { DetectedPasswordManager } from '../../main/foundation/pm-detect'
+import type { PmPreference } from '../../main/foundation/pm-preference'
+import type { SecretFinding } from '../../main/foundation/secret-scanner'
 
 /** Discriminates which environment's role this shell is driving (A vs B copy/actions). */
 type Role = 'a' | 'b'
@@ -113,6 +113,10 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
   const [centerTab, setCenterTab] = useState<'changes' | 'history'>('changes')
   const [diff, setDiff] = useState<string | null>(null)
   const [lastCommitMessage, setLastCommitMessage] = useState<string | null>(null)
+  // An honest "nothing to commit" notice (not an error): the chosen Files already matched the
+  // Den, so the Commit was a clean no-op (CommitResult.noop). Shown as neutral info, never the
+  // red error channel — never fail loudly on a legitimate no-op (ADR 0001).
+  const [commitNotice, setCommitNotice] = useState<string | null>(null)
   // This environment's automation level (issue 1-12). Auto-sync auto-pushes Commits and
   // changes the Commit/Sync copy; Manual leaves push to an explicit Sync now. Read once on
   // mount and refreshed when the user toggles it elsewhere (Settings, a later slice).
@@ -433,6 +437,15 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
     async (paths: readonly string[]) => {
       if (paths.length === 0) return
       const result = await window.dotden.den.commit(paths)
+      // A legitimate no-op: the chosen Files already match the Den (stale tree status). Say so
+      // honestly and reload so the now-clean status disables the Commit button — never an error.
+      if (result.noop) {
+        setCommitNotice('Nothing to commit — your selected Files already match your Den.')
+        setLastCommitMessage(null)
+        await reloadTree()
+        return
+      }
+      setCommitNotice(null)
       setLastCommitMessage(result.message)
       // Under Auto-sync the main process auto-pushed this Commit (result.pushed === true);
       // under Manual it stays local until Sync now. Reflect that so the callout copy is honest.
@@ -797,7 +810,7 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
         />
       ) : (
         // Keep the middle grid row collapsed when there is no banner (no layout shift).
-        <div className="hidden" />
+        <div />
       )}
 
       <div className="grid grid-cols-[260px_1fr_300px] overflow-hidden">
@@ -1194,10 +1207,16 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
             />
           ) : null}
 
+          {role === 'a' && commitNotice ? (
+            <p className="text-dd-blue-400 text-xs" role="status">
+              {commitNotice}
+            </p>
+          ) : null}
+
           {role === 'a' && lastCommitMessage ? (
             <section className="border-border bg-card rounded-md border p-3">
               <h2 className="mb-1 text-xs font-semibold tracking-wide">LAST COMMIT</h2>
-              <p className="font-mono text-xs break-words">{lastCommitMessage}</p>
+              <p className="font-mono text-xs wrap-break-word">{lastCommitMessage}</p>
               {/* Honest about where the change actually is: Auto-sync auto-pushed it to the
                   Remote; Manual leaves it local until Sync now (never imply a sync that did
                   not happen). */}

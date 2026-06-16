@@ -194,6 +194,16 @@ export interface CommitResult {
    * Always `false` under Manual (no auto-push attempted) and when the auto-push succeeded.
    */
   readonly queued: boolean
+  /**
+   * `true` when the Commit was a **legitimate no-op**: staging the chosen Files plus the
+   * `.myenv/` metadata left the index byte-for-byte equal to HEAD, so there was nothing to
+   * record (e.g. the Files were already Committed and the tree status was stale). A plain
+   * `git commit` exits non-zero ("nothing to commit") here; we treat it as a clean no-op
+   * instead of a failure (mirrors {@link GitTransport.commitIfChanged} — never fail loudly
+   * on a legitimate no-op, never invent an empty commit). `committedFiles` is `[]` in this
+   * case and no push is attempted; the UI says so honestly rather than surfacing an error.
+   */
+  readonly noop: boolean
 }
 
 /**
@@ -842,15 +852,38 @@ export class DenService {
       // chezmoi.commit re-adds/adds the chosen Files then commits exactly their
       // source-state paths; we stage the `.myenv/` metadata in the same commit so
       // the synced Workspace tree + registry travel with the recorded Files.
+      // `recorded` stays true unless the staged tree matched HEAD — a legitimate no-op
+      // (the Files were already Committed; the renderer's tree status was stale). We use
+      // the no-op-tolerant primitive so an everyday Commit of an already-recorded set is a
+      // clean no-op rather than a "nothing to commit" CommandFailedError (ADR 0001 spirit).
+      let recorded = true
       await this.chezmoi.commit(targetPaths, rendered.message, {
         commit: async (sourcePaths, message) => {
           // Stage the chosen Files' source paths PLUS the synced metadata
           // (`.myenv/` registry+placements and the `.chezmoiignore` that keeps
           // `.myenv/` out of chezmoi's managed set) so the model travels with the
           // Commit and a second environment can reconstruct the Den.
-          await this.git.commit([...sourcePaths, '.myenv', '.chezmoiignore'], message)
+          recorded = await this.git.commitIfChanged(
+            [...sourcePaths, '.myenv', '.chezmoiignore'],
+            message,
+          )
         },
       })
+      // Nothing was recorded → an honest no-op. Skip auto-push (there is no new Commit to
+      // send) and return early so the UI reports "nothing to commit" instead of an error.
+      if (!recorded) {
+        span?.setAttribute('fileCount', 0)
+        span?.end('ok')
+        return {
+          message: rendered.message,
+          templateId: rendered.templateId,
+          templateLabel: rendered.templateLabel,
+          committedFiles: [],
+          pushed: false,
+          queued: false,
+          noop: true,
+        }
+      }
       span?.setAttribute('fileCount', targetPaths.length)
       span?.setAttribute('automationLevel', this.automation.automationLevel)
       // Auto-sync (issue 1-12): when the AutomationPolicy permits it, PUSH the
@@ -894,6 +927,7 @@ export class DenService {
         // reconnect"; the local Commit is safe regardless.
         pushed,
         queued,
+        noop: false,
       }
     } catch (error) {
       span?.end('error')
