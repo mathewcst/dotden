@@ -21,6 +21,7 @@ import type { EnvironmentRegistry } from '../foundation/environment-registry.js'
 import type { RemoteClient } from '../foundation/remote-client.js'
 import type { AutomationLevel } from '../foundation/automation-policy.js'
 import type { SyncSettings } from '../foundation/sync-settings.js'
+import type { PrivacySettings } from '../foundation/privacy-settings.js'
 import type { Scope } from '../foundation/os-scope.js'
 import type { UnsubscribeDisposition } from '../foundation/subscription-settings.js'
 import type { SecretFinding } from '../foundation/secret-scanner.js'
@@ -107,6 +108,18 @@ export interface IpcBridgeDeps {
    * user's choice and returns the persisted settings.
    */
   readonly setSyncSettings: (settings: SyncSettings) => Promise<SyncSettings>
+  /**
+   * Read this environment's privacy/telemetry consent — analytics · crash reports (issue 2-14).
+   * Environment-local (`userData`, never synced — ADR 0024); the bridge just forwards it.
+   */
+  readonly getPrivacySettings: () => Promise<PrivacySettings>
+  /**
+   * Persist this environment's privacy/telemetry consent (issue 2-14). CONTROL SURFACE ONLY:
+   * this records a stored boolean and has NO side effects — no egress, no SDK, no network call.
+   * The consumers that act on consent are PRD 3 (issues 3-09/3-10). Returns the persisted
+   * settings so the Privacy tab re-renders from the source of truth.
+   */
+  readonly setPrivacySettings: (settings: PrivacySettings) => Promise<PrivacySettings>
 }
 
 /**
@@ -517,6 +530,24 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     // index.ts's setSyncSettings persists locally then re-arms the poller + applies autostart,
     // and returns the persisted settings so the tab re-renders from the source of truth.
     return deps.setSyncSettings(settings)
+  })
+
+  // ── Privacy / telemetry consent channels (issue 2-14): the environment-local Privacy tab ──
+  // get-settings is read-only; set-settings persists the consent flag LOCALLY and has NO side
+  // effects — CONTROL SURFACE ONLY (no egress, no SDK, no network call). The consumers that act
+  // on consent are PRD 3 (issues 3-09/3-10). Both assert the `_trace` envelope so EVERY IPC call
+  // is uniformly correlated, even though the consent read/write does not take a trace id today.
+  registrar.handle('privacy:get-settings', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    return deps.getPrivacySettings()
+  })
+  registrar.handle('privacy:set-settings', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    const { settings } = payload as TracedPayload & { settings: PrivacySettings }
+    // index.ts's setPrivacySettings persists locally and returns the persisted consent so the
+    // tab re-renders from the source of truth. No egress happens here — flipping a toggle stores
+    // a boolean and nothing more (issue 2-14 is control-surface-only).
+    return deps.setPrivacySettings(settings)
   })
 }
 

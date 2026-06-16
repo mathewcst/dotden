@@ -418,6 +418,21 @@ const api: DotdenApi = {
       }) as ReturnType<DotdenApi['sync']['setSettings']>
     },
   },
+  privacy: {
+    // → IPC channel 'privacy:get-settings' (env-local telemetry consent; both default off, 2-14)
+    getSettings() {
+      return ipcRenderer.invoke('privacy:get-settings', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['privacy']['getSettings']>
+    },
+    // → IPC channel 'privacy:set-settings' (persist consent ONLY — no egress, control surface, 2-14)
+    setSettings(settings) {
+      return ipcRenderer.invoke('privacy:set-settings', {
+        settings,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['privacy']['setSettings']>
+    },
+  },
   trayPoller: {
     // ← main→renderer push: the TrayPoller fires 'tray-poller:incoming' when the Remote
     // moved (issue 1-12). We wrap the raw IPC listener so the renderer callback never sees

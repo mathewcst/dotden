@@ -34,6 +34,8 @@ import type { UnsubscribeDisposition } from './foundation/subscription-settings.
 import { DEFAULT_POLL_CADENCE, TrayPoller, type PollCadence } from './foundation/tray-poller.js'
 import { readSyncSettings, writeSyncSettings } from './foundation/sync-settings.js'
 import type { PollCadenceProfile, SyncSettings } from './foundation/sync-settings.js'
+import { readPrivacySettings, writePrivacySettings } from './foundation/privacy-settings.js'
+import type { PrivacySettings } from './foundation/privacy-settings.js'
 
 /**
  * Process-wide observability core (ADR 0007): one wide event per Operation lands in
@@ -296,6 +298,26 @@ async function setSyncSettings(settings: SyncSettings): Promise<SyncSettings> {
   return settings
 }
 
+// ── Privacy / telemetry consent: analytics · crash reports (issue 2-14, ADR 0024) ──
+
+/** Read this environment's telemetry consent (analytics · crash reports; both default off). */
+function getPrivacySettings(): Promise<PrivacySettings> {
+  return readPrivacySettings(app.getPath('userData'))
+}
+
+/**
+ * Persist this environment's telemetry consent (issue 2-14). CONTROL SURFACE ONLY: unlike
+ * {@link setSyncSettings} this has NO side effects — it only writes the consent flag to
+ * `userData` (never the synced `.myenv/`, ADR 0024). No telemetry SDK is loaded and no network
+ * connection is opened here; the consumers gated behind this consent are PRD 3 (issues
+ * 3-09/3-10), which read it. Returns the persisted consent so the Privacy tab re-renders from
+ * the source of truth.
+ */
+async function setPrivacySettings(settings: PrivacySettings): Promise<PrivacySettings> {
+  await writePrivacySettings(app.getPath('userData'), settings)
+  return settings
+}
+
 /**
  * Apply the OS "open dotden at login" preference (issue 2-08). Electron's
  * `setLoginItemSettings` registers/unregisters the login item on macOS + Windows; it is a
@@ -528,6 +550,8 @@ app.whenReady().then(() => {
     setUnsubscribeDisposition,
     getSyncSettings,
     setSyncSettings,
+    getPrivacySettings,
+    setPrivacySettings,
   })
   createWindow()
 

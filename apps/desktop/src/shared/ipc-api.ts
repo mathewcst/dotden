@@ -52,6 +52,7 @@ import type {
 import type { DiscoverySuggestion } from '../main/foundation/discovery-scanner.js'
 import type { AutomationLevel } from '../main/foundation/automation-policy.js'
 import type { SyncSettings } from '../main/foundation/sync-settings.js'
+import type { PrivacySettings } from '../main/foundation/privacy-settings.js'
 import type { AppearanceSettings } from './appearance-settings.js'
 
 /**
@@ -531,6 +532,31 @@ export interface DotdenApi {
      * Returns the persisted settings so the tab re-renders from the source of truth.
      */
     setSettings(settings: SyncSettings): Promise<SyncSettings>
+  }
+  /**
+   * Privacy / telemetry consent (issue 2-14, stories 43–44), forwarded to `privacy:*` IPC
+   * channels — the data seam behind the Settings → Privacy tab.
+   *
+   * Two INDEPENDENT opt-in consents (anonymous usage analytics · crash reports), **both OFF by
+   * default**, so nothing leaves the environment unless the user opts in. Like the Sync settings,
+   * consent is **environment-local** (ADR 0024): a per-machine decision — a shared/locked-down
+   * machine refuses telemetry independently — so it lives in Electron `userData` and NEVER enters
+   * the synced `.myenv/` directory.
+   *
+   * **Control surface only (issue 2-14):** `setSettings` persists a stored boolean and NOTHING
+   * else — no network call, no SDK, no egress. The consumers that act on consent (the Sentry/Umami
+   * clients gated behind these flags, and the first-launch consent screen) are PRD 3 (issues
+   * 3-09/3-10), which READ this consent; flipping a toggle here sends nothing anywhere yet.
+   */
+  readonly privacy: {
+    /** Read this environment's telemetry consent (analytics · crash reports; both default off). */
+    getSettings(): Promise<PrivacySettings>
+    /**
+     * Persist this environment's telemetry consent. Records the flag LOCALLY and returns the
+     * persisted settings so the tab re-renders from the source of truth. No egress: this writes a
+     * boolean and nothing else (the consent gate's consumers are PRD 3).
+     */
+    setSettings(settings: PrivacySettings): Promise<PrivacySettings>
   }
   /**
    * The TrayPoller's detect-only incoming notifications (issue 1-12), pushed FROM the

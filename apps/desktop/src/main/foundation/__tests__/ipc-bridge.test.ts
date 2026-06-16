@@ -10,6 +10,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { registerIpcBridge, traceId, type IpcRegistrar } from '../../ipc/ipc-bridge.js'
 import type { SyncSettings } from '../sync-settings.js'
+import type { PrivacySettings } from '../privacy-settings.js'
 
 /** A fake registrar that captures channel→handler so tests can invoke them directly. */
 function fakeRegistrar() {
@@ -73,6 +74,12 @@ describe('IpcBridge', () => {
         startOnLogin: false,
       }),
       setSyncSettings: async (settings) => settings,
+      getPrivacySettings: async () => ({
+        analyticsEnabled: false,
+        crashReportsEnabled: false,
+        diagnosticLogsEnabled: false,
+      }),
+      setPrivacySettings: async (settings) => settings,
     })
 
     await handlers.get('den:track')?.({}, {
@@ -180,6 +187,12 @@ describe('IpcBridge', () => {
         startOnLogin: false,
       }),
       setSyncSettings: async (settings) => settings,
+      getPrivacySettings: async () => ({
+        analyticsEnabled: false,
+        crashReportsEnabled: false,
+        diagnosticLogsEnabled: false,
+      }),
+      setPrivacySettings: async (settings) => settings,
     })
 
     // get forwards the read Operation's trace id.
@@ -228,6 +241,12 @@ describe('IpcBridge', () => {
         startOnLogin: false,
       }),
       setSyncSettings: async (s) => s,
+      getPrivacySettings: async () => ({
+        analyticsEnabled: false,
+        crashReportsEnabled: false,
+        diagnosticLogsEnabled: false,
+      }),
+      setPrivacySettings: async (s) => s,
     })
 
     // get forwards the read Operation's trace id.
@@ -272,6 +291,12 @@ describe('IpcBridge', () => {
         startOnLogin: false,
       }),
       setSyncSettings: async (settings) => settings,
+      getPrivacySettings: async () => ({
+        analyticsEnabled: false,
+        crashReportsEnabled: false,
+        diagnosticLogsEnabled: false,
+      }),
+      setPrivacySettings: async (settings) => settings,
     })
 
     await handlers.get('den:detect-conflicts')?.({}, { _trace: { traceId: 'c1' } } as never)
@@ -330,6 +355,12 @@ describe('IpcBridge', () => {
         startOnLogin: false,
       }),
       setSyncSettings: async (settings) => settings,
+      getPrivacySettings: async () => ({
+        analyticsEnabled: false,
+        crashReportsEnabled: false,
+        diagnosticLogsEnabled: false,
+      }),
+      setPrivacySettings: async (settings) => settings,
     })
 
     await handlers.get('den:create-workspace')?.({}, {
@@ -426,6 +457,12 @@ describe('IpcBridge', () => {
         startOnLogin: false,
       }),
       setSyncSettings: async (settings) => settings,
+      getPrivacySettings: async () => ({
+        analyticsEnabled: false,
+        crashReportsEnabled: false,
+        diagnosticLogsEnabled: false,
+      }),
+      setPrivacySettings: async (settings) => settings,
     })
 
     await handlers.get('den:subscription-state')?.({}, { _trace: { traceId: 's1' } } as never)
@@ -493,6 +530,12 @@ describe('IpcBridge', () => {
         startOnLogin: false,
       }),
       setSyncSettings: async (settings) => settings,
+      getPrivacySettings: async () => ({
+        analyticsEnabled: false,
+        crashReportsEnabled: false,
+        diagnosticLogsEnabled: false,
+      }),
+      setPrivacySettings: async (settings) => settings,
     })
 
     await handlers.get('remote:preflight')?.({}, {
@@ -523,6 +566,12 @@ describe('IpcBridge', () => {
         startOnLogin: false,
       }),
       setSyncSettings: async (settings) => settings,
+      getPrivacySettings: async () => ({
+        analyticsEnabled: false,
+        crashReportsEnabled: false,
+        diagnosticLogsEnabled: false,
+      }),
+      setPrivacySettings: async (settings) => settings,
     })
 
     await expect(handlers.get('den:sync-push')?.({}, {} as never)).rejects.toThrow(
@@ -552,6 +601,12 @@ describe('IpcBridge', () => {
         startOnLogin: false,
       }),
       setSyncSettings: async (settings) => settings,
+      getPrivacySettings: async () => ({
+        analyticsEnabled: false,
+        crashReportsEnabled: false,
+        diagnosticLogsEnabled: false,
+      }),
+      setPrivacySettings: async (settings) => settings,
     })
 
     await expect(
@@ -604,6 +659,12 @@ describe('IpcBridge', () => {
         startOnLogin: false,
       }),
       setSyncSettings: async (settings) => settings,
+      getPrivacySettings: async () => ({
+        analyticsEnabled: false,
+        crashReportsEnabled: false,
+        diagnosticLogsEnabled: false,
+      }),
+      setPrivacySettings: async (settings) => settings,
     })
 
     await expect(
@@ -644,6 +705,12 @@ describe('IpcBridge', () => {
         startOnLogin: false,
       }),
       setSyncSettings: async (settings) => settings,
+      getPrivacySettings: async () => ({
+        analyticsEnabled: false,
+        crashReportsEnabled: false,
+        diagnosticLogsEnabled: false,
+      }),
+      setPrivacySettings: async (settings) => settings,
     })
 
     // get-level forwards the environment-local rung.
@@ -684,6 +751,12 @@ describe('IpcBridge', () => {
       setUnsubscribeDisposition: async () => undefined,
       getSyncSettings,
       setSyncSettings,
+      getPrivacySettings: async () => ({
+        analyticsEnabled: false,
+        crashReportsEnabled: false,
+        diagnosticLogsEnabled: false,
+      }),
+      setPrivacySettings: async (settings) => settings,
     })
 
     // get-settings forwards the environment-local Sync settings.
@@ -700,6 +773,61 @@ describe('IpcBridge', () => {
 
     // Both channels still hard-fail without a _trace envelope (uniform correlation).
     await expect(handlers.get('sync:get-settings')?.({}, {} as never)).rejects.toThrow(
+      'without a _trace envelope',
+    )
+  })
+
+  it('routes the privacy:* consent channels and asserts _trace (issue 2-14)', async () => {
+    const getPrivacySettings = vi.fn(async () => ({
+      analyticsEnabled: false,
+      crashReportsEnabled: false,
+      diagnosticLogsEnabled: false,
+    }))
+    // setPrivacySettings echoes the persisted consent back (control surface only — NO egress).
+    const setPrivacySettings = vi.fn(async (settings: PrivacySettings) => settings)
+    const { registrar, handlers } = fakeRegistrar()
+    registerIpcBridge(registrar, {
+      remoteClient: async () => ({}) as never,
+      denService: async () => ({}) as never,
+      discoveryScanner: async () => ({}) as never,
+      environmentRegistry: async () => ({}) as never,
+      getAutomationLevel: async () => 'manual' as const,
+      setAutomationLevel: async () => undefined,
+      claimEnvironment: async () => undefined,
+      getUnsubscribeDisposition: async () => 'keep' as const,
+      setUnsubscribeDisposition: async () => undefined,
+      getSyncSettings: async () => ({
+        pollerEnabled: true,
+        cadence: 'fast' as const,
+        startOnLogin: false,
+      }),
+      setSyncSettings: async (settings) => settings,
+      getPrivacySettings,
+      setPrivacySettings,
+    })
+
+    // get-settings forwards this environment's telemetry consent — all off out of the box.
+    await expect(
+      handlers.get('privacy:get-settings')?.({}, { _trace: { traceId: 'p1' } } as never),
+    ).resolves.toEqual({
+      analyticsEnabled: false,
+      crashReportsEnabled: false,
+      diagnosticLogsEnabled: false,
+    })
+    // set-settings forwards the chosen consent so index.ts can persist it (no egress here).
+    const next: PrivacySettings = {
+      analyticsEnabled: true,
+      crashReportsEnabled: false,
+      diagnosticLogsEnabled: true,
+    }
+    await handlers.get('privacy:set-settings')?.({}, {
+      settings: next,
+      _trace: { traceId: 'p2' },
+    } as never)
+    expect(setPrivacySettings).toHaveBeenCalledWith(next)
+
+    // Both channels still hard-fail without a _trace envelope (uniform correlation).
+    await expect(handlers.get('privacy:set-settings')?.({}, {} as never)).rejects.toThrow(
       'without a _trace envelope',
     )
   })
