@@ -28,6 +28,17 @@ Window: 1100 × 720, radius 12, `border` stroke. Reuse the same shell pattern fo
 full-window flow; reuse page-02 library components (`Button`, `Input`, `Checkbox`, `Radio`,
 `StatusTag`, …) for the repeatable controls _inside_ each `OBContent`.
 
+> **Built in code (v1, issue 1-06, 2026-06-15).** The V1-Lean A+B flow below is implemented in
+> `apps/desktop/src/renderer/components/onboarding/`: `OnboardingShell` (rail + content slot + step
+> router) · `OnboardingMenu` (the 6-step rail) · `OBConnectUrl` (step 3, reuses the 1-03
+> `remote.preflight`/`connect` IPC) · `OBDiscover` (step 4) · `ListRow` (scan rows). The
+> tool-catalog discovery scan is the main-process `DiscoveryScanner`
+> (`apps/desktop/src/main/foundation/discovery-scanner.ts`) exposed over the `discover:*` IPC
+> channels — **feature-detection grounded in a known-tools catalog, not a blind sweep** (ADR 0022).
+> Steps Welcome/CreateRepo/Commit/AutoSync/Done render inline in `OnboardingShell`. **C1/C2 and the
+> gh-CLI enrichment remain v1.1** (designs only — see below). The Auto-sync step is a **wired opt-in
+> slot**; the engine is issue 1-12.
+
 ## V1-Lean flow (canonical for v1 — ADR 0020)
 
 > dotden **creates no Remote and holds no token** in v1. First-run is _"connect your repo"_: the user

@@ -43,6 +43,7 @@ describe('IpcBridge', () => {
     registerIpcBridge(registrar, {
       remoteClient: async () => ({}) as never,
       denService: async () => den as never,
+      discoveryScanner: async () => ({}) as never,
       environmentRegistry: async () => ({}) as never,
     })
 
@@ -78,6 +79,7 @@ describe('IpcBridge', () => {
     registerIpcBridge(registrar, {
       remoteClient: async () => remote as never,
       denService: async () => ({}) as never,
+      discoveryScanner: async () => ({}) as never,
       environmentRegistry: async () => ({}) as never,
     })
 
@@ -96,10 +98,42 @@ describe('IpcBridge', () => {
     registerIpcBridge(registrar, {
       remoteClient: async () => ({}) as never,
       denService: async () => ({ syncPush: async () => undefined }) as never,
+      discoveryScanner: async () => ({}) as never,
       environmentRegistry: async () => ({}) as never,
     })
 
     await expect(handlers.get('den:sync-push')?.({}, {} as never)).rejects.toThrow(
+      'without a _trace envelope',
+    )
+  })
+
+  it('routes discover:* channels to the DiscoveryScanner and asserts _trace', async () => {
+    const scanner = {
+      scan: vi.fn(async () => ({ suggestions: [{ targetPath: '.zshrc', toolId: 'zsh' }] })),
+      inspectCustomPath: vi.fn(async () => ({ targetPath: '.foorc', toolId: 'custom' })),
+    }
+    const { registrar, handlers } = fakeRegistrar()
+    registerIpcBridge(registrar, {
+      remoteClient: async () => ({}) as never,
+      denService: async () => ({}) as never,
+      discoveryScanner: async () => scanner as never,
+      environmentRegistry: async () => ({}) as never,
+    })
+
+    await expect(
+      handlers.get('discover:scan')?.({}, { _trace: { traceId: 'd1' } } as never),
+    ).resolves.toMatchObject({ suggestions: [{ targetPath: '.zshrc' }] })
+    expect(scanner.scan).toHaveBeenCalledTimes(1)
+
+    await handlers.get('discover:inspect-path')?.({}, {
+      targetPath: '.foorc',
+      _trace: { traceId: 'd2' },
+    } as never)
+    // The arbitrary drag-in path is forwarded verbatim to inspectCustomPath.
+    expect(scanner.inspectCustomPath).toHaveBeenCalledWith('.foorc')
+
+    // Both discover:* channels still hard-fail without a _trace envelope.
+    await expect(handlers.get('discover:scan')?.({}, {} as never)).rejects.toThrow(
       'without a _trace envelope',
     )
   })
@@ -123,6 +157,7 @@ describe('IpcBridge', () => {
     registerIpcBridge(registrar, {
       remoteClient: async () => ({}) as never,
       denService: async () => ({}) as never,
+      discoveryScanner: async () => ({}) as never,
       environmentRegistry: async () => registry as never,
     })
 

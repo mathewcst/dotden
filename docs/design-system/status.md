@@ -12,11 +12,11 @@ All three surfaces are **additive** — no v1 (A/B) screen was touched. New scre
 components live in the **Onboarding** section of page `02 · Components`. Audits clean (0 white-fill,
 0 unbound product paints on the new nodes).
 
-| Surface | Status | Component(s) | Screen |
-| --- | --- | --- | --- |
-| **C2** foreign-chezmoi hard-refuse | ✅ built | reuses `Dialog` `Tone=Default` (`266:732`) | `703:1334` |
-| **C1** benign-adopt per-file picker | ✅ built (first draft) | `OBContent/AdoptExisting` `706:1582` | `713:1414` |
-| **gh-CLI** account enrichment on CredentialError | ✅ built | `OBContent/ConnectURL` variant `State=CredentialErrorGhCli` `717:1474` | `717:9517` |
+| Surface                                          | Status                 | Component(s)                                                           | Screen     |
+| ------------------------------------------------ | ---------------------- | ---------------------------------------------------------------------- | ---------- |
+| **C2** foreign-chezmoi hard-refuse               | ✅ built               | reuses `Dialog` `Tone=Default` (`266:732`)                             | `703:1334` |
+| **C1** benign-adopt per-file picker              | ✅ built (first draft) | `OBContent/AdoptExisting` `706:1582`                                   | `713:1414` |
+| **gh-CLI** account enrichment on CredentialError | ✅ built               | `OBContent/ConnectURL` variant `State=CredentialErrorGhCli` `717:1474` | `717:9517` |
 
 ## Locked decisions honored
 

@@ -1,0 +1,220 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Loader2, Plus, ScanSearch } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { ListRow } from './ListRow'
+import type { DiscoverySuggestion } from '../../../main/foundation/discovery-scanner'
+
+/** Human-friendly size for a row's meta slot, or "Folder" for a directory. */
+function metaFor(suggestion: DiscoverySuggestion): string {
+  if (suggestion.isFolder) return 'Folder'
+  if (suggestion.sizeBytes < 1024) return `${suggestion.sizeBytes} B`
+  return `${Math.round(suggestion.sizeBytes / 1024)} KB`
+}
+
+/**
+ * OBDiscover — onboarding step 4 (design: onboarding.md `OBContent/Discover`).
+ *
+ * Runs the **tool-catalog discovery scan** (`window.dotden.discover.scan`) and offers
+ * the found config Files for Tracking, **grouped by the tool** they belong to so the
+ * suggestions read as relevant (grounded, not a blind sweep — ADR 0022). The user
+ * checks the ones to manage; advancing Tracks each pick through the 1-04 path
+ * (`window.dotden.den.track` → `chezmoi add` + a `.myenv/` placement), which also
+ * seeds the **default Workspace automatically** (no organization asked up front).
+ *
+ * Files the scan missed are still manageable: a **drag-in / browse** affordance lets
+ * the user add any home-relative path (`window.dotden.discover.inspectPath`), which
+ * appends to the list and Tracks identically — the "manage anything" criterion.
+ *
+ * @param onTracked Called with the Tracked paths once advancing succeeds, so the
+ *   shell can carry them into the First-commit step.
+ */
+export function OBDiscover({
+  onTracked,
+}: {
+  onTracked: (trackedPaths: readonly string[]) => void
+}) {
+  const [scanning, setScanning] = useState(true)
+  const [suggestions, setSuggestions] = useState<readonly DiscoverySuggestion[]>([])
+  // Default selection = all found configs checked (the common "yes, sync these" case);
+  // the user unchecks anything they want to skip.
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
+  const [customPath, setCustomPath] = useState('')
+  const [tracking, setTracking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const dropRef = useRef<HTMLDivElement>(null)
+
+  // Run the scan once on mount. A failed scan surfaces inline and leaves an empty
+  // (but recoverable) list — discovery is best-effort, the user can still drag in.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const found = await window.dotden.discover.scan()
+        if (cancelled) return
+        setSuggestions(found)
+        setPicked(new Set(found.map((s) => s.targetPath)))
+      } catch (caught) {
+        if (!cancelled) setError(caught instanceof Error ? caught.message : 'Scan failed.')
+      } finally {
+        if (!cancelled) setScanning(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Group suggestions by tool so the list shows "Zsh / Git / Neovim …" headers.
+  const groups = useMemo(() => {
+    const byTool = new Map<string, { label: string; rows: DiscoverySuggestion[] }>()
+    for (const suggestion of suggestions) {
+      const group = byTool.get(suggestion.toolId) ?? { label: suggestion.toolLabel, rows: [] }
+      group.rows.push(suggestion)
+      byTool.set(suggestion.toolId, group)
+    }
+    return [...byTool.values()]
+  }, [suggestions])
+
+  function toggle(targetPath: string) {
+    setPicked((prev) => {
+      const next = new Set(prev)
+      if (next.has(targetPath)) next.delete(targetPath)
+      else next.add(targetPath)
+      return next
+    })
+  }
+
+  // Add a home-relative path the scan missed (drag-in or the browse input).
+  async function addCustom(targetPath: string) {
+    const trimmed = targetPath.trim()
+    if (!trimmed) return
+    setError(null)
+    try {
+      const suggestion = await window.dotden.discover.inspectPath(trimmed)
+      if (!suggestion) {
+        // Never fail silently — say exactly why it could not be added.
+        setError(
+          `Couldn’t add “${trimmed}” — it must be an existing file under your home directory.`,
+        )
+        return
+      }
+      setSuggestions((prev) =>
+        prev.some((s) => s.targetPath === suggestion.targetPath) ? prev : [...prev, suggestion],
+      )
+      setPicked((prev) => new Set(prev).add(suggestion.targetPath))
+      setCustomPath('')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Adding that file failed.')
+    }
+  }
+
+  // Track every picked File through the 1-04 path, then hand the paths to the shell.
+  async function advance() {
+    const paths = suggestions.map((s) => s.targetPath).filter((p) => picked.has(p))
+    setTracking(true)
+    setError(null)
+    try {
+      // Track sequentially so each `chezmoi add` + placement is recorded deterministically.
+      for (const targetPath of paths) {
+        await window.dotden.den.track(targetPath)
+      }
+      onTracked(paths)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Tracking your Files failed.')
+    } finally {
+      setTracking(false)
+    }
+  }
+
+  return (
+    <div className="flex max-h-full max-w-2xl flex-col gap-5">
+      <header className="space-y-2">
+        <h1 className="text-foreground text-2xl font-semibold tracking-tight">
+          Discover your configs
+        </h1>
+        <p className="text-muted-foreground text-sm leading-relaxed">
+          dotden scanned for config files from tools you already use. Pick the ones to manage — or
+          drag in anything the scan missed. They go into a default Workspace; you can reorganize
+          later.
+        </p>
+      </header>
+
+      {scanning ? (
+        <div className="text-muted-foreground flex items-center gap-2 text-sm" role="status">
+          <Loader2 className="size-4 animate-spin" />
+          Scanning your home directory…
+        </div>
+      ) : (
+        <div
+          ref={dropRef}
+          className="border-border min-h-0 flex-1 space-y-4 overflow-auto rounded-md border border-dashed p-3"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            // Accept a dropped file: its name is a home-relative target guess.
+            event.preventDefault()
+            const file = event.dataTransfer.files[0]
+            if (file) void addCustom(file.name)
+          }}
+        >
+          {groups.length === 0 ? (
+            <p className="text-muted-foreground px-1 py-6 text-center text-sm">
+              <ScanSearch className="text-muted-foreground mx-auto mb-2 size-6" />
+              No known configs found. Drag a file here or browse below to manage anything.
+            </p>
+          ) : (
+            groups.map((group) => (
+              <section key={group.label} className="space-y-1.5">
+                <h2 className="text-muted-foreground px-1 text-xs font-semibold tracking-wide uppercase">
+                  {group.label}
+                </h2>
+                {group.rows.map((row) => (
+                  <ListRow
+                    key={row.targetPath}
+                    title={row.targetPath.split('/').pop() ?? row.targetPath}
+                    path={`~/${row.targetPath}`}
+                    meta={metaFor(row)}
+                    isFolder={row.isFolder}
+                    checked={picked.has(row.targetPath)}
+                    onToggle={() => toggle(row.targetPath)}
+                  />
+                ))}
+              </section>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Browse / type-in for Files the catalog missed (the "manage anything" path). */}
+      <div className="flex items-center gap-2">
+        <input
+          className="border-input bg-background placeholder:text-muted-foreground flex-1 rounded-md border px-3 py-1.5 font-mono text-xs"
+          placeholder=".config/something — add a file the scan missed"
+          value={customPath}
+          onChange={(event) => setCustomPath(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') void addCustom(customPath)
+          }}
+        />
+        <Button size="sm" variant="secondary" onClick={() => void addCustom(customPath)}>
+          <Plus className="size-4" /> Add
+        </Button>
+      </div>
+
+      {error ? (
+        <p className="text-dd-red-400 text-xs" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="flex items-center gap-3">
+        <Button disabled={tracking} onClick={() => void advance()}>
+          {tracking ? <Loader2 className="size-4 animate-spin" /> : null}
+          {picked.size > 0 ? `Track ${picked.size} selected` : 'Skip for now'}
+        </Button>
+        <span className="text-muted-foreground text-xs">
+          {picked.size} of {suggestions.length} selected
+        </span>
+      </div>
+    </div>
+  )
+}

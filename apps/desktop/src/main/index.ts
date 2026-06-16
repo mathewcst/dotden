@@ -9,6 +9,7 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { join } from 'node:path'
 import { DenService } from './foundation/den-service.js'
+import { DiscoveryScanner } from './foundation/discovery-scanner.js'
 import { loadEnvironmentIdentity } from './foundation/environment-identity.js'
 import { EnvironmentRegistry } from './foundation/environment-registry.js'
 import { OperationTracer } from './foundation/operation-tracer.js'
@@ -138,6 +139,18 @@ async function getEnvironmentRegistry(): Promise<EnvironmentRegistry> {
   return environmentRegistry
 }
 
+/**
+ * Process-wide {@link DiscoveryScanner} for the first-run scan (issue 1-06).
+ *
+ * Bound to this environment's real home dir — the same `destinationDir` the
+ * RemoteClient/DenService apply into — so the scan offers config Files that live
+ * where Apply writes them. It resolves no bundled binaries (read-only filesystem
+ * scan, ADR 0023), so it is constructed directly rather than lazily-with-retry.
+ */
+function getDiscoveryScanner(): Promise<DiscoveryScanner> {
+  return Promise.resolve(new DiscoveryScanner({ homeDir: app.getPath('home') }))
+}
+
 /** Resolve tools + this environment's identity, then build the EnvironmentRegistry. */
 async function buildEnvironmentRegistry(): Promise<EnvironmentRegistry> {
   const tools = await resolveBundledTools()
@@ -201,6 +214,7 @@ app.whenReady().then(() => {
   registerIpcBridge(ipcMain, {
     remoteClient: getRemoteClient,
     denService: getDenService,
+    discoveryScanner: getDiscoveryScanner,
     environmentRegistry: getEnvironmentRegistry,
   })
   createWindow()

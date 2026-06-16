@@ -15,6 +15,7 @@
  * `ipcMain`).
  */
 import type { DenService } from '../foundation/den-service.js'
+import type { DiscoveryScanner } from '../foundation/discovery-scanner.js'
 import type { EnvironmentRegistry } from '../foundation/environment-registry.js'
 import type { RemoteClient } from '../foundation/remote-client.js'
 
@@ -55,6 +56,8 @@ export interface IpcBridgeDeps {
   readonly remoteClient: () => Promise<RemoteClient>
   /** Lazily resolves the shared {@link DenService} bound to this environment. */
   readonly denService: () => Promise<DenService>
+  /** Lazily resolves the shared {@link DiscoveryScanner} bound to this environment's home dir. */
+  readonly discoveryScanner: () => Promise<DiscoveryScanner>
   /** Lazily resolves the shared {@link EnvironmentRegistry} for identity/labels/attribution. */
   readonly environmentRegistry: () => Promise<EnvironmentRegistry>
 }
@@ -67,6 +70,7 @@ export interface IpcBridgeDeps {
  * - `remote:preflight` / `remote:connect` / `remote:latest-sha` → {@link RemoteClient}
  * - `den:track` / `den:commit` / `den:sync-push` / `den:list-incoming` / `den:apply` →
  *   {@link DenService}
+ * - `discover:scan` / `discover:inspect-path` → {@link DiscoveryScanner} (issue 1-06)
  *
  * The bridge asserts the `_trace` envelope is present on every call ({@link traceId}
  * throws on a missing id), making "an Operation crossed the boundary uncorrelated" a
@@ -114,6 +118,19 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   registrar.handle('den:apply', async (_event, payload: TracedPayload) => {
     const { targetPaths } = payload as TracedPayload & { targetPaths: readonly string[] }
     return (await deps.denService()).applyIncoming(targetPaths, traceId(payload))
+  })
+
+  // ── Discovery channels (issue 1-06): first-run tool-catalog scan + drag-in inspect ──
+  // Read-only: discovery only FINDS candidate Files; Tracking a pick is the den:track path.
+  // Each still asserts the `_trace` envelope so EVERY IPC call is uniformly correlated.
+  registrar.handle('discover:scan', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    return (await deps.discoveryScanner()).scan()
+  })
+  registrar.handle('discover:inspect-path', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    const { targetPath } = payload as TracedPayload & { targetPath: string }
+    return (await deps.discoveryScanner()).inspectCustomPath(targetPath)
   })
 
   // ── Environment channels (issue 1-05): identity, editable label, git-log attribution ──

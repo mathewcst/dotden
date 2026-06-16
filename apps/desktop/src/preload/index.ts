@@ -85,6 +85,21 @@ const api: DotdenApi = {
       }) as ReturnType<DotdenApi['den']['apply']>
     },
   },
+  discover: {
+    // → IPC channel 'discover:scan'
+    scan() {
+      return ipcRenderer.invoke('discover:scan', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['discover']['scan']>
+    },
+    // → IPC channel 'discover:inspect-path'
+    inspectPath(targetPath) {
+      return ipcRenderer.invoke('discover:inspect-path', {
+        targetPath,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['discover']['inspectPath']>
+    },
+  },
   environment: {
     // → IPC channel 'env:list'
     list() {

@@ -30,6 +30,7 @@ import type {
   ClaimSuggestion,
   EnvironmentWithAttribution,
 } from '../main/foundation/environment-registry.js'
+import type { DiscoverySuggestion } from '../main/foundation/discovery-scanner.js'
 
 /**
  * Node's `process.platform` value set, declared locally so this shared contract
@@ -100,6 +101,25 @@ export interface DotdenApi {
     listIncoming(): Promise<readonly IncomingReviewItem[]>
     /** **Apply** reviewed incoming Files to disk (env B). Maps to `chezmoi apply`. */
     apply(targetPaths: readonly string[]): Promise<ApplyResult>
+  }
+  /**
+   * First-run **discovery** operations (issue 1-06), forwarded to `discover:*` IPC
+   * channels. The scan is grounded in a catalog of known tools so suggestions are
+   * relevant (feature-detection, not a blind sweep — ADR 0022). Discovery only
+   * *finds* candidate Files; Tracking the picks reuses {@link DotdenApi.den.track}.
+   */
+  readonly discover: {
+    /**
+     * Scan this environment's home dir for config Files of known tools, returning
+     * the ones that exist for the Discover onboarding step to offer for Tracking.
+     */
+    scan(): Promise<readonly DiscoverySuggestion[]>
+    /**
+     * Inspect an arbitrary home-relative path the user dragged in or browsed for, so
+     * Files the catalog missed can be Tracked too ("manage anything"). Resolves to
+     * `null` when the path does not exist or escapes the home dir.
+     */
+    inspectPath(targetPath: string): Promise<DiscoverySuggestion | null>
   }
   /**
    * Environment registry & identity operations (issue 1-05), each forwarded to an
