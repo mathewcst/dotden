@@ -51,6 +51,7 @@ import { PushQueue } from './push-queue.js'
 import { isOfflineError } from './offline.js'
 import type { UnsubscribeDisposition } from './subscription-settings.js'
 import { scanForSecrets, type SecretFinding } from './secret-scanner.js'
+import { partitionFindings, type SecretAllowlist } from './secret-allowlist.js'
 import { parseFileHistory, type FileVersion } from './file-history.js'
 
 /** Construction wiring for a {@link DenService}, bound to one environment's dirs. */
@@ -642,8 +643,15 @@ export class DenService {
    * NEVER prevents a Commit (warn-not-block, ADR 0001). An empty result means "nothing to
    * warn about", and the renderer proceeds straight to {@link commitTracked}; a non-empty
    * result is the caution the warn step renders (one card per finding: File, kind, line,
-   * masked preview), after which the user still chooses to Commit (the Convert-to-a-Secret-
-   * reference path lands in issues 2-04/2-05).
+   * masked preview), after which the user still chooses to Convert to a Secret reference or
+   * Commit anyway (the deliberate two-option choice — issues 2-04/2-05).
+   *
+   * **The synced allowlist filter (issue 2-04).** A finding the user previously dismissed via
+   * "Don't warn me about this File again" is filtered OUT here, so an already-judged-safe File
+   * stops nagging on subsequent Commits — and because the allowlist syncs through `.myenv/`
+   * (ADR 0024), a File allowlisted on one environment is not re-warned on another. The filter is
+   * scoped **per File + the specific match** ({@link partitionFindings}), so a NEW/different
+   * secret in the same File still warns — the allowlist never silently re-enables a real leak.
    *
    * Reading the **destination** bytes (not chezmoi's source state) is deliberate: the user
    * is about to record exactly these bytes into the Den, where they would sync RAW to every
@@ -652,12 +660,14 @@ export class DenService {
    * skipped rather than failing the scan: the scan is advisory, and a missing File simply
    * has nothing to warn about (the Commit itself will surface a real add/re-add error).
    *
-   * Pure detection, no shell: the only I/O here is reading the File bytes; the detector
-   * itself runs no subprocess and makes no network call, so scanning can never leak a secret.
+   * Pure detection, no shell: the only I/O here is reading the File bytes + the synced
+   * allowlist; the detector itself runs no subprocess and makes no network call, so scanning
+   * can never leak a secret.
    *
    * @param targetPaths The Files about to be Committed (the renderer's changed set).
    * @param traceId Correlation id for the wide event (a read-only scan Operation).
-   * @returns Every secret finding across the set, in File-then-line order (empty = clean).
+   * @returns The secret findings to WARN about (allowlisted matches removed), File-then-line
+   *   order (empty = clean or all-allowlisted).
    */
   async scanCommit(
     targetPaths: readonly string[],
@@ -678,12 +688,51 @@ export class DenService {
           }
         }),
       )
-      const findings = scanForSecrets(inputs)
-      // Allowlisted count only — never the secret values themselves (the privacy posture).
+      const allFindings = scanForSecrets(inputs)
+      // Filter out findings the user already judged safe (synced allowlist, issue 2-04). The
+      // partition is scoped per File+match, so a NEW secret in an allowlisted File still warns.
+      const allowlist = await this.store.readSecretAllowlist()
+      const { toWarn, allowlisted } = partitionFindings(allowlist, allFindings)
+      // Allowlisted COUNTS only — never the secret values/paths themselves (the privacy posture).
       span?.setAttribute('fileCount', targetPaths.length)
-      span?.setAttribute('secretFindingCount', findings.length)
+      span?.setAttribute('secretFindingCount', toWarn.length)
+      span?.setAttribute('secretAllowlistedCount', allowlisted.length)
       span?.end('ok')
-      return findings
+      return toWarn
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * **Allowlist a flagged secret** — the persistence half of the "Don't warn me about this File
+   * again" checkbox the user ticks under Commit-anyway (issue 2-04, story 16).
+   *
+   * Records the dismissed finding into the SYNCED `.myenv/secret-allowlist.json` so the warn
+   * step stops opening for THIS specific match on every future Commit — and, because `.myenv/`
+   * syncs (ADR 0024), on every environment. The decision is scoped **per File + match**
+   * ({@link import('./secret-allowlist.js').addAllowlistEntry}), never a blanket per-File mute,
+   * so a different/new secret in the same File still warns (a real leak is never silently
+   * re-enabled). Only the masked preview is stored — the raw secret never enters the synced file.
+   *
+   * The renderer calls this BEFORE {@link commitTracked} when the user ticks the box, so the
+   * allowlist edit is staged into the SAME Commit that records the Files (DenService stages
+   * `.myenv/` alongside every Commit) — the decision then travels with the next Sync. Recording
+   * the allowlist NEVER prevents the Commit (warn-not-block, ADR 0001).
+   *
+   * @param finding The flagged finding the user judged safe (the scanner's shape).
+   * @param traceId Correlation id for the wide event.
+   * @returns The resulting synced allowlist (for the renderer's optimistic state).
+   */
+  async allowlistSecret(finding: SecretFinding, traceId: string): Promise<SecretAllowlist> {
+    const span = this.tracer?.startOperation('commit', traceId)
+    try {
+      const allowlist = await this.store.addSecretAllowlistEntry(finding)
+      // Count only — never the value/path (privacy posture, mirrors scanCommit).
+      span?.setAttribute('secretAllowlistedCount', allowlist.entries.length)
+      span?.end('ok')
+      return allowlist
     } catch (error) {
       span?.end('error')
       throw error

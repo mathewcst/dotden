@@ -1233,6 +1233,126 @@ describe('DenService commit-time secret scan + warn (issue 2-03)', () => {
   })
 })
 
+describe('DenService commit-anyway + synced "don\'t warn" allowlist (issue 2-04)', () => {
+  it('an allowlisted File stops warning on later Commits — but a NEW secret in it still warns', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const home = join(root, 'home')
+    const source = join(root, 'source')
+    await mkdir(home, { recursive: true })
+    await initSourceRepo(source, remote)
+    const tracer = new OperationTracer()
+    const env = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: source,
+      destinationDir: home,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+      tracer,
+    })
+
+    // A credentials file with a real AWS key the user is about to Commit.
+    await mkdir(join(home, '.aws'), { recursive: true })
+    await writeFile(
+      join(home, '.aws/credentials'),
+      '[default]\naws_access_key_id = AKIAJQ4R7TZP2WBN5KCD\n',
+    )
+    await env.trackFile('.aws/credentials', 'trace-track')
+
+    // First scan flags the key (the warn step would open).
+    const first = await env.scanCommit(['.aws/credentials'], 'trace-scan-1')
+    expect(first).toHaveLength(1)
+
+    // The user picks "Commit anyway" + "Don't warn me about this File again": allowlist it.
+    const allowlist = await env.allowlistSecret(first[0]!, 'trace-allow')
+    expect(allowlist.entries).toHaveLength(1)
+    // The synced allowlist landed in `.myenv/` — never the raw secret, only the masked preview.
+    const raw = await readFile(join(source, '.myenv', 'secret-allowlist.json'), 'utf8')
+    expect(raw).not.toContain('AKIAJQ4R7TZP2WBN5KCD')
+    expect(JSON.parse(raw).entries[0].file).toBe('.aws/credentials')
+
+    // Commit it (the allowlist edit + the File travel in the same Commit — `.myenv/` is staged).
+    await env.commitTracked(['.aws/credentials'], 'trace-commit-1')
+
+    // A LATER scan of the SAME File + SAME key no longer warns (acceptance criterion 3).
+    expect(await env.scanCommit(['.aws/credentials'], 'trace-scan-2')).toEqual([])
+
+    // THE security crux (acceptance criterion: no silent re-enable): a DIFFERENT secret added to
+    // the SAME allowlisted File still warns — the allowlist is scoped per File+match, not per File.
+    await writeFile(
+      join(home, '.aws/credentials'),
+      '[default]\naws_access_key_id = AKIAJQ4R7TZP2WBN5KCD\ngithub = ghp_1234567890abcdefghijklmnopqrstuvwxyz\n',
+    )
+    const afterNewSecret = await env.scanCommit(['.aws/credentials'], 'trace-scan-3')
+    expect(afterNewSecret.map((f) => f.kind)).toEqual(['GitHub Token'])
+
+    // The scan recorded the allowlist suppression as a COUNT only (privacy posture) — never a
+    // value or path. The last clean scan suppressed exactly the one allowlisted finding.
+    const cleanScan = tracer
+      .events()
+      .find(
+        (e) => e.attributes.secretAllowlistedCount === 1 && e.attributes.secretFindingCount === 0,
+      )
+    expect(cleanScan).toBeTruthy()
+  })
+
+  it('a File allowlisted on one environment is not re-warned on another (the allowlist syncs)', async () => {
+    // ── env A allowlists the File, Commits, and pushes ──
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const aHome = join(root, 'a-home')
+    const aSource = join(root, 'a-source')
+    await mkdir(aHome, { recursive: true })
+    await initSourceRepo(aSource, remote)
+    const envA = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: aHome,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+
+    await mkdir(join(aHome, '.aws'), { recursive: true })
+    await writeFile(
+      join(aHome, '.aws/credentials'),
+      '[default]\naws_access_key_id = AKIAJQ4R7TZP2WBN5KCD\n',
+    )
+    await envA.trackFile('.aws/credentials', 'trace-track')
+    const findings = await envA.scanCommit(['.aws/credentials'], 'trace-scan')
+    await envA.allowlistSecret(findings[0]!, 'trace-allow')
+    await envA.commitTracked(['.aws/credentials'], 'trace-commit')
+    await envA.syncPush('trace-push')
+
+    // ── env B clones the Den; the same File + the same flagged value is present on B's disk ──
+    const bHome = join(root, 'b-home')
+    const bSource = join(root, 'b-source')
+    await mkdir(join(bHome, '.aws'), { recursive: true })
+    await cloneRepo(gitBin, remote, bSource)
+    const envB = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: bSource,
+      destinationDir: bHome,
+      environment: { id: 'env-b', label: 'work-laptop', os: process.platform },
+    })
+
+    // The synced allowlist travelled through the Remote (acceptance criterion 4): env B reads
+    // env A's "don't warn" decision out of `.myenv/`.
+    const bStore = new MyenvStore(bSource)
+    expect((await bStore.readSecretAllowlist()).entries).toHaveLength(1)
+
+    // On env B the user edits the SAME File with the SAME (already-allowlisted) value, then a
+    // Commit-time scan does NOT re-warn — the decision was answered once, on env A (criterion 5).
+    await writeFile(
+      join(bHome, '.aws/credentials'),
+      '[default]\naws_access_key_id = AKIAJQ4R7TZP2WBN5KCD\n',
+    )
+    expect(await envB.scanCommit(['.aws/credentials'], 'trace-scan-b')).toEqual([])
+  })
+})
+
 /** Read raw `chezmoi status` for a source/destination pair (test setup probe only). */
 async function readChezmoiStatus(sourceDir: string, destinationDir: string): Promise<string> {
   const { stdout } = await runCommand(chezmoiBin, [

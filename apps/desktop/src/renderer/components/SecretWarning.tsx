@@ -1,7 +1,11 @@
 import { AlertDialog } from '@base-ui/react/alert-dialog'
 import { AlertTriangle } from 'lucide-react'
+import { useState } from 'react'
 import type { SecretFinding } from '../../main/foundation/secret-scanner'
 import { Button } from '@/components/ui/button'
+
+/** The two deliberate paths Step 1 of the secret flow offers (secret-and-errors screen spec). */
+export type SecretChoice = 'convert' | 'commit-anyway'
 
 /** Props for {@link SecretWarning}. */
 export interface SecretWarningProps {
@@ -11,32 +15,49 @@ export interface SecretWarningProps {
   readonly onOpenChange: (open: boolean) => void
   /** The commit-time scan findings to warn about (one card each). Never empty when open. */
   readonly findings: readonly SecretFinding[]
-  /** Proceed with the Commit anyway (this slice's single path; Convert lands in 2-04/2-05). */
-  readonly onContinue: () => void
-  /** Disable Continue while the Commit it triggers is in flight. */
+  /**
+   * Proceed with **Commit the secret anyway** (issue 2-04). `dontWarnAgain` carries the
+   * per-File "Don't warn me about this File again" checkbox: when `true`, the caller allowlists
+   * the shown findings (synced, scoped per File+match) BEFORE Committing so they stop warning.
+   */
+  readonly onCommitAnyway: (dontWarnAgain: boolean) => void
+  /**
+   * Choose **Convert to a Secret reference** (the recommended/default path) → step 2, the
+   * password-manager picker (issue 2-05). Optional while step 2 is not yet built: when omitted,
+   * the Convert option is still presented and selectable (acceptance criterion 1) but Continue
+   * under it is a no-op rather than a faked conversion — the user can switch to Commit anyway.
+   */
+  readonly onConvert?: () => void
+  /** Disable the footer action while the Commit it triggers is in flight. */
   readonly continueDisabled?: boolean
 }
 
 /**
- * SecretWarning — the commit-time **warn step** (Step 1 of the secret flow), issue 2-03.
+ * SecretWarning — Step 1 of the secret flow: the commit-time **warn step** with the deliberate
+ * two-option choice (issues 2-03 + 2-04, secret-and-errors screen spec).
  *
  * The PURE {@link import('../../main/foundation/secret-scanner.js').scanForSecrets} detector
- * runs on the about-to-be-Committed Files; when it finds anything, the renderer shows THIS
- * modal before the Commit completes (secret-and-errors screen spec). It is a **caution**,
+ * runs on the about-to-be-Committed Files; when it finds anything NOT already on the synced
+ * allowlist, the renderer shows THIS modal before the Commit completes. It is a **caution**,
  * not a hard block — the Commit can always proceed (warn-never-block, ADR 0001) — so it is
- * styled **warn-amber**, never destructive-red (functional-colour discipline reserves red
- * for failure/delete; catching a secret is non-destructive and the remedy is safe).
+ * styled **warn-amber**, never destructive-red (functional-colour discipline reserves red for
+ * failure/delete; catching a secret is non-destructive and the remedy is safe).
  *
- * Per finding it shows the **File** (mono), an amber `SECRET` pill + the **kind** and
- * **line** ("AWS Access Key ID · line 3"), and the **masked value** preview
- * (`AKIA••••••••••••N7QX`) so the user sees exactly what was flagged without re-exposing it
- * (the masking is the scanner's security invariant — the full value never reaches the UI).
+ * Per finding it shows the **File** (mono), an amber `SECRET` pill + the **kind** and **line**
+ * ("AWS Access Key ID · line 3"), and the **masked value** preview (`AKIA••••••••••••N7QX`) so
+ * the user sees exactly what was flagged without re-exposing it (the masking is the scanner's
+ * security invariant — the full value never reaches the UI).
  *
- * Scope of THIS slice (issue 2-03): detection + the warn surface only. The deliberate
- * two-option choice (Convert to a Secret reference / Commit anyway + the per-File "don't warn
- * again" allowlist) and the password-manager conversion land in issues 2-04/2-05; here the
- * footer is **Cancel** (don't Commit yet — go fix it) / **Commit anyway** (proceed), so the
- * user always stays in control.
+ * **The deliberate two-option choice (issue 2-04).** A single `SelectRow`-style radio group with
+ * exactly two mutually-exclusive options — **Convert to a Secret reference** (selected by
+ * default, the recommended remedy) and **Commit the secret anyway** — so the decision is one the
+ * user makes *consciously*, not a checkbox-next-to-a-button contradiction. Under "Commit anyway"
+ * a per-File **"Don't warn me about this File again"** checkbox appears: ticking it allowlists
+ * the shown findings so a File the user has judged safe stops nagging on future Commits. That
+ * allowlist is SYNCED (ADR 0024), scoped per File+match — it never silently re-enables a real
+ * leak (a new/different secret in the same File still warns). The footer's Continue routes to
+ * step 2 (the password-manager picker, issue 2-05) when Convert is chosen, or records the Commit
+ * (with optional allowlisting) when Commit anyway is chosen.
  *
  * Built on `@base-ui/react/alert-dialog` (like {@link import('./ConfirmDialog.js').ConfirmDialog})
  * so it is a real focus-trapped, Esc/scrim-dismissible alert dialog rendered over the
@@ -46,9 +67,38 @@ export function SecretWarning({
   open,
   onOpenChange,
   findings,
-  onContinue,
+  onCommitAnyway,
+  onConvert,
   continueDisabled = false,
 }: SecretWarningProps) {
+  // The selected path — Convert is the recommended default (acceptance criterion 1). The parent
+  // re-mounts this modal per warn session (via a `key`), so these initializers run fresh each
+  // time and a prior session's selection never bleeds in — no reset effect needed (which would
+  // trip react-hooks/set-state-in-effect; the codebase keeps state changes in event paths).
+  const [choice, setChoice] = useState<SecretChoice>('convert')
+  // The per-File "Don't warn me about this File again" decision — only meaningful under
+  // Commit-anyway (the checkbox only renders there).
+  const [dontWarnAgain, setDontWarnAgain] = useState(false)
+
+  // How many distinct Files the findings touch — the "don't warn again" copy is per-File, so it
+  // reads honestly whether one or several Files are involved.
+  const fileCount = new Set(findings.map((f) => f.file)).size
+
+  const handleContinue = () => {
+    if (choice === 'commit-anyway') {
+      onCommitAnyway(dontWarnAgain)
+      onOpenChange(false)
+      return
+    }
+    // Convert → step 2 (the password-manager picker, issue 2-05). While that step is not yet
+    // wired, Convert is presented + selectable but Continue is a no-op rather than a faked
+    // conversion — never proceed to a Commit the user did not choose (never fail silently).
+    if (onConvert) {
+      onConvert()
+      onOpenChange(false)
+    }
+  }
+
   return (
     <AlertDialog.Root open={open} onOpenChange={onOpenChange}>
       <AlertDialog.Portal>
@@ -69,12 +119,12 @@ export function SecretWarning({
             dotden flagged {findings.length === 1 ? 'a value' : `${findings.length} values`} that
             look like {findings.length === 1 ? 'a secret' : 'secrets'}. Committing
             {findings.length === 1 ? ' it' : ' them'} would sync the value raw to every environment.
-            Review below — you can still Commit if this is intentional.
+            Review below, then choose what to do.
           </AlertDialog.Description>
 
           {/* One detected card per finding — File (mono) + amber SECRET pill + kind·line + the
               masked value, so the user sees exactly what was flagged without re-exposure. */}
-          <div className="mt-4 flex max-h-72 flex-col gap-2 overflow-y-auto">
+          <div className="mt-4 flex max-h-56 flex-col gap-2 overflow-y-auto">
             {findings.map((finding, index) => (
               <div
                 key={`${finding.file}:${finding.line}:${index}`}
@@ -97,7 +147,65 @@ export function SecretWarning({
             ))}
           </div>
 
-          {/* Footer — Cancel (don't Commit yet) / Commit anyway (proceed; warn-never-block). */}
+          {/* The deliberate two-option choice (issue 2-04): Convert (default) vs Commit anyway.
+              A radio group makes them mutually exclusive — one decision, made consciously. */}
+          <fieldset className="mt-4 grid gap-2">
+            <label className="border-border bg-card flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
+              <input
+                type="radio"
+                name="secret-choice"
+                className="accent-dd-ember-500 mt-0.5 size-4"
+                checked={choice === 'convert'}
+                onChange={() => setChoice('convert')}
+              />
+              <span>
+                <span className="text-foreground font-medium">Convert to a Secret reference</span>
+                <span className="text-muted-foreground block text-xs">
+                  Recommended — store the value in your password manager and sync only a reference,
+                  never the raw secret.
+                </span>
+              </span>
+            </label>
+
+            <label className="border-border bg-card flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
+              <input
+                type="radio"
+                name="secret-choice"
+                className="accent-dd-ember-500 mt-0.5 size-4"
+                checked={choice === 'commit-anyway'}
+                onChange={() => setChoice('commit-anyway')}
+              />
+              <span className="flex-1">
+                <span className="text-foreground font-medium">Commit the secret anyway</span>
+                <span className="text-muted-foreground block text-xs">
+                  The value syncs raw to every environment. Only do this if it&rsquo;s safe to share
+                  across your computers.
+                </span>
+
+                {/* Per-File "don't warn" checkbox — appears ONLY under Commit anyway. Ticking it
+                    allowlists these findings (synced, scoped per File+match) so this File stops
+                    warning on future Commits, without muting a NEW secret in it. */}
+                {choice === 'commit-anyway' ? (
+                  <label className="mt-3 flex cursor-pointer items-start gap-2">
+                    <input
+                      type="checkbox"
+                      className="accent-dd-ember-500 mt-0.5 size-3.5"
+                      checked={dontWarnAgain}
+                      onChange={() => setDontWarnAgain((v) => !v)}
+                    />
+                    <span className="text-muted-foreground text-xs">
+                      Don&rsquo;t warn me about{' '}
+                      {fileCount === 1 ? 'this File' : `these ${fileCount} Files`} again. This
+                      decision syncs to all your environments; a new or different secret here will
+                      still be flagged.
+                    </span>
+                  </label>
+                ) : null}
+              </span>
+            </label>
+          </fieldset>
+
+          {/* Footer — Cancel (don't Commit yet) / Continue (route by the chosen path). */}
           <div className="mt-5 flex justify-end gap-2">
             <AlertDialog.Close
               render={
@@ -109,13 +217,10 @@ export function SecretWarning({
             <Button
               variant="default"
               size="sm"
-              disabled={continueDisabled}
-              onClick={() => {
-                onContinue()
-                onOpenChange(false)
-              }}
+              disabled={continueDisabled || (choice === 'convert' && !onConvert)}
+              onClick={handleContinue}
             >
-              Commit anyway
+              {choice === 'commit-anyway' ? 'Commit anyway' : 'Continue'}
             </Button>
           </div>
         </AlertDialog.Popup>

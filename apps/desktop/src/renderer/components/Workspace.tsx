@@ -411,26 +411,32 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
       await selectFile(targetPath)
     })
 
-  // The ACTUAL Commit, once the secret warn step (if any) has been cleared. Extracted so the
-  // scan-then-warn path and the "Commit anyway" button both record the Commit identically.
+  // The ACTUAL Commit body (un-wrapped) — records the Commit + reflects its result. Extracted so
+  // the plain Commit path AND the Commit-anyway-with-allowlist path (issue 2-04) both record the
+  // Commit identically, the latter sharing a SINGLE `run` span with its allowlist writes.
+  const recordCommit = useCallback(
+    async (paths: readonly string[]) => {
+      if (paths.length === 0) return
+      const result = await window.dotden.den.commit(paths)
+      setLastCommitMessage(result.message)
+      // Under Auto-sync the main process auto-pushed this Commit (result.pushed === true);
+      // under Manual it stays local until Sync now. Reflect that so the callout copy is honest.
+      setLastCommitPushed(result.pushed)
+      // Offline queue (issue 1-16): an Auto-sync push that couldn't go out because we are
+      // offline is QUEUED (result.queued) — show the offline banner; the Commit is safe.
+      setPushQueued(result.queued)
+      await reloadTree()
+      // An auto-pushed Commit also fetched incoming as part of the round-trip — refresh the
+      // Remote axis + banner so they stay live without the user pressing Sync now.
+      if (result.pushed) await refreshIncoming()
+    },
+    [reloadTree, refreshIncoming],
+  )
+
+  // The ACTUAL Commit, once the secret warn step (if any) has been cleared (no allowlist edit).
   const performCommit = useCallback(
-    (paths: readonly string[]) =>
-      run('commit', async () => {
-        if (paths.length === 0) return
-        const result = await window.dotden.den.commit(paths)
-        setLastCommitMessage(result.message)
-        // Under Auto-sync the main process auto-pushed this Commit (result.pushed === true);
-        // under Manual it stays local until Sync now. Reflect that so the callout copy is honest.
-        setLastCommitPushed(result.pushed)
-        // Offline queue (issue 1-16): an Auto-sync push that couldn't go out because we are
-        // offline is QUEUED (result.queued) — show the offline banner; the Commit is safe.
-        setPushQueued(result.queued)
-        await reloadTree()
-        // An auto-pushed Commit also fetched incoming as part of the round-trip — refresh the
-        // Remote axis + banner so they stay live without the user pressing Sync now.
-        if (result.pushed) await refreshIncoming()
-      }),
-    [run, reloadTree, refreshIncoming],
+    (paths: readonly string[]) => run('commit', () => recordCommit(paths)),
+    [run, recordCommit],
   )
 
   // Commit-time secret scan + warn (issue 2-03): scan the about-to-be-Committed set FIRST.
@@ -451,6 +457,25 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
         await performCommit(paths)
       }),
     [run, performCommit],
+  )
+
+  // Commit-anyway past the warn step (issue 2-04). When `dontWarnAgain` is set, allowlist the
+  // shown findings FIRST so this File stops warning on future Commits — synced + scoped per
+  // File+match (a new/different secret here still warns), persisted by the main process into
+  // `.myenv/` and staged into the SAME Commit so the decision travels with the next Sync. The
+  // allowlist write NEVER prevents the Commit (warn-not-block, ADR 0001), which follows either way.
+  const commitAnyway = useCallback(
+    (findings: readonly SecretFinding[], paths: readonly string[], dontWarnAgain: boolean) =>
+      run('commit', async () => {
+        if (dontWarnAgain) {
+          // Allowlist each distinct flagged finding (de-duplicated by the pure model in main).
+          for (const finding of findings) {
+            await window.dotden.den.allowlistSecret(finding)
+          }
+        }
+        await recordCommit(paths)
+      }),
+    [run, recordCommit],
   )
 
   const commit = () => {
@@ -1211,14 +1236,21 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
           closes without Committing so the user can go convert/edit the value. */}
       {secretWarn ? (
         <SecretWarning
+          // Re-mount per warn session so the modal's choice/checkbox state starts fresh each
+          // time (no reset effect — keeps state changes out of effects, react-patterns). The
+          // session signature is this scan's exact paths, which differ per Commit attempt.
+          key={secretWarn.paths.join(' ')}
           open
           onOpenChange={(next) => {
             if (!next) setSecretWarn(null)
           }}
           findings={secretWarn.findings}
           continueDisabled={busy !== null}
-          onContinue={() => {
-            void performCommit(secretWarn.paths)
+          onCommitAnyway={(dontWarnAgain) => {
+            // Commit anyway (issue 2-04): when the user ticked "Don't warn me about this File
+            // again", allowlist the shown findings FIRST (synced, per File+match) so they stop
+            // warning on future Commits — then record the Commit either way (warn-not-block).
+            void commitAnyway(secretWarn.findings, secretWarn.paths, dontWarnAgain)
           }}
         />
       ) : null}

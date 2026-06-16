@@ -34,6 +34,7 @@ import type {
 } from '../main/foundation/den-service.js'
 import type { UnsubscribeDisposition } from '../main/foundation/subscription-settings.js'
 import type { SecretFinding } from '../main/foundation/secret-scanner.js'
+import type { SecretAllowlist } from '../main/foundation/secret-allowlist.js'
 import type { FileVersion } from '../main/foundation/file-history.js'
 import type { ResolutionChoice } from '../main/foundation/conflict-model.js'
 import type { Group, Workspace } from '../main/foundation/myenv-store.js'
@@ -104,12 +105,26 @@ export interface DotdenApi {
      * **Scan the about-to-be-Committed set for secrets** (issue 2-03) — the commit-time
      * detection that drives the amber warn step. The renderer calls this BEFORE
      * {@link commit}; on a non-empty result it shows the warn step (one card per finding:
-     * File, kind, line, masked preview) and lets the user Commit anyway (warn, never block —
-     * ADR 0001). An empty result means "nothing flagged", so the renderer proceeds straight
-     * to {@link commit}. Pure detection (regex + entropy, no shell): the masked preview
-     * never exposes the full secret, and the values never leave the main process.
+     * File, kind, line, masked preview) and lets the user Convert or Commit anyway (warn,
+     * never block — ADR 0001). An empty result means "nothing flagged", so the renderer
+     * proceeds straight to {@link commit}. Findings the user previously dismissed via the
+     * synced "Don't warn me about this File again" allowlist (issue 2-04) are filtered OUT
+     * here — scoped per File+match, so a NEW secret in an allowlisted File still warns. Pure
+     * detection (regex + entropy, no shell): the masked preview never exposes the full secret,
+     * and the values never leave the main process.
      */
     scanCommit(targetPaths: readonly string[]): Promise<readonly SecretFinding[]>
+    /**
+     * **Allowlist a flagged secret** — persist the "Don't warn me about this File again"
+     * checkbox the user ticks under Commit-anyway (issue 2-04, story 16). Records the dismissed
+     * finding into the SYNCED `.myenv/` allowlist so the warn step stops opening for THIS match
+     * on subsequent Commits, and — because `.myenv/` syncs (ADR 0024) — on every environment.
+     * Scoped per File+match: a different/new secret in the same File still warns (a real leak is
+     * never silently re-enabled). Only the masked preview is stored; the raw secret never syncs.
+     * The renderer calls this just BEFORE {@link commit} when the box is ticked, so the decision
+     * is staged into the SAME Commit (which stages `.myenv/`) and travels with the next Sync.
+     */
+    allowlistSecret(finding: SecretFinding): Promise<SecretAllowlist>
     /**
      * **Commit** Tracked Files into the Den with a templated message — LOCAL only
      * (a Commit is local until pushed, ADR 0006). The result carries the resolved

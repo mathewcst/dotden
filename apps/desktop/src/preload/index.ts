@@ -65,6 +65,13 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['scanCommit']>
     },
+    // → IPC channel 'den:allowlist-secret' (synced "don't warn me about this File again", issue 2-04)
+    allowlistSecret(finding) {
+      return ipcRenderer.invoke('den:allowlist-secret', {
+        finding,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['allowlistSecret']>
+    },
     // → IPC channel 'den:commit'
     commit(targetPaths) {
       return ipcRenderer.invoke('den:commit', {

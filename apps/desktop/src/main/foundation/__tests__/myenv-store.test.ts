@@ -390,4 +390,57 @@ describe('MyenvStore — OS Scope + inheritance (1-15)', () => {
     ])
     expect(entry.label).toBe('renamed-mac')
   })
+
+  // ── Secret-scan "don't warn" allowlist (issue 2-04) ──
+  // The allowlist is user-authored organization-of-trust, so it SYNCS through `.myenv/`
+  // (ADR 0024). These tests pin the write/read seam the acceptance criteria name: the
+  // decision lands in `.myenv/secret-allowlist.json`, scoped per File+match, never raw.
+
+  it('reads an empty allowlist before any finding is dismissed', async () => {
+    const store = new MyenvStore(source)
+    await store.seedDefault({ id: 'env-a', label: 'mac', os: 'darwin' })
+    expect(await store.readSecretAllowlist()).toEqual({ entries: [] })
+  })
+
+  it('persists a dismissed finding to .myenv/secret-allowlist.json (synced), scoped per File+match', async () => {
+    const store = new MyenvStore(source)
+    await store.seedDefault({ id: 'env-a', label: 'mac', os: 'darwin' })
+
+    const list = await store.addSecretAllowlistEntry({
+      file: '.aws/credentials',
+      kind: 'AWS Access Key ID',
+      line: 2,
+      maskedValue: 'AKIA••••••••N7QX',
+    })
+
+    // The returned + persisted entry carries the human-auditable fields + a derived fingerprint,
+    // and NEVER the raw secret (only the masked preview is stored, so nothing leaks into sync).
+    expect(list.entries).toHaveLength(1)
+    expect(list.entries[0]).toMatchObject({
+      file: '.aws/credentials',
+      kind: 'AWS Access Key ID',
+      maskedValue: 'AKIA••••••••N7QX',
+    })
+    expect(list.entries[0]?.fingerprint).toBeTruthy()
+
+    // It landed in the SYNCED .myenv/ directory — the file a second environment clones + reads.
+    const raw = await readFile(join(source, '.myenv', 'secret-allowlist.json'), 'utf8')
+    expect(JSON.parse(raw).entries).toHaveLength(1)
+    // And it is re-read identically through the store (round-trip).
+    expect(await store.readSecretAllowlist()).toEqual(list)
+  })
+
+  it('de-duplicates a re-dismissed finding (idempotent write, no git churn)', async () => {
+    const store = new MyenvStore(source)
+    await store.seedDefault({ id: 'env-a', label: 'mac', os: 'darwin' })
+    const finding = {
+      file: '.aws/credentials',
+      kind: 'AWS Access Key ID' as const,
+      line: 2,
+      maskedValue: 'AKIA••••••••N7QX',
+    }
+    await store.addSecretAllowlistEntry(finding)
+    const list = await store.addSecretAllowlistEntry(finding)
+    expect(list.entries).toHaveLength(1)
+  })
 })

@@ -23,6 +23,7 @@ import type { AutomationLevel } from '../foundation/automation-policy.js'
 import type { SyncSettings } from '../foundation/sync-settings.js'
 import type { Scope } from '../foundation/os-scope.js'
 import type { UnsubscribeDisposition } from '../foundation/subscription-settings.js'
+import type { SecretFinding } from '../foundation/secret-scanner.js'
 
 /**
  * The minimal trace envelope every IPC payload carries.
@@ -112,9 +113,9 @@ export interface IpcBridgeDeps {
  *
  * Channels (all payloads carry `_trace`):
  * - `remote:preflight` / `remote:connect` / `remote:latest-sha` → {@link RemoteClient}
- * - `den:track` / `den:scan-commit` / `den:commit` / `den:sync-push` /
- *   `den:list-incoming` / `den:incoming-summary` / `den:incoming-diff` / `den:apply` /
- *   `den:tree` / `den:diff` / `den:untrack` / `den:delete-everywhere` /
+ * - `den:track` / `den:scan-commit` / `den:allowlist-secret` / `den:commit` /
+ *   `den:sync-push` / `den:list-incoming` / `den:incoming-summary` / `den:incoming-diff` /
+ *   `den:apply` / `den:tree` / `den:diff` / `den:untrack` / `den:delete-everywhere` /
  *   `den:affected-environments` → {@link DenService}
  * - `discover:scan` / `discover:inspect-path` → {@link DiscoveryScanner} (issue 1-06)
  * - `automation:get-level` / `automation:set-level` → environment-local automation
@@ -160,6 +161,13 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   registrar.handle('den:scan-commit', async (_event, payload: TracedPayload) => {
     const { targetPaths } = payload as TracedPayload & { targetPaths: readonly string[] }
     return (await deps.denService()).scanCommit(targetPaths, traceId(payload))
+  })
+  // Allowlist a flagged secret (issue 2-04): persist the "Don't warn me about this File again"
+  // dismissal into the SYNCED `.myenv/` allowlist, scoped per File+match. Recording it never
+  // blocks the Commit (warn-not-block, ADR 0001); the renderer calls it just before den:commit.
+  registrar.handle('den:allowlist-secret', async (_event, payload: TracedPayload) => {
+    const { finding } = payload as TracedPayload & { finding: SecretFinding }
+    return (await deps.denService()).allowlistSecret(finding, traceId(payload))
   })
   registrar.handle('den:commit', async (_event, payload: TracedPayload) => {
     const { targetPaths } = payload as TracedPayload & { targetPaths: readonly string[] }

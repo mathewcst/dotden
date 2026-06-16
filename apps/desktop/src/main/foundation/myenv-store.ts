@@ -22,6 +22,12 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { effectiveScope, narrowScope, type Scope } from './os-scope.js'
+import {
+  addAllowlistEntry,
+  EMPTY_SECRET_ALLOWLIST,
+  type SecretAllowlist,
+} from './secret-allowlist.js'
+import type { SecretFinding } from './secret-scanner.js'
 
 /**
  * The default Workspace id every Den is seeded with.
@@ -162,6 +168,12 @@ export interface EnvironmentsDoc {
 const MYENV_DIR = '.myenv'
 const WORKSPACES_FILE = join(MYENV_DIR, 'workspaces.json')
 const ENVIRONMENTS_FILE = join(MYENV_DIR, 'environments.json')
+/**
+ * The synced secret-scan "don't warn" allowlist (issue 2-04, ADR 0024). Lives in `.myenv/`
+ * so a File the user judged safe stops nagging on EVERY environment — the decision is
+ * user-authored organization-of-trust, so it travels with the Den (never re-answered per machine).
+ */
+const SECRET_ALLOWLIST_FILE = join(MYENV_DIR, 'secret-allowlist.json')
 
 /**
  * Reads/writes the synced `.myenv/` metadata inside a chezmoi source dir.
@@ -603,6 +615,48 @@ export class MyenvStore {
   /** Read the environment registry, returning an empty doc when absent. */
   async readEnvironments(): Promise<EnvironmentsDoc> {
     return (await this.readJson<EnvironmentsDoc>(ENVIRONMENTS_FILE)) ?? { environments: [] }
+  }
+
+  // ── Secret-scan "don't warn" allowlist (issue 2-04) ──
+  // The synced half of the Commit-anyway path: a File the user consciously judged safe (its
+  // specific flagged value) stops triggering the warn step — on EVERY environment, because the
+  // decision is user-authored organization-of-trust and so syncs through `.myenv/` (ADR 0024).
+  // The model + the per-File+match scoping (which prevents a NEW secret being silently
+  // re-enabled) live in secret-allowlist.ts; this is only the synced read/write seam.
+
+  /**
+   * Read the synced secret-scan allowlist, returning an empty one when absent (the default
+   * before any finding has been dismissed). A Den synced by an older dotden that never wrote
+   * this file simply reads back empty — forward-compatible, never fail silently.
+   *
+   * @returns The synced {@link SecretAllowlist} (`.myenv/secret-allowlist.json`).
+   */
+  async readSecretAllowlist(): Promise<SecretAllowlist> {
+    return (await this.readJson<SecretAllowlist>(SECRET_ALLOWLIST_FILE)) ?? EMPTY_SECRET_ALLOWLIST
+  }
+
+  /**
+   * Record a dismissed finding into the synced allowlist — the persistence half of the
+   * "Don't warn me about this File again" checkbox (issue 2-04).
+   *
+   * Delegates the scoping to {@link addAllowlistEntry} (per File + match, idempotent) so a real
+   * leak is never silently re-enabled, then writes `.myenv/secret-allowlist.json`. Only the
+   * **masked** preview is ever stored — the raw secret never enters the synced file. The write
+   * is skipped when the entry already exists, so re-dismissing produces no git churn. The Commit
+   * that records this allowlist change is the one that staged `.myenv/` (DenService), so the
+   * decision travels to every environment with the next Sync.
+   *
+   * @param finding The finding the user judged safe (the scanner's shape; `line` is ignored by
+   *   the fingerprint so a moved secret stays allowlisted).
+   * @returns The resulting allowlist as stored.
+   */
+  async addSecretAllowlistEntry(finding: SecretFinding): Promise<SecretAllowlist> {
+    const current = await this.readSecretAllowlist()
+    const next = addAllowlistEntry(current, finding)
+    // Idempotent: addAllowlistEntry returns the SAME reference when nothing changed, so skip
+    // the write to avoid churning `.myenv/secret-allowlist.json`.
+    if (next !== current) await this.writeJson(SECRET_ALLOWLIST_FILE, next)
+    return next
   }
 
   /** Write the Workspace doc (pretty-printed JSON, for human-readable git diffs). */

@@ -40,6 +40,10 @@ export type AllowlistedAttributeKey =
   // file/kind/line/value are NEVER attributes (no such key exists), so the wide event can
   // record "the scan flagged N things" without ever carrying a secret or a path.
   | 'secretFindingCount'
+  // The COUNT of secret findings the synced "don't warn" allowlist suppressed (issue 2-04) —
+  // again a number only. Records "N findings were allowlisted" so observability can see the
+  // allowlist working, while the allowlisted File/value remain unrepresentable as attributes.
+  | 'secretAllowlistedCount'
 
 /**
  * The value an allowlisted attribute may hold: a count, an enum string, or a flag.
