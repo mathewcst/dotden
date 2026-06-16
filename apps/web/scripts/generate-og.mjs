@@ -17,7 +17,13 @@ import { dirname, join } from 'node:path'
 import sharp from 'sharp'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const OUT = join(__dirname, '..', 'public', 'og.png')
+const PUBLIC = join(__dirname, '..', 'public')
+
+// Output scales. 1x (1200×630) is the og:image the site references; 2x/4x are
+// crisp re-usable exports for places that want a bigger asset (GitHub social
+// preview, slides, READMEs). Because the source is an SVG, each scale is
+// re-rasterised at a higher DPI rather than upscaled — so text stays sharp.
+const SCALES = [1, 2, 4]
 
 const W = 1200
 const H = 630
@@ -78,5 +84,10 @@ const svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http
   <rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" fill="none" stroke="${INK_700}" stroke-opacity="0.6"/>
 </svg>`
 
-await sharp(Buffer.from(svg)).png().toFile(OUT)
-console.log(`wrote ${OUT}`)
+// Sharp rasterises an SVG at `density` DPI (72 = the SVG's nominal px size), so
+// density 72×scale renders the vector natively at that scale — crisp, not blurry.
+for (const scale of SCALES) {
+  const file = join(PUBLIC, scale === 1 ? 'og.png' : `og@${scale}x.png`)
+  await sharp(Buffer.from(svg), { density: 72 * scale }).png().toFile(file)
+  console.log(`wrote ${file} (${W * scale}×${H * scale})`)
+}
