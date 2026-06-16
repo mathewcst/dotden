@@ -131,6 +131,17 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   registrar.handle('den:sync-push', async (_event, payload: TracedPayload) => {
     return (await deps.denService()).syncPush(traceId(payload))
   })
+  // The offline push queue (issue 1-16): flush retries a push queued while offline (the
+  // manual/reconnect retry; index.ts also calls flushPushQueue on net-online), push-pending
+  // is the read-only banner state. flush MUTATES (it pushes) so its `_trace` is forwarded;
+  // push-pending is read-only (asserts the `_trace` envelope only).
+  registrar.handle('den:flush-push-queue', async (_event, payload: TracedPayload) => {
+    return (await deps.denService()).flushPushQueue(traceId(payload))
+  })
+  registrar.handle('den:push-pending', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    return (await deps.denService()).pushPending()
+  })
   registrar.handle('den:list-incoming', async (_event, payload: TracedPayload) => {
     return (await deps.denService()).listIncomingClean(traceId(payload))
   })

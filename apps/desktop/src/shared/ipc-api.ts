@@ -29,6 +29,7 @@ import type {
   FileTreeView,
   IncomingReviewItem,
   IncomingSummary,
+  SyncPushResult,
 } from '../main/foundation/den-service.js'
 import type { ResolutionChoice } from '../main/foundation/conflict-model.js'
 import type { Group, Workspace } from '../main/foundation/myenv-store.js'
@@ -100,8 +101,27 @@ export interface DotdenApi {
      * message and which template produced it, for the Commit UI.
      */
     commit(targetPaths: readonly string[]): Promise<CommitResult>
-    /** **Sync now** push half: send already-Committed changes to the Remote (env A). */
-    syncPush(): Promise<void>
+    /**
+     * **Sync now** push half: send already-Committed changes to the Remote (env A), flushing
+     * any push queued while offline. Maps to `git push` (all-or-nothing → also flushes the
+     * offline queue). The result reports whether the push reached the Remote (`pushed`) or
+     * was **queued** because the machine is offline (`queued`, issue 1-16); an offline Sync
+     * does NOT throw (the local Commits are safe + retried), so the UI shows the offline
+     * banner. A server-reached rejection still rejects so the user sees the real error.
+     */
+    syncPush(): Promise<SyncPushResult>
+    /**
+     * **Flush the offline push queue** — retry a push queued while offline (issue 1-16),
+     * the reconnect path. No-op when nothing is queued. Returns whether a queued push was
+     * flushed (`pushed`) or remained queued because the machine is still offline (`queued`).
+     */
+    flushPushQueue(): Promise<SyncPushResult>
+    /**
+     * Whether a push is currently **queued** offline (owed to the Remote), issue 1-16.
+     * Read-only; drives the offline banner ("changes queued — will sync when you reconnect")
+     * without touching the network.
+     */
+    pushPending(): Promise<boolean>
     /**
      * **env B** — fetch the Remote and list incoming Files for a reviewed Apply,
      * restricted to the incoming-clean path (no local copy, no Conflict). Each item
@@ -333,5 +353,23 @@ export interface DotdenApi {
      * @returns An unsubscribe function the renderer calls on unmount.
      */
     onIncoming(listener: () => void): () => void
+  }
+  /**
+   * Connectivity signals for the offline queue (issue 1-16). The main process owns the
+   * machine-wake reconnect trigger (`powerMonitor`), which flushes queued pushes; this lets
+   * an open window re-read {@link DotdenApi.den.pushPending} so its offline banner stays in
+   * step. The renderer ALSO listens to its own `navigator.onLine`/`online` event and calls
+   * {@link DotdenApi.den.flushPushQueue} directly — the two paths are complementary.
+   */
+  readonly net: {
+    /**
+     * Subscribe to "the machine reconnected and queued pushes were flushed" events, pushed
+     * FROM the main process after a `powerMonitor` wake. Detect-only for the UI: receiving
+     * it just prompts a `pushPending()` re-read so the offline banner clears/persists.
+     *
+     * @param listener Called after each main-process reconnect flush (no payload).
+     * @returns An unsubscribe function the renderer calls on unmount.
+     */
+    onReconnected(listener: () => void): () => void
   }
 }

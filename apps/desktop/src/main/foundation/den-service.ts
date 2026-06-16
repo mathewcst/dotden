@@ -47,6 +47,8 @@ import {
   type AutomationLevel,
 } from './automation-policy.js'
 import type { Os, Scope } from './os-scope.js'
+import { PushQueue } from './push-queue.js'
+import { isOfflineError } from './offline.js'
 
 /** Construction wiring for a {@link DenService}, bound to one environment's dirs. */
 export interface DenServiceOptions {
@@ -78,6 +80,16 @@ export interface DenServiceOptions {
    * Commit itself is NEVER automatic at any level (ADR 0006), and Apply always stays manual.
    */
   readonly automationLevel?: AutomationLevel
+  /**
+   * Path to this environment's **offline push outbox** (issue 1-16). The outbox is a single
+   * durable flag "a push is owed to the Remote", used so a Commit made while offline records
+   * locally and **queues** its push for retry on reconnect / next Sync (ADR 0006), rather
+   * than failing. It is **environment-local** (a property of THIS machine's connectivity,
+   * never synced — ADR 0024): `index.ts` passes a path under Electron `userData`. Omitted in
+   * tests/contexts that don't exercise queued pushes ⇒ offline pushes still queue in memory
+   * for the lifetime of the service via an in-process fallback path.
+   */
+  readonly pushOutboxPath?: string
 }
 
 /**
@@ -115,6 +127,29 @@ export interface CommitResult {
    * locally — Sync now to push". {@link DenService.syncPush} is what flips it.
    */
   readonly pushed: boolean
+  /**
+   * `true` when an Auto-sync push was attempted but **queued** because the machine is
+   * offline (issue 1-16): the Commit is recorded locally and its push will retry on
+   * reconnect / next Sync (ADR 0006). The UI shows the offline banner ("changes queued").
+   * Always `false` under Manual (no auto-push attempted) and when the auto-push succeeded.
+   */
+  readonly queued: boolean
+}
+
+/**
+ * Result of a {@link DenService.syncPush} or {@link DenService.flushPushQueue} — whether the
+ * push reached the Remote or was **queued offline** for retry (issue 1-16).
+ *
+ * `pushed` is `true` when the Remote now has the local Commits; `queued` is `true` when the
+ * machine was offline and the push was recorded in the durable outbox to retry on the next
+ * reconnect/Sync. Exactly one is `true` for a Sync that had something to send; a Sync with
+ * nothing pending and nothing new to push reports both `false` (a clean no-op).
+ */
+export interface SyncPushResult {
+  /** `true` when the push reached the Remote (the local Commits are now shared). */
+  readonly pushed: boolean
+  /** `true` when the push could not go out (offline) and was queued for retry. */
+  readonly queued: boolean
 }
 
 /**
@@ -372,6 +407,13 @@ export class DenService {
    * gate. Holds only the level; the safety invariants stay with their owners.
    */
   private readonly automation: AutomationPolicy
+  /**
+   * The durable offline push outbox (issue 1-16). A push that can't go out because the
+   * machine is offline is recorded here and retried on reconnect / next Sync (ADR 0006),
+   * so a Commit made offline records locally and never loses its push. Environment-local
+   * (ADR 0024): persisted outside the synced source tree.
+   */
+  private readonly pushQueue: PushQueue
 
   /**
    * @param options Binaries, dirs, this environment's identity, automation level, tracer.
@@ -387,6 +429,13 @@ export class DenService {
     this.store = new MyenvStore(options.sourceDir)
     this.tracer = options.tracer
     this.automation = new AutomationPolicy(options.automationLevel ?? DEFAULT_AUTOMATION_LEVEL)
+    // The outbox is environment-local connectivity state, so it must NOT live inside the
+    // synced source/git tree. Default it to a sibling of the source dir (still per-Den, but
+    // outside version control + outside `.myenv/`) when the caller does not pass an explicit
+    // userData path. The PushQueue creates the file/dir on first write.
+    this.pushQueue = new PushQueue(
+      options.pushOutboxPath ?? resolve(options.sourceDir, '..', '.dotden-push-outbox.json'),
+    )
   }
 
   /**
@@ -494,13 +543,28 @@ export class DenService {
       // We DEPEND on the policy's `mayAutoPush()` decision (ADR 0008) — DenService never
       // re-implements the level gate — and this only ever transports a change the user
       // ALREADY Committed (transport-not-commit, ADR 0006); the Commit above is never
-      // automatic. A failed auto-push is surfaced (never fail silently): the Commit is
-      // recorded locally regardless, so we report `pushed: false` and rethrow so the UI
-      // shows the failure and offers a manual Sync now.
-      const pushed = this.automation.mayAutoPush()
-      if (pushed) {
-        await this.git.push()
+      // automatic.
+      let pushed = false
+      let queued = false
+      if (this.automation.mayAutoPush()) {
+        // OFFLINE QUEUE (issue 1-16): the Commit is ALREADY recorded locally above, so a
+        // push that can't reach the Remote because the machine is offline must NOT fail the
+        // Commit — it is queued and retried on reconnect / next Sync (ADR 0006). A push that
+        // fails for any OTHER reason (a server-reached rejection: non-fast-forward, auth,
+        // missing repo) is a real error and rethrows, so the UI surfaces it (never fail
+        // silently — that error a blind retry can't fix).
+        try {
+          await this.git.push()
+          pushed = true
+        } catch (error) {
+          if (!isOfflineError(error)) throw error
+          await this.pushQueue.enqueue()
+          queued = true
+        }
       }
+      // `queued` is the allowlisted offline-queue flag (issue 1-16); `pushed` is implied by
+      // its absence + the automation level, so we do not add a separate non-allowlisted key.
+      span?.setAttribute('queued', queued)
       span?.end('ok')
       return {
         message: rendered.message,
@@ -508,8 +572,11 @@ export class DenService {
         templateLabel: rendered.templateLabel,
         committedFiles: [...targetPaths],
         // Manual: a Commit is local until pushed (ADR 0006) — `false`, and Sync now sends
-        // it. Auto-sync: the policy auto-pushed above — `true`, so the UI says it's synced.
+        // it. Auto-sync online: the policy auto-pushed above — `true`. Auto-sync offline:
+        // not pushed but `queued` — the offline banner says "changes queued, will sync on
+        // reconnect"; the local Commit is safe regardless.
         pushed,
+        queued,
       }
     } catch (error) {
       span?.end('error')
@@ -518,24 +585,99 @@ export class DenService {
   }
 
   /**
-   * **Sync now (push half)**: send already-Committed changes to the Remote.
+   * **Sync now (push half)**: send already-Committed changes to the Remote, flushing any
+   * push queued while offline (issue 1-16).
    *
    * Maps to `git push --set-upstream origin main` (CONTEXT.md "Sync"). This is the
    * moment a local Commit becomes shared — the only thing that leaves the
-   * environment, and only what was Committed (transport-not-commit, ADR 0006).
+   * environment, and only what was Committed (transport-not-commit, ADR 0006). Because
+   * `git push` sends EVERY unpushed commit, one push here also flushes any push that was
+   * queued while offline — so "Sync now" is the manual retry path the issue asks for
+   * ("queued pushes also flush on the next Sync").
+   *
+   * Offline handling: if the push can't reach the Remote because the machine is offline,
+   * the push is **queued** (the local Commits are not lost) and a `queued` result is
+   * returned rather than throwing — the UI shows the offline banner. A NON-offline failure
+   * (a server-reached rejection) clears any stale queue and rethrows so the user sees it.
    *
    * @param traceId Correlation id for the wide event.
+   * @returns Whether the push reached the Remote (`pushed`) or was queued offline (`queued`).
    */
-  async syncPush(traceId: string): Promise<void> {
+  async syncPush(traceId: string): Promise<SyncPushResult> {
     const span = this.tracer?.startOperation('sync', traceId)
     try {
       await this.git.push()
+      // The push reached the Remote, carrying every unpushed commit — including anything
+      // that was queued while offline. Clear the outbox so a stale flag doesn't linger.
+      await this.pushQueue.clear()
       span?.setAttribute('queued', false)
       span?.end('ok')
+      return { pushed: true, queued: false }
     } catch (error) {
+      if (isOfflineError(error)) {
+        // Still offline — queue the push (idempotent) so the next reconnect/Sync retries it.
+        // This is NOT an error path for the user: the Commits are safe locally and will
+        // travel automatically, so we return `queued` rather than throwing.
+        await this.pushQueue.enqueue()
+        span?.setAttribute('queued', true)
+        span?.end('ok')
+        return { pushed: false, queued: true }
+      }
+      // A server-reached rejection (non-fast-forward, auth, missing repo): a blind retry
+      // can't fix it, so drop any stale queue and surface the real error (never fail silently).
+      await this.pushQueue.clear()
       span?.end('error')
       throw error
     }
+  }
+
+  /**
+   * **Flush the offline push queue** — retry a push that was queued while offline (issue
+   * 1-16). This is the **reconnect** path: `index.ts` calls it when `powerMonitor`/Electron
+   * `net` reports the machine came back online, so queued Commits propagate without the user
+   * pressing Sync now. (The OTHER flush path is {@link syncPush}, the manual/Auto Sync.)
+   *
+   * No-op when nothing is queued (returns `pushed:false, queued:false`) — flushing on every
+   * reconnect is cheap and never pushes spuriously. If the push still can't go out (the
+   * reconnect was flaky / partial), it stays queued for the next attempt; a NON-offline
+   * failure surfaces (the error propagates) so a real rejection is not hidden.
+   *
+   * @param traceId Correlation id for the wide event.
+   * @returns Whether a queued push was flushed (`pushed`) or remained queued (`queued`).
+   */
+  async flushPushQueue(traceId: string): Promise<SyncPushResult> {
+    const span = this.tracer?.startOperation('sync', traceId)
+    try {
+      // PushQueue.flush is the durable retry: success clears the outbox; an offline failure
+      // KEEPS it (rethrows isOffline) so we can report `queued` and retry later; a
+      // non-offline failure clears it and rethrows so the real error surfaces.
+      const flushed = await this.pushQueue.flush(() => this.git.push())
+      span?.setAttribute('queued', false)
+      span?.end('ok')
+      // `flushed` is false only when nothing was queued (a clean no-op).
+      return { pushed: flushed, queued: false }
+    } catch (error) {
+      if (isOfflineError(error)) {
+        // Still offline after the reconnect — the push remains queued (flush kept the flag).
+        span?.setAttribute('queued', true)
+        span?.end('ok')
+        return { pushed: false, queued: true }
+      }
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * Whether a push is currently **queued** (owed to the Remote) because it could not go out
+   * offline (issue 1-16). Read-only; drives the renderer's offline banner so the in-app
+   * surface honestly reflects "changes queued — will sync when you reconnect" without
+   * attempting any network. Emits no wide event.
+   *
+   * @returns `true` when there are local Commits waiting to be pushed on reconnect/next Sync.
+   */
+  async pushPending(): Promise<boolean> {
+    return this.pushQueue.isPending()
   }
 
   /**

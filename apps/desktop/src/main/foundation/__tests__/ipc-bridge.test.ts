@@ -35,7 +35,9 @@ describe('IpcBridge', () => {
         committedFiles: ['.zshrc'],
         pushed: false,
       })),
-      syncPush: vi.fn(async () => undefined),
+      syncPush: vi.fn(async () => ({ pushed: true, queued: false })),
+      flushPushQueue: vi.fn(async () => ({ pushed: false, queued: false })),
+      pushPending: vi.fn(async () => false),
       listIncomingClean: vi.fn(async () => []),
       incomingSummary: vi.fn(async () => ({ items: [], fromEnvironmentLabel: 'this-mac' })),
       incomingDiff: vi.fn(async () => ''),
@@ -62,6 +64,10 @@ describe('IpcBridge', () => {
       _trace: { traceId: 't2' },
     } as never)
     await handlers.get('den:sync-push')?.({}, { _trace: { traceId: 't3' } } as never)
+    // The offline push queue (issue 1-16): flush MUTATES (forwards the id); push-pending is
+    // read-only (asserts _trace, forwards no id).
+    await handlers.get('den:flush-push-queue')?.({}, { _trace: { traceId: 't10' } } as never)
+    await handlers.get('den:push-pending')?.({}, { _trace: { traceId: 't11' } } as never)
     await handlers.get('den:list-incoming')?.({}, { _trace: { traceId: 't4' } } as never)
     await handlers.get('den:apply')?.({}, {
       targetPaths: ['.zshrc'],
@@ -86,6 +92,9 @@ describe('IpcBridge', () => {
     expect(den.trackFile).toHaveBeenCalledWith('.zshrc', 't1')
     expect(den.commitTracked).toHaveBeenCalledWith(['.zshrc'], 't2')
     expect(den.syncPush).toHaveBeenCalledWith('t3')
+    // flush-push-queue forwards the id (it pushes); push-pending is read-only (no id forwarded).
+    expect(den.flushPushQueue).toHaveBeenCalledWith('t10')
+    expect(den.pushPending).toHaveBeenCalledTimes(1)
     expect(den.listIncomingClean).toHaveBeenCalledWith('t4')
     expect(den.applyIncoming).toHaveBeenCalledWith(['.zshrc'], 't5', ['.bye'])
     // tree/diff are read-only: the bridge asserts _trace but does not forward an id.

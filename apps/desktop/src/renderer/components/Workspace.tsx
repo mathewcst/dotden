@@ -29,6 +29,7 @@ import { WorkspaceSidebar } from '@/components/WorkspaceSidebar'
 import { FileRow } from '@/components/FileRow'
 import { ScopeEditor } from '@/components/ScopeEditor'
 import { IncomingBanner } from '@/components/IncomingBanner'
+import { OfflineBanner } from '@/components/OfflineBanner'
 import { ReviewApply } from '@/components/ReviewApply'
 import { ConflictResolver } from '@/components/ConflictResolver'
 import { remoteAxisDecoration } from '@/lib/remote-axis'
@@ -109,6 +110,11 @@ export function Workspace({ role }: { role: Role }) {
   // Whether the last Commit auto-pushed (Auto-sync) vs is local-until-Sync (Manual) — drives
   // the "Last commit" callout copy so the user always knows where their change actually is.
   const [lastCommitPushed, setLastCommitPushed] = useState(false)
+  // Offline queue (issue 1-16): whether a push is currently QUEUED because this environment
+  // is offline (ADR 0006 — the Commit recorded locally; its push waits for connectivity).
+  // Drives the Offline banner. Refreshed after every Commit/Sync and on connectivity changes;
+  // it is the main-process truth (`den.pushPending`), not a guess from `navigator.onLine`.
+  const [pushQueued, setPushQueued] = useState(false)
   const [busy, setBusy] = useState<
     | null
     | 'load'
@@ -272,6 +278,50 @@ export function Workspace({ role }: { role: Role }) {
     }
   }, [])
 
+  // Re-read whether a push is queued offline (issue 1-16) from the main process — the
+  // authoritative durable-outbox state, not a `navigator.onLine` guess. Soft-fails: a read
+  // error must never break the everyday view, so it surfaces nothing (the banner just stays
+  // as it was). Only env A's everyday view owns the offline banner (env B drives its own flow).
+  const refreshPushQueued = useCallback(async () => {
+    try {
+      setPushQueued(await window.dotden.den.pushPending())
+    } catch {
+      // A failed read leaves the banner unchanged — better than flickering it on a transient error.
+    }
+  }, [])
+
+  // Connectivity detection (issue 1-16) via the browser's own `navigator.onLine` + the
+  // `online`/`offline` events — the canonical renderer-side signal. On `online` we ask the
+  // main process to FLUSH any push queued while offline (the reconnect retry, complementing
+  // the main-process `powerMonitor` path), then refresh the banner; `offline` just refreshes
+  // so the banner can appear promptly. The main process also pushes `net:reconnected` after a
+  // wake-flush, which we treat the same way (re-read the queue). env A only.
+  useEffect(() => {
+    if (role !== 'a') return
+    const onOnline = () => {
+      void (async () => {
+        try {
+          await window.dotden.den.flushPushQueue()
+        } catch (caught) {
+          // A non-offline failure during flush (e.g. a server rejection) surfaces as an error;
+          // an offline flush re-queues silently inside the main process (never throws here).
+          setError(caught instanceof Error ? caught.message : 'Could not retry the queued push.')
+        } finally {
+          await refreshPushQueued()
+        }
+      })()
+    }
+    const onOffline = () => void refreshPushQueued()
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+    const unsubscribeReconnect = window.dotden.net.onReconnected(() => void refreshPushQueued())
+    return () => {
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
+      unsubscribeReconnect()
+    }
+  }, [role, refreshPushQueued])
+
   // env A starts by reading its real managed Files (env B waits for an explicit
   // Detect). App.tsx keys this component by role, so switching environments remounts
   // it and resets all state (the React `key` reset pattern). The initial load mirrors
@@ -287,6 +337,10 @@ export function Workspace({ role }: { role: Role }) {
         // the "Last commit" callout reflect Manual vs Auto-sync from first paint.
         const level = await window.dotden.automation.getLevel()
         if (active) setAutomationLevel(level)
+        // Whether a push is queued offline (issue 1-16), so the Offline banner is correct
+        // from first paint (e.g. the app launched still offline with a queued push).
+        const queued = await window.dotden.den.pushPending()
+        if (active) setPushQueued(queued)
         const view = await window.dotden.den.tree()
         if (active) {
           setFiles(view.files)
@@ -348,6 +402,9 @@ export function Workspace({ role }: { role: Role }) {
       // Under Auto-sync the main process auto-pushed this Commit (result.pushed === true);
       // under Manual it stays local until Sync now. Reflect that so the callout copy is honest.
       setLastCommitPushed(result.pushed)
+      // Offline queue (issue 1-16): an Auto-sync push that couldn't go out because we are
+      // offline is QUEUED (result.queued) — show the offline banner; the Commit is safe locally.
+      setPushQueued(result.queued)
       await reloadTree()
       // An auto-pushed Commit also fetched incoming as part of the round-trip — refresh the
       // Remote axis + banner so they stay live without the user pressing Sync now.
@@ -356,9 +413,12 @@ export function Workspace({ role }: { role: Role }) {
 
   const push = () =>
     run('push', async () => {
-      await window.dotden.den.syncPush()
-      // The local Commit(s) have now left this environment.
-      setLastCommitPushed(true)
+      const result = await window.dotden.den.syncPush()
+      // Offline queue (issue 1-16): a Sync that couldn't reach the Remote (offline) does NOT
+      // throw — the push is queued and `result.queued` is true, so we show the offline banner.
+      // A successful Sync clears it; the Commit(s) have now left this environment.
+      setPushQueued(result.queued)
+      setLastCommitPushed(result.pushed)
       // A Sync also checks for incoming, so refresh the Remote axis + banner afterwards.
       await refreshIncoming()
     })
@@ -586,12 +646,20 @@ export function Workspace({ role }: { role: Role }) {
         </div>
       </header>
 
-      {/* The top-level "N incoming from <environment> — Review & Apply" entry (issue
-          1-09): a persistent strip between the titlebar and the body (detach + insert,
-          not overlay — sync-states spec). Only env A's everyday view, only when there is
-          something incoming; its CTA jumps straight to the Review & Apply surface. The
-          row keeps the body's height (auto row) rather than covering the pane headers. */}
-      {role === 'a' && incomingCount > 0 ? (
+      {/* The Offline banner (issue 1-16): a persistent strip between the titlebar and the
+          body, shown when this environment has a push QUEUED because it is offline (ADR
+          0006 — the Commit is recorded locally; only the push waits). Functional, honest
+          chrome, never a hard error — the work is safe and retries on reconnect / next Sync.
+          Takes precedence over the incoming banner so the most urgent transient state shows;
+          already-fetched incoming changes still Apply offline (only push is queued). */}
+      {role === 'a' && pushQueued ? (
+        <OfflineBanner />
+      ) : /* The top-level "N incoming from <environment> — Review & Apply" entry (issue
+            1-09): a persistent strip between the titlebar and the body (detach + insert,
+            not overlay — sync-states spec). Only env A's everyday view, only when there is
+            something incoming; its CTA jumps straight to the Review & Apply surface. The
+            row keeps the body's height (auto row) rather than covering the pane headers. */
+      role === 'a' && incomingCount > 0 ? (
         <IncomingBanner
           count={incomingCount}
           fromEnvironmentLabel={incomingFrom}

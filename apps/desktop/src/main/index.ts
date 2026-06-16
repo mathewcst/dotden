@@ -283,9 +283,11 @@ async function armTrayPoller(): Promise<void> {
     })
     trayPoller.start()
 
-    // powerMonitor reconnect: on wake/unlock, re-check the Remote right away (issue 1-12).
-    powerMonitor.on('resume', () => trayPoller?.onReconnect())
-    powerMonitor.on('unlock-screen', () => trayPoller?.onReconnect())
+    // powerMonitor reconnect: on wake/unlock, re-check the Remote right away (issue 1-12)
+    // AND flush any push queued while offline (issue 1-16) — a machine that slept while
+    // offline likely reconnects on wake, so this is a natural "back online" retry trigger.
+    powerMonitor.on('resume', () => onReconnect())
+    powerMonitor.on('unlock-screen', () => onReconnect())
   } catch (error) {
     // A failure to arm the watcher must never block app startup; the user can still work
     // and Sync manually. Surface it rather than swallow it (never fail silently).
@@ -296,6 +298,40 @@ async function armTrayPoller(): Promise<void> {
 /** Mint a correlation id for a poll Operation (mirrors the preload's per-action `_trace`). */
 function pollTrace(): { traceId: string } {
   return { traceId: `poll-${Date.now()}-${Math.random().toString(36).slice(2)}` }
+}
+
+/**
+ * The **reconnect** handler (issue 1-12 + 1-16): re-check the Remote for incoming changes
+ * (the TrayPoller) AND flush any push that was queued while offline (the PushQueue), so a
+ * machine coming back online both learns about incoming changes and propagates the work it
+ * recorded offline — without the user pressing Sync now.
+ *
+ * Fired on `powerMonitor` wake/unlock here, and on the renderer's `online` event via the
+ * `net:flush-queue` IPC channel (the renderer owns `navigator.onLine`, the canonical
+ * browser-side connectivity signal). Best-effort + never throws: a flush that is still
+ * offline simply re-queues, and any error is surfaced to the log, never crashing the app.
+ */
+function onReconnect(): void {
+  trayPoller?.onReconnect()
+  void flushQueuedPushes()
+}
+
+/**
+ * Retry any push queued while offline (issue 1-16), then nudge an open window to refresh its
+ * offline banner so the in-app state matches reality. Best-effort: an isOffline flush leaves
+ * the push queued for the next reconnect (DenService handles that), and any error is logged
+ * (never fail silently) rather than thrown into the event loop.
+ */
+async function flushQueuedPushes(): Promise<void> {
+  try {
+    const den = await getDenService()
+    await den.flushPushQueue(pollTrace().traceId)
+  } catch (error) {
+    console.error('[dotden] Failed to flush queued pushes on reconnect:', error)
+  } finally {
+    // Let an open window re-read pushPending() so its offline banner clears/persists in step.
+    mainWindow?.webContents.send('net:reconnected')
+  }
 }
 
 /**

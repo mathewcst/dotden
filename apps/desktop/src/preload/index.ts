@@ -65,11 +65,23 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['commit']>
     },
-    // → IPC channel 'den:sync-push'
+    // → IPC channel 'den:sync-push' (push + flush any offline-queued push, issue 1-16)
     syncPush() {
       return ipcRenderer.invoke('den:sync-push', {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['syncPush']>
+    },
+    // → IPC channel 'den:flush-push-queue' (retry a push queued while offline, issue 1-16)
+    flushPushQueue() {
+      return ipcRenderer.invoke('den:flush-push-queue', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['flushPushQueue']>
+    },
+    // → IPC channel 'den:push-pending' (offline-banner state: is a push queued?, issue 1-16)
+    pushPending() {
+      return ipcRenderer.invoke('den:push-pending', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['pushPending']>
     },
     // → IPC channel 'den:list-incoming'
     listIncoming() {
@@ -269,6 +281,17 @@ const api: DotdenApi = {
       const handler = () => listener()
       ipcRenderer.on('tray-poller:incoming', handler)
       return () => ipcRenderer.removeListener('tray-poller:incoming', handler)
+    },
+  },
+  net: {
+    // ← main→renderer push: after a `powerMonitor` wake flushes queued pushes (issue 1-16),
+    // the main process fires 'net:reconnected' so an open window re-reads pushPending() and
+    // updates its offline banner. Wrapped so the renderer callback never sees the Electron
+    // event object (narrow contract, ADR 0004); returns an unsubscribe for this listener.
+    onReconnected(listener) {
+      const handler = () => listener()
+      ipcRenderer.on('net:reconnected', handler)
+      return () => ipcRenderer.removeListener('net:reconnected', handler)
     },
   },
 }
