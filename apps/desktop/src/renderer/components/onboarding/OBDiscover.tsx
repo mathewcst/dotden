@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, Plus, ScanSearch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ListRow } from './ListRow'
+import { warnedPathsFromFindings } from './secret-warn'
 import type { DiscoverySuggestion } from '../../../main/foundation/discovery-scanner'
 
 /** Human-friendly size for a row's meta slot, or "Folder" for a directory. */
@@ -38,6 +39,11 @@ export function OBDiscover({
   // Default selection = all found configs checked (the common "yes, sync these" case);
   // the user unchecks anything they want to skip.
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
+  // The set of discovered Files the SecretScanner flagged as secret-bearing (issue 2-07).
+  // A flagged File still shows as a normal *selectable* row (warn-not-block, ADR 0001) — its
+  // ListRow renders the amber "Secret · review at commit" state; the secret is handled at
+  // Commit time by the warn step. We mark, never exclude, and never auto-deselect.
+  const [warnedPaths, setWarnedPaths] = useState<ReadonlySet<string>>(new Set())
   const [customPath, setCustomPath] = useState('')
   const [tracking, setTracking] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -53,6 +59,15 @@ export function OBDiscover({
         if (cancelled) return
         setSuggestions(found)
         setPicked(new Set(found.map((s) => s.targetPath)))
+        // Reconcile the SecretScanner into Discover (issue 2-07): run the SAME commit-time
+        // scanner (`den.scanCommit`, issue 2-03 — no parallel detector) over the discovered
+        // Files and flag the secret-bearing ones for the amber `Warn` row. Best-effort: a
+        // failed secret scan must never block discovery (the Files stay neutral, still
+        // Trackable, and the commit-time warn step still catches secrets later).
+        await refreshWarnings(
+          found.map((s) => s.targetPath),
+          () => cancelled,
+        )
       } catch (caught) {
         if (!cancelled) setError(caught instanceof Error ? caught.message : 'Scan failed.')
       } finally {
@@ -63,6 +78,36 @@ export function OBDiscover({
       cancelled = true
     }
   }, [])
+
+  /**
+   * Run the commit-time SecretScanner over a set of discovered paths and update the warned
+   * set (issue 2-07). Reuses `window.dotden.den.scanCommit` — the exact detector the Commit
+   * step uses — so onboarding and Commit agree on what looks secret-bearing (no fork).
+   *
+   * Best-effort + non-blocking: a scan failure leaves the previous warnings untouched and is
+   * swallowed (the row simply stays neutral). The secret is never *missed* by this — the
+   * commit-time warn step re-scans at Commit and catches it regardless (ADR 0001).
+   *
+   * @param paths Destination-relative discovered paths to scan for secrets.
+   * @param isCancelled Guard so a stale async result after unmount is dropped.
+   */
+  async function refreshWarnings(
+    paths: readonly string[],
+    isCancelled: () => boolean,
+  ): Promise<void> {
+    if (paths.length === 0) return
+    try {
+      const findings = await window.dotden.den.scanCommit(paths)
+      if (isCancelled()) return
+      // Per-File warn (a File with many findings is one warned row) — derived by the pure
+      // helper so the mapping is unit-tested independent of this component.
+      const found = warnedPathsFromFindings(findings)
+      setWarnedPaths((prev) => new Set([...prev, ...found]))
+    } catch {
+      // Advisory only — never surface a discovery error for a failed secret pre-scan; the
+      // Commit step's warn flow is the real guard. Leave existing warnings as-is.
+    }
+  }
 
   // Group suggestions by tool so the list shows "Zsh / Git / Neovim …" headers.
   const groups = useMemo(() => {
@@ -103,6 +148,9 @@ export function OBDiscover({
       )
       setPicked((prev) => new Set(prev).add(suggestion.targetPath))
       setCustomPath('')
+      // Scan the just-added File for secrets too (issue 2-07) so a dragged-in secret-bearing
+      // File gets the same amber Warn row as a catalog hit — best-effort, never blocking.
+      await refreshWarnings([suggestion.targetPath], () => false)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Adding that file failed.')
     }
@@ -135,7 +183,7 @@ export function OBDiscover({
         <p className="text-muted-foreground text-sm leading-relaxed">
           dotden scanned for config files from tools you already use. Pick the ones to manage — or
           drag in anything the scan missed. They go into a default Workspace; you can reorganize
-          later.
+          later. Secrets are flagged so you store them safely, never synced raw.
         </p>
       </header>
 
@@ -176,6 +224,9 @@ export function OBDiscover({
                     isFolder={row.isFolder}
                     checked={picked.has(row.targetPath)}
                     onToggle={() => toggle(row.targetPath)}
+                    // Amber Warn row when the SecretScanner flagged this File (issue 2-07) —
+                    // still selectable; the secret is resolved at Commit time, not excluded.
+                    warn={warnedPaths.has(row.targetPath)}
                   />
                 ))}
               </section>
