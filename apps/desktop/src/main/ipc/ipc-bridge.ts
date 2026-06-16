@@ -20,6 +20,7 @@ import type { DiscoveryScanner } from '../foundation/discovery-scanner.js'
 import type { EnvironmentRegistry } from '../foundation/environment-registry.js'
 import type { RemoteClient } from '../foundation/remote-client.js'
 import type { AutomationLevel } from '../foundation/automation-policy.js'
+import type { SyncSettings } from '../foundation/sync-settings.js'
 import type { Scope } from '../foundation/os-scope.js'
 import type { UnsubscribeDisposition } from '../foundation/subscription-settings.js'
 
@@ -91,6 +92,18 @@ export interface IpcBridgeDeps {
   readonly getUnsubscribeDisposition: () => Promise<UnsubscribeDisposition>
   /** Persist this environment's remembered un-subscribe disposition default (issue 1-13). */
   readonly setUnsubscribeDisposition: (disposition: UnsubscribeDisposition) => Promise<void>
+  /**
+   * Read this environment's Sync settings — poller on/off · cadence · start-on-login (issue
+   * 2-08). Environment-local (`userData`, never synced — ADR 0024); the bridge just forwards it.
+   */
+  readonly getSyncSettings: () => Promise<SyncSettings>
+  /**
+   * Persist this environment's Sync settings AND apply the side effects (issue 2-08): re-arm or
+   * dismiss the TrayPoller for the new on-off + cadence, and set the OS login-item for
+   * start-on-login. index.ts owns the re-arming + the autostart call; the bridge only routes the
+   * user's choice and returns the persisted settings.
+   */
+  readonly setSyncSettings: (settings: SyncSettings) => Promise<SyncSettings>
 }
 
 /**
@@ -409,6 +422,23 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     // The store rejects a non-MVP level; let that surface to the renderer (never persist
     // an unbuilt rung). index.ts's setAutomationLevel also re-arms the services on success.
     await deps.setAutomationLevel(level)
+  })
+
+  // ── Sync settings channels (issue 2-08): the environment-local Sync tab ──
+  // get-settings is read-only; set-settings MUTATES local settings AND re-arms the side effects
+  // (TrayPoller on-off/cadence + OS autostart), so index.ts owns the re-arming behind
+  // `setSyncSettings`. Both still assert the `_trace` envelope so EVERY IPC call is uniformly
+  // correlated, even though the settings read/write does not take a trace id today.
+  registrar.handle('sync:get-settings', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    return deps.getSyncSettings()
+  })
+  registrar.handle('sync:set-settings', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    const { settings } = payload as TracedPayload & { settings: SyncSettings }
+    // index.ts's setSyncSettings persists locally then re-arms the poller + applies autostart,
+    // and returns the persisted settings so the tab re-renders from the source of truth.
+    return deps.setSyncSettings(settings)
   })
 }
 

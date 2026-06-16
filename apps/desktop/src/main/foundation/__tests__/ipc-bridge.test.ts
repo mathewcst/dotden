@@ -9,6 +9,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { registerIpcBridge, traceId, type IpcRegistrar } from '../../ipc/ipc-bridge.js'
+import type { SyncSettings } from '../sync-settings.js'
 
 /** A fake registrar that captures channel→handler so tests can invoke them directly. */
 function fakeRegistrar() {
@@ -56,6 +57,12 @@ describe('IpcBridge', () => {
       claimEnvironment: async () => undefined,
       getUnsubscribeDisposition: async () => 'keep' as const,
       setUnsubscribeDisposition: async () => undefined,
+      getSyncSettings: async () => ({
+        pollerEnabled: true,
+        cadence: 'fast' as const,
+        startOnLogin: false,
+      }),
+      setSyncSettings: async (settings) => settings,
     })
 
     await handlers.get('den:track')?.({}, {
@@ -126,6 +133,12 @@ describe('IpcBridge', () => {
       claimEnvironment: async () => undefined,
       getUnsubscribeDisposition: async () => 'keep' as const,
       setUnsubscribeDisposition: async () => undefined,
+      getSyncSettings: async () => ({
+        pollerEnabled: true,
+        cadence: 'fast' as const,
+        startOnLogin: false,
+      }),
+      setSyncSettings: async (settings) => settings,
     })
 
     await handlers.get('den:detect-conflicts')?.({}, { _trace: { traceId: 'c1' } } as never)
@@ -178,6 +191,12 @@ describe('IpcBridge', () => {
       claimEnvironment: async () => undefined,
       getUnsubscribeDisposition: async () => 'keep' as const,
       setUnsubscribeDisposition: async () => undefined,
+      getSyncSettings: async () => ({
+        pollerEnabled: true,
+        cadence: 'fast' as const,
+        startOnLogin: false,
+      }),
+      setSyncSettings: async (settings) => settings,
     })
 
     await handlers.get('den:create-workspace')?.({}, {
@@ -268,6 +287,12 @@ describe('IpcBridge', () => {
       claimEnvironment,
       getUnsubscribeDisposition,
       setUnsubscribeDisposition,
+      getSyncSettings: async () => ({
+        pollerEnabled: true,
+        cadence: 'fast' as const,
+        startOnLogin: false,
+      }),
+      setSyncSettings: async (settings) => settings,
     })
 
     await handlers.get('den:subscription-state')?.({}, { _trace: { traceId: 's1' } } as never)
@@ -329,6 +354,12 @@ describe('IpcBridge', () => {
       claimEnvironment: async () => undefined,
       getUnsubscribeDisposition: async () => 'keep' as const,
       setUnsubscribeDisposition: async () => undefined,
+      getSyncSettings: async () => ({
+        pollerEnabled: true,
+        cadence: 'fast' as const,
+        startOnLogin: false,
+      }),
+      setSyncSettings: async (settings) => settings,
     })
 
     await handlers.get('remote:preflight')?.({}, {
@@ -353,6 +384,12 @@ describe('IpcBridge', () => {
       claimEnvironment: async () => undefined,
       getUnsubscribeDisposition: async () => 'keep' as const,
       setUnsubscribeDisposition: async () => undefined,
+      getSyncSettings: async () => ({
+        pollerEnabled: true,
+        cadence: 'fast' as const,
+        startOnLogin: false,
+      }),
+      setSyncSettings: async (settings) => settings,
     })
 
     await expect(handlers.get('den:sync-push')?.({}, {} as never)).rejects.toThrow(
@@ -376,6 +413,12 @@ describe('IpcBridge', () => {
       claimEnvironment: async () => undefined,
       getUnsubscribeDisposition: async () => 'keep' as const,
       setUnsubscribeDisposition: async () => undefined,
+      getSyncSettings: async () => ({
+        pollerEnabled: true,
+        cadence: 'fast' as const,
+        startOnLogin: false,
+      }),
+      setSyncSettings: async (settings) => settings,
     })
 
     await expect(
@@ -422,6 +465,12 @@ describe('IpcBridge', () => {
       claimEnvironment: async () => undefined,
       getUnsubscribeDisposition: async () => 'keep' as const,
       setUnsubscribeDisposition: async () => undefined,
+      getSyncSettings: async () => ({
+        pollerEnabled: true,
+        cadence: 'fast' as const,
+        startOnLogin: false,
+      }),
+      setSyncSettings: async (settings) => settings,
     })
 
     await expect(
@@ -456,6 +505,12 @@ describe('IpcBridge', () => {
       claimEnvironment: async () => undefined,
       getUnsubscribeDisposition: async () => 'keep' as const,
       setUnsubscribeDisposition: async () => undefined,
+      getSyncSettings: async () => ({
+        pollerEnabled: true,
+        cadence: 'fast' as const,
+        startOnLogin: false,
+      }),
+      setSyncSettings: async (settings) => settings,
     })
 
     // get-level forwards the environment-local rung.
@@ -471,6 +526,47 @@ describe('IpcBridge', () => {
 
     // Both channels still hard-fail without a _trace envelope (uniform correlation).
     await expect(handlers.get('automation:get-level')?.({}, {} as never)).rejects.toThrow(
+      'without a _trace envelope',
+    )
+  })
+
+  it('routes the sync:* settings channels and asserts _trace (issue 2-08)', async () => {
+    const getSyncSettings = vi.fn(async () => ({
+      pollerEnabled: true,
+      cadence: 'fast' as const,
+      startOnLogin: false,
+    }))
+    // setSyncSettings echoes the persisted settings back (index.ts re-arms the poller + autostart).
+    const setSyncSettings = vi.fn(async (settings: SyncSettings) => settings)
+    const { registrar, handlers } = fakeRegistrar()
+    registerIpcBridge(registrar, {
+      remoteClient: async () => ({}) as never,
+      denService: async () => ({}) as never,
+      discoveryScanner: async () => ({}) as never,
+      environmentRegistry: async () => ({}) as never,
+      getAutomationLevel: async () => 'manual' as const,
+      setAutomationLevel: async () => undefined,
+      claimEnvironment: async () => undefined,
+      getUnsubscribeDisposition: async () => 'keep' as const,
+      setUnsubscribeDisposition: async () => undefined,
+      getSyncSettings,
+      setSyncSettings,
+    })
+
+    // get-settings forwards the environment-local Sync settings.
+    await expect(
+      handlers.get('sync:get-settings')?.({}, { _trace: { traceId: 'y1' } } as never),
+    ).resolves.toEqual({ pollerEnabled: true, cadence: 'fast', startOnLogin: false })
+    // set-settings forwards the chosen settings so index.ts can persist + re-arm the poller/autostart.
+    const next: SyncSettings = { pollerEnabled: false, cadence: 'relaxed', startOnLogin: true }
+    await handlers.get('sync:set-settings')?.({}, {
+      settings: next,
+      _trace: { traceId: 'y2' },
+    } as never)
+    expect(setSyncSettings).toHaveBeenCalledWith(next)
+
+    // Both channels still hard-fail without a _trace envelope (uniform correlation).
+    await expect(handlers.get('sync:get-settings')?.({}, {} as never)).rejects.toThrow(
       'without a _trace envelope',
     )
   })

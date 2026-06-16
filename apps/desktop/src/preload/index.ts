@@ -321,6 +321,21 @@ const api: DotdenApi = {
       }) as ReturnType<DotdenApi['automation']['setLevel']>
     },
   },
+  sync: {
+    // → IPC channel 'sync:get-settings' (env-local poller on/off · cadence · autostart, issue 2-08)
+    getSettings() {
+      return ipcRenderer.invoke('sync:get-settings', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['sync']['getSettings']>
+    },
+    // → IPC channel 'sync:set-settings' (persist + re-arm poller + apply OS autostart, issue 2-08)
+    setSettings(settings) {
+      return ipcRenderer.invoke('sync:set-settings', {
+        settings,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['sync']['setSettings']>
+    },
+  },
   trayPoller: {
     // ← main→renderer push: the TrayPoller fires 'tray-poller:incoming' when the Remote
     // moved (issue 1-12). We wrap the raw IPC listener so the renderer callback never sees

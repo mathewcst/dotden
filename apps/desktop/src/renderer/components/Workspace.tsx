@@ -80,7 +80,7 @@ function toGitStatus(file: FileTreeEntry): GitStatusEntry | null {
  * the `WORKSPACES` grouping for 1-14, and the muted/`ignored` rendering for OS Scope
  * (1-15) — all reachable without reshaping this component.
  */
-export function Workspace({ role }: { role: Role }) {
+export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings?: () => void }) {
   // env A: the managed File tree read from the main process (the real chezmoi view).
   const [files, setFiles] = useState<readonly FileTreeEntry[]>([])
   // The Workspace/Group tree (issue 1-14), read from the synced `.myenv/` over `den:tree`.
@@ -642,7 +642,16 @@ export function Workspace({ role }: { role: Role }) {
         <div className="text-muted-foreground flex items-center gap-3">
           <CircleDot className="size-4" aria-label="sync status" />
           <Bell className="size-4" aria-label="notifications" />
-          <Settings className="size-4" aria-label="settings" />
+          {/* Open the Settings surface (issue 2-08): the app shows it over the Workspace. */}
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            disabled={!onOpenSettings}
+            className="hover:text-foreground rounded transition-colors disabled:pointer-events-none"
+            aria-label="settings"
+          >
+            <Settings className="size-4" />
+          </button>
         </div>
       </header>
 

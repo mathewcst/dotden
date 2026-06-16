@@ -4,12 +4,13 @@ import { Button } from '@/components/ui/button'
 import { Workspace } from '@/components/Workspace'
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell'
 import { ReturningShell } from '@/components/returning/ReturningShell'
+import { SettingsShell } from '@/components/settings/SettingsShell'
 
 /**
  * The top-level route: a landing chooser, the first-run onboarding, the second-environment
- * returning flow, or the main three-pane app.
+ * returning flow, the main three-pane app, or the Settings surface.
  */
-type Route = 'landing' | 'onboarding' | 'returning' | 'app'
+type Route = 'landing' | 'onboarding' | 'returning' | 'app' | 'settings'
 
 /**
  * App — the top-level router between the landing chooser, the two setup flows, and the main
@@ -63,6 +64,12 @@ export function App() {
     )
   }
 
+  if (route === 'settings') {
+    // The Settings surface (issue 2-08) is a full-window route shown OVER the Workspace, mirroring
+    // how onboarding/returning are full-window routes; closing returns to the app on the same role.
+    return <SettingsShell onClose={() => setRoute('app')} />
+  }
+
   return (
     <div className="relative">
       <div className="bg-card border-border absolute top-1 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border px-1 py-1 text-xs shadow-sm">
@@ -81,7 +88,7 @@ export function App() {
       </div>
       {/* Key by role so switching environments remounts the Workspace and resets all
           of its state (the React `key` reset pattern), keeping the A/B thread clean. */}
-      <Workspace key={role} role={role} />
+      <Workspace key={role} role={role} onOpenSettings={() => setRoute('settings')} />
     </div>
   )
 }

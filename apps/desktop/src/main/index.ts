@@ -31,7 +31,9 @@ import {
   writeUnsubscribeDisposition,
 } from './foundation/subscription-settings.js'
 import type { UnsubscribeDisposition } from './foundation/subscription-settings.js'
-import { TrayPoller } from './foundation/tray-poller.js'
+import { DEFAULT_POLL_CADENCE, TrayPoller, type PollCadence } from './foundation/tray-poller.js'
+import { readSyncSettings, writeSyncSettings } from './foundation/sync-settings.js'
+import type { PollCadenceProfile, SyncSettings } from './foundation/sync-settings.js'
 
 /**
  * Process-wide observability core (ADR 0007): one wide event per Operation lands in
@@ -250,6 +252,82 @@ function setUnsubscribeDisposition(disposition: UnsubscribeDisposition): Promise
   return writeUnsubscribeDisposition(app.getPath('userData'), disposition)
 }
 
+// ── Sync settings: poller on/off · cadence · start-on-login (issue 2-08, ADR 0024) ──
+
+/**
+ * The relaxed poll cadence the Sync tab's `relaxed` profile maps onto — a slower, battery-
+ * friendlier ceiling than {@link DEFAULT_POLL_CADENCE} (the `fast` profile). The minutes here
+ * are the local-only realization of the named profile the user picks; the profile string is
+ * what we persist, so these numbers can evolve without rewriting users' settings files.
+ */
+const RELAXED_POLL_CADENCE: PollCadence = {
+  minIntervalMs: 120_000, // 2 min focused floor (vs 30s fast)
+  maxIntervalMs: 900_000, // 15 min idle ceiling (vs 5 min fast)
+  backoffFactor: 2,
+}
+
+/** Map a Sync-tab cadence profile onto the concrete {@link PollCadence} the TrayPoller consumes. */
+function cadenceForProfile(profile: PollCadenceProfile): PollCadence {
+  return profile === 'relaxed' ? RELAXED_POLL_CADENCE : DEFAULT_POLL_CADENCE
+}
+
+/** Read this environment's Sync settings (poller on/off · cadence · autostart), ADR 0024. */
+function getSyncSettings(): Promise<SyncSettings> {
+  return readSyncSettings(app.getPath('userData'))
+}
+
+/**
+ * Persist this environment's Sync settings AND apply the side effects (issue 2-08):
+ * - **start-on-login** is realized via Electron's `app.setLoginItemSettings` so the tray (and
+ *   therefore the watcher) is present at login without the user opening the app;
+ * - the **TrayPoller** is re-armed: dismissed when the user turns polling off, (re)started at
+ *   the chosen cadence when on. The poller is independent of Auto-sync (even Manual polls), so
+ *   this is the ONLY user control over whether the background watcher runs at all.
+ *
+ * Returns the persisted settings so the renderer re-renders from the source of truth.
+ */
+async function setSyncSettings(settings: SyncSettings): Promise<SyncSettings> {
+  await writeSyncSettings(app.getPath('userData'), settings)
+  applyLoginItemSetting(settings.startOnLogin)
+  await restartTrayPoller()
+  return settings
+}
+
+/**
+ * Apply the OS "open dotden at login" preference (issue 2-08). Electron's
+ * `setLoginItemSettings` registers/unregisters the login item on macOS + Windows; it is a
+ * best-effort, no-throw call (an unsupported/locked-down platform simply ignores it), so a
+ * failure to register autostart never blocks saving the rest of the Sync settings.
+ */
+function applyLoginItemSetting(openAtLogin: boolean): void {
+  try {
+    app.setLoginItemSettings({ openAtLogin })
+  } catch (error) {
+    // Never fail silently, but never block the settings save over an OS autostart hiccup.
+    console.error('[dotden] Failed to apply start-on-login setting:', error)
+  }
+}
+
+/**
+ * Tear down the current {@link TrayPoller} and re-arm it from the current Sync settings (issue
+ * 2-08) — the re-arm path the Sync tab triggers when the user flips poller on/off or changes
+ * cadence. {@link armTrayPoller} reads the settings itself, so this just stops any running
+ * poller first; if polling is now off, `armTrayPoller` returns without starting a new one.
+ */
+async function restartTrayPoller(): Promise<void> {
+  trayPoller?.stop()
+  trayPoller = null
+  // When polling is turned OFF, also drop the tray presence: the tray exists only to keep the
+  // background watcher alive with the window closed, so a disabled poller should not pin the
+  // process tray-side. `armTrayPoller` recreates the tray when polling is (re)enabled.
+  const settings = await getSyncSettings()
+  if (!settings.pollerEnabled && tray) {
+    tray.destroy()
+    tray = null
+  }
+  await armTrayPoller()
+}
+
 /**
  * Fire the detect-only side effects when the TrayPoller sees the Remote move (issue 1-12):
  * an OS {@link Notification} (so the user learns even with the window closed) AND a
@@ -283,6 +361,12 @@ function notifyIncoming(): void {
  */
 async function armTrayPoller(): Promise<void> {
   try {
+    // The Sync tab can turn the background watcher OFF on this environment (issue 2-08). When
+    // it is disabled we stay dormant entirely — no tray, no poll loop — until the user re-enables
+    // it. The cadence profile the user picked selects the poll interval bounds below.
+    const syncSettings = await getSyncSettings()
+    if (!syncSettings.pollerEnabled) return
+
     const den = await getDenService()
     const snapshot = await den.pollSnapshot()
     // No Remote configured yet (a Den never connected) ⇒ nothing to watch; stay dormant.
@@ -306,6 +390,8 @@ async function armTrayPoller(): Promise<void> {
       readLatestSha: (signal) =>
         client.latestRemoteSha(remoteUrl, 'main', { _trace: pollTrace(), signal }),
       notifier: { notifyIncoming },
+      // The cadence the user picked in the Sync tab (issue 2-08): `fast` (default) or `relaxed`.
+      cadence: cadenceForProfile(syncSettings.cadence),
       // Real one-shot timers; the poller owns clearing/re-arming.
       scheduler: {
         schedule: (fn, delayMs) => setTimeout(fn, delayMs),
@@ -437,8 +523,15 @@ app.whenReady().then(() => {
     claimEnvironment,
     getUnsubscribeDisposition,
     setUnsubscribeDisposition,
+    getSyncSettings,
+    setSyncSettings,
   })
   createWindow()
+
+  // Reconcile the OS login-item with this environment's saved start-on-login preference (issue
+  // 2-08) on each launch, so a setting changed while the app was closed (or out of sync with the
+  // OS) is re-applied. Best-effort; the helper never throws.
+  void getSyncSettings().then((settings) => applyLoginItemSetting(settings.startOnLogin))
 
   // Arm the always-on TrayPoller (issue 1-12): it watches the Remote on the cheap
   // ls-remote SHA cadence and notifies on incoming, independent of Auto-sync and even

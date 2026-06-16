@@ -42,6 +42,7 @@ import type {
 } from '../main/foundation/environment-registry.js'
 import type { DiscoverySuggestion } from '../main/foundation/discovery-scanner.js'
 import type { AutomationLevel } from '../main/foundation/automation-policy.js'
+import type { SyncSettings } from '../main/foundation/sync-settings.js'
 
 /**
  * Node's `process.platform` value set, declared locally so this shared contract
@@ -393,6 +394,26 @@ export interface DotdenApi {
      * level the MVP does not expose (never persist an unbuilt rung).
      */
     setLevel(level: AutomationLevel): Promise<void>
+  }
+  /**
+   * Sync & polling settings (issue 2-08), forwarded to `sync:*` IPC channels — the data
+   * seam behind the Settings → Sync tab.
+   *
+   * Like the automation level, these are **environment-local** (ADR 0024): each environment
+   * decides whether the background TrayPoller runs, how aggressively it polls, and whether
+   * dotden starts at login. They live in Electron `userData` and NEVER enter the synced
+   * `.myenv/` directory (paths/runtime/per-machine behavior are local facts, not user-authored
+   * organization). Setting them re-arms the poller + applies the OS autostart preference.
+   */
+  readonly sync: {
+    /** Read this environment's Sync settings (poller on/off · cadence · start-on-login). */
+    getSettings(): Promise<SyncSettings>
+    /**
+     * Persist this environment's Sync settings AND apply the side effects: re-arm/dismiss the
+     * TrayPoller for the new on-off + cadence, and set the OS login-item for start-on-login.
+     * Returns the persisted settings so the tab re-renders from the source of truth.
+     */
+    setSettings(settings: SyncSettings): Promise<SyncSettings>
   }
   /**
    * The TrayPoller's detect-only incoming notifications (issue 1-12), pushed FROM the
