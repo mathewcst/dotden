@@ -325,6 +325,51 @@ export class GitTransport {
   }
 
   /**
+   * Read the current branch's tip commit SHA — the local "where this environment is"
+   * marker the {@link import('./tray-poller.js').TrayPoller} seeds itself with.
+   *
+   * Maps to `git rev-parse HEAD`. The poller compares the *Remote's* advertised SHA
+   * (`git ls-remote`, issue 1-03) against this so the FIRST observed Remote SHA equal
+   * to local HEAD is correctly "nothing new" rather than a spurious notification. A
+   * repo with no commits yet (fresh init/clone-empty) has no HEAD, so this returns
+   * `null` rather than throwing — the poller then treats the first Remote SHA as
+   * genuinely incoming (correct for a brand-new clone).
+   *
+   * @returns The 40-char HEAD SHA, or null when the repo has no commits yet.
+   * @throws CommandFailedError for any non-zero exit that is NOT "no commits yet".
+   */
+  async headSha(): Promise<string | null> {
+    try {
+      return (await this.git(['rev-parse', 'HEAD'])).stdout.trim() || null
+    } catch (error) {
+      // A fresh repo has an unborn HEAD; rev-parse fails. That is "no commit yet", not
+      // an error — return null so the poller's first comparison is against "nothing seen".
+      if (isNoCommitsYet(error)) return null
+      throw error
+    }
+  }
+
+  /**
+   * Read the URL of a named remote — the Remote URL the
+   * {@link import('./tray-poller.js').TrayPoller} hands to `git ls-remote` each tick.
+   *
+   * Maps to `git remote get-url <remote>`. Returns `null` when the remote is not
+   * configured (e.g. a Den initialized but never connected to a Remote), so the poller
+   * can stay dormant rather than poll a non-existent Remote (never fail by guessing).
+   *
+   * @param remote Remote name to read. Defaults to `origin`.
+   * @returns The configured URL, or null when the remote does not exist.
+   */
+  async remoteUrl(remote = 'origin'): Promise<string | null> {
+    try {
+      return (await this.git(['remote', 'get-url', remote])).stdout.trim() || null
+    } catch {
+      // No such remote configured — the Den has no Remote to poll yet.
+      return null
+    }
+  }
+
+  /**
    * Return the diff of the working tree against a ref.
    *
    * Maps to `git diff <ref>`.

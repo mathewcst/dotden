@@ -41,6 +41,11 @@ import { SyncEngine, type IncomingFile } from './sync-engine.js'
 import type { ApplyChangeKind } from './apply-planner.js'
 import { ConflictModel, type ResolutionChoice } from './conflict-model.js'
 import { parseChezmoiStatus, parseIncomingDeletions, type FileGitStatus } from './chezmoi-status.js'
+import {
+  AutomationPolicy,
+  DEFAULT_AUTOMATION_LEVEL,
+  type AutomationLevel,
+} from './automation-policy.js'
 
 /** Construction wiring for a {@link DenService}, bound to one environment's dirs. */
 export interface DenServiceOptions {
@@ -63,6 +68,31 @@ export interface DenServiceOptions {
   readonly environment: Pick<EnvironmentEntry, 'id' | 'label' | 'os'>
   /** Shared tracer so each Operation emits one wide event (ADR 0007); optional in tests. */
   readonly tracer?: OperationTracer
+  /**
+   * This environment's selected {@link AutomationLevel} (issue 1-12) — the rung the
+   * {@link AutomationPolicy} gates by. It is **environment-local** (CONTEXT.md "Auto-sync"),
+   * read from {@link import('./automation-settings.js').readAutomationLevel} in production
+   * and defaulting to the safe Manual rung when omitted. It controls exactly one thing in
+   * the MVP: whether a Commit **auto-pushes** (Auto-sync) or waits for **Sync now** (Manual).
+   * Commit itself is NEVER automatic at any level (ADR 0006), and Apply always stays manual.
+   */
+  readonly automationLevel?: AutomationLevel
+}
+
+/**
+ * A snapshot the {@link import('./tray-poller.js').TrayPoller} needs to watch the Remote
+ * (issue 1-12): the Remote URL to `git ls-remote`, and this environment's local HEAD SHA
+ * to seed the poller's "already seen" marker so the first observed Remote SHA equal to
+ * HEAD is "nothing new", not a spurious notification.
+ *
+ * `remoteUrl` is `null` when no Remote is configured yet (a Den initialized but never
+ * connected), in which case the poller stays dormant rather than poll nothing.
+ */
+export interface PollSnapshot {
+  /** The configured Remote URL (`git remote get-url origin`), or null when none exists. */
+  readonly remoteUrl: string | null
+  /** This environment's local HEAD SHA (`git rev-parse HEAD`), or null on a fresh repo. */
+  readonly headSha: string | null
 }
 
 /**
@@ -326,9 +356,15 @@ export class DenService {
   private readonly git: GitTransport
   private readonly store: MyenvStore
   private readonly tracer?: OperationTracer
+  /**
+   * The automation-ladder gate for THIS environment (ADR 0008, issue 1-12). DenService
+   * **depends on** it to decide whether a Commit auto-pushes — it never re-implements the
+   * gate. Holds only the level; the safety invariants stay with their owners.
+   */
+  private readonly automation: AutomationPolicy
 
   /**
-   * @param options Binaries, dirs, this environment's identity, and an optional tracer.
+   * @param options Binaries, dirs, this environment's identity, automation level, tracer.
    */
   constructor(private readonly options: DenServiceOptions) {
     this.chezmoi = new ChezmoiAdapter({
@@ -340,6 +376,18 @@ export class DenService {
     this.git = new GitTransport({ gitBin: options.gitBin, repoDir: options.sourceDir })
     this.store = new MyenvStore(options.sourceDir)
     this.tracer = options.tracer
+    this.automation = new AutomationPolicy(options.automationLevel ?? DEFAULT_AUTOMATION_LEVEL)
+  }
+
+  /**
+   * The Remote URL + local HEAD SHA the {@link import('./tray-poller.js').TrayPoller}
+   * needs to watch the Remote (issue 1-12). Read-only; emits no wide event.
+   *
+   * @returns The configured Remote URL (or null) and this environment's HEAD SHA (or null).
+   */
+  async pollSnapshot(): Promise<PollSnapshot> {
+    const [remoteUrl, headSha] = await Promise.all([this.git.remoteUrl(), this.git.headSha()])
+    return { remoteUrl, headSha }
   }
 
   /**
@@ -430,14 +478,28 @@ export class DenService {
         },
       })
       span?.setAttribute('fileCount', targetPaths.length)
+      span?.setAttribute('automationLevel', this.automation.automationLevel)
+      // Auto-sync (issue 1-12): when the AutomationPolicy permits it, PUSH the
+      // already-Committed change automatically so the user need not press Sync now.
+      // We DEPEND on the policy's `mayAutoPush()` decision (ADR 0008) — DenService never
+      // re-implements the level gate — and this only ever transports a change the user
+      // ALREADY Committed (transport-not-commit, ADR 0006); the Commit above is never
+      // automatic. A failed auto-push is surfaced (never fail silently): the Commit is
+      // recorded locally regardless, so we report `pushed: false` and rethrow so the UI
+      // shows the failure and offers a manual Sync now.
+      const pushed = this.automation.mayAutoPush()
+      if (pushed) {
+        await this.git.push()
+      }
       span?.end('ok')
       return {
         message: rendered.message,
         templateId: rendered.templateId,
         templateLabel: rendered.templateLabel,
         committedFiles: [...targetPaths],
-        // A Commit is local until pushed (ADR 0006). syncPush() is what sends it.
-        pushed: false,
+        // Manual: a Commit is local until pushed (ADR 0006) — `false`, and Sync now sends
+        // it. Auto-sync: the policy auto-pushed above — `true`, so the UI says it's synced.
+        pushed,
       }
     } catch (error) {
       span?.end('error')

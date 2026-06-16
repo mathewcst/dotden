@@ -37,14 +37,31 @@ export function OnboardingShell({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState<OnboardingStep>('welcome')
   const [trackedPaths, setTrackedPaths] = useState<readonly string[]>([])
   const [commit, setCommit] = useState<CommitResult | null>(null)
-  // The Auto-sync opt-in is a WIRED SLOT here (issue 1-12 owns Auto-sync itself); we
-  // record the user's choice so the next slice can enable it, but turning it on is
-  // a no-op stub in this slice (the toggle is real, the engine is 1-12's).
+  // The Auto-sync opt-in (issue 1-12): the checkbox state, persisted to the environment-
+  // local automation level when the user finishes this step. Auto-sync auto-pushes
+  // Committed changes and notifies on incoming; Apply always stays a manual review.
   const [autoSync, setAutoSync] = useState(false)
-  const [busy, setBusy] = useState<null | 'commit' | 'sync'>(null)
+  const [busy, setBusy] = useState<null | 'commit' | 'sync' | 'auto-sync'>(null)
   const [error, setError] = useState<string | null>(null)
 
   const advance = () => setStep((current) => nextStep(current))
+
+  // Persist the Auto-sync opt-in (issue 1-12) THEN advance. Manual is the default, so an
+  // unchecked box explicitly records `manual` (idempotent). A failure to save must not
+  // trap the user in onboarding — surface it but still advance (never fail silently, but
+  // never block finishing setup over a settings write).
+  async function finishAutoSync() {
+    setBusy('auto-sync')
+    setError(null)
+    try {
+      await window.dotden.automation.setLevel(autoSync ? 'auto-sync' : 'manual')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not save your Auto-sync choice.')
+    } finally {
+      setBusy(null)
+      advance()
+    }
+  }
 
   // First-commit: Commit the Tracked Files (LOCAL until pushed) then Sync push.
   async function commitAndSync() {
@@ -225,8 +242,8 @@ export function OnboardingShell({ onComplete }: { onComplete: () => void }) {
                 Applying changes always stays a manual review.
               </p>
             </header>
-            {/* Wired slot for the Auto-sync opt-in — issue 1-12 owns the engine; this
-                records the choice so the next slice can enable it. */}
+            {/* The Auto-sync opt-in (issue 1-12): the choice is persisted to the
+                environment-local automation level when the user clicks finish. */}
             <label className="border-border bg-card flex cursor-pointer items-start gap-3 rounded-md border p-4 text-sm">
               <input
                 type="checkbox"
@@ -237,12 +254,19 @@ export function OnboardingShell({ onComplete }: { onComplete: () => void }) {
               <span>
                 <span className="text-foreground font-medium">Enable Auto-sync</span>
                 <span className="text-muted-foreground block text-xs">
-                  Sends Committed changes automatically. You can change this any time in Settings.
+                  Sends Committed changes automatically and notifies you about incoming ones.
+                  Applying always stays a manual review. Change this any time in Settings.
                 </span>
               </span>
             </label>
+            {error ? (
+              <p className="text-dd-red-400 text-xs" role="alert">
+                {error}
+              </p>
+            ) : null}
             <div>
-              <Button onClick={advance}>
+              <Button disabled={busy !== null} onClick={() => void finishAutoSync()}>
+                {busy === 'auto-sync' ? <Loader2 className="size-4 animate-spin" /> : null}
                 {autoSync ? 'Enable & finish' : 'Finish setup'} <ArrowRight className="size-4" />
               </Button>
             </div>

@@ -37,6 +37,7 @@ import type {
   EnvironmentWithAttribution,
 } from '../main/foundation/environment-registry.js'
 import type { DiscoverySuggestion } from '../main/foundation/discovery-scanner.js'
+import type { AutomationLevel } from '../main/foundation/automation-policy.js'
 
 /**
  * Node's `process.platform` value set, declared locally so this shared contract
@@ -275,5 +276,44 @@ export interface DotdenApi {
      * dotden never auto-merges.
      */
     suggestClaims(): Promise<readonly ClaimSuggestion[]>
+  }
+  /**
+   * Automation-ladder operations (issue 1-12), forwarded to `automation:*` IPC channels.
+   *
+   * The automation level is **environment-local** (CONTEXT.md "Auto-sync"): each
+   * environment decides its own rung, persisted in Electron `userData`, never synced.
+   * The MVP exposes only **Manual** + **Auto-sync** — Apply always stays a manual review,
+   * and Commit is never automatic at any level (ADR 0006/0008).
+   */
+  readonly automation: {
+    /** Read this environment's selected automation level (Manual or Auto-sync). */
+    getLevel(): Promise<AutomationLevel>
+    /**
+     * Set this environment's automation level — the onboarding Auto-sync opt-in and the
+     * Settings toggle. Persists locally and re-arms the background services. Rejects any
+     * level the MVP does not expose (never persist an unbuilt rung).
+     */
+    setLevel(level: AutomationLevel): Promise<void>
+  }
+  /**
+   * The TrayPoller's detect-only incoming notifications (issue 1-12), pushed FROM the
+   * main process when another environment changed the Remote.
+   *
+   * This is the one main→renderer push channel (the rest of the surface is
+   * renderer→main request/response): the always-on poller fires it so an OPEN window can
+   * refresh its Incoming banner the moment the Remote moves, mirroring the OS notification
+   * the poller raises when the window is closed. Detect-only — receiving it never applies
+   * anything; it just prompts the in-app "check for incoming" refresh.
+   */
+  readonly trayPoller: {
+    /**
+     * Subscribe to incoming-detected events. The callback fires each time the poller sees
+     * the Remote's latest SHA move past what this environment has seen.
+     *
+     * @param listener Called on each detected incoming move (no payload — the renderer
+     *   re-fetches the incoming summary itself, keeping the contract narrow, ADR 0004).
+     * @returns An unsubscribe function the renderer calls on unmount.
+     */
+    onIncoming(listener: () => void): () => void
   }
 }

@@ -228,6 +228,32 @@ const api: DotdenApi = {
       }) as ReturnType<DotdenApi['environment']['suggestClaims']>
     },
   },
+  automation: {
+    // → IPC channel 'automation:get-level' (environment-local automation rung, issue 1-12)
+    getLevel() {
+      return ipcRenderer.invoke('automation:get-level', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['automation']['getLevel']>
+    },
+    // → IPC channel 'automation:set-level' (the onboarding opt-in + Settings toggle)
+    setLevel(level) {
+      return ipcRenderer.invoke('automation:set-level', {
+        level,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['automation']['setLevel']>
+    },
+  },
+  trayPoller: {
+    // ← main→renderer push: the TrayPoller fires 'tray-poller:incoming' when the Remote
+    // moved (issue 1-12). We wrap the raw IPC listener so the renderer callback never sees
+    // the Electron event object (keeping the contract narrow, ADR 0004) and return an
+    // unsubscribe that removes exactly this listener.
+    onIncoming(listener) {
+      const handler = () => listener()
+      ipcRenderer.on('tray-poller:incoming', handler)
+      return () => ipcRenderer.removeListener('tray-poller:incoming', handler)
+    },
+  },
 }
 
 contextBridge.exposeInMainWorld('dotden', api)

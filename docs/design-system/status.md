@@ -50,11 +50,19 @@ chezmoi read-only / managed via chezmoi CLI" adoption; any backend/auth logic.
 
 Built directly in the renderer (real chezmoi/git ↔ IPC ↔ UI), not regenerated in Figma:
 
-| Screen spec                                                | Status   | Component(s)                                                                                                                                                                                                       |
-| ---------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [conflict-resolver](./screens/conflict-resolver.md) (1-11) | ✅ built | `ConflictResolver.tsx` — ConflictFiles list · `@pierre/diffs` `UnresolvedFile` merge view (read-only) · Keep mine / Take theirs / Open both · `n/m` resolve progress · Apply resolution (ember when ready) · Abort |
+| Screen spec                                                | Status    | Component(s)                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [conflict-resolver](./screens/conflict-resolver.md) (1-11) | ✅ built  | `ConflictResolver.tsx` — ConflictFiles list · `@pierre/diffs` `UnresolvedFile` merge view (read-only) · Keep mine / Take theirs / Open both · `n/m` resolve progress · Apply resolution (ember when ready) · Abort                                                                                                                                                                                                                                     |
+| [sync-states](./screens/sync-states.md) (1-12)             | ◻ partial | Functional Sync-now polish only: the **Sync now** + **Commit changes** tooltips make the transport-not-apply / never-auto-Commit distinction transparent, and the "Last commit" callout reflects Auto-sync-pushed vs local. The full six-tone live `Banner` strip wired to live Sync state (Syncing/UpToDate/Incoming/Push/Offline/Error) is **issue 3-04**, not this slice; the `Tone=Incoming` strip already shipped in 1-09 (`IncomingBanner.tsx`). |
 
 Functional-color discipline honored: amber = mine/Current, blue = theirs/Incoming, red = Conflict,
 green = resolved, ember = the primary **Apply resolution** action only. The merge view is **read-only**
 (`mergeConflictActionsType: 'none'`); every resolution routes through `ConflictModel.resolve(choice)`
 (ADR 0008 invariant #1), never `@pierre/diffs`' own `resolveConflict()`.
+
+The 1-12 automation slice itself (Auto-sync, the always-on `TrayPoller`, OS notification,
+`AutomationPolicy`) is **behavior, not a specced screen**: its design rationale lives in
+[ADR 0025](../adr/0025-tray-poller-detect-only-cheap-sha-compare.md) (TrayPoller detect-only +
+cheap SHA-compare + adaptive cadence) and [ADR 0008](../adr/0008-invariant-ownership.md)
+(`AutomationPolicy` gates levels by depending on the invariant owners). The native tray menu +
+notification polish is issue 3-06/3-07.

@@ -38,6 +38,7 @@ import type {
   RemoteAxisMarker,
 } from '../../main/foundation/den-service'
 import type { Workspace as WorkspaceModel } from '../../main/foundation/myenv-store'
+import type { AutomationLevel } from '../../main/foundation/automation-policy'
 
 /** Discriminates which environment's role this shell is driving (A vs B copy/actions). */
 type Role = 'a' | 'b'
@@ -98,6 +99,14 @@ export function Workspace({ role }: { role: Role }) {
   const [selected, setSelected] = useState<string | null>(null)
   const [diff, setDiff] = useState<string | null>(null)
   const [lastCommitMessage, setLastCommitMessage] = useState<string | null>(null)
+  // This environment's automation level (issue 1-12). Auto-sync auto-pushes Commits and
+  // changes the Commit/Sync copy; Manual leaves push to an explicit Sync now. Read once on
+  // mount and refreshed when the user toggles it elsewhere (Settings, a later slice).
+  const [automationLevel, setAutomationLevel] = useState<AutomationLevel>('manual')
+  const autoSyncOn = automationLevel === 'auto-sync'
+  // Whether the last Commit auto-pushed (Auto-sync) vs is local-until-Sync (Manual) — drives
+  // the "Last commit" callout copy so the user always knows where their change actually is.
+  const [lastCommitPushed, setLastCommitPushed] = useState(false)
   const [busy, setBusy] = useState<
     | null
     | 'load'
@@ -272,6 +281,10 @@ export function Workspace({ role }: { role: Role }) {
     let active = true
     async function loadInitial() {
       try {
+        // This environment's automation level (issue 1-12) so the Commit/Sync copy and
+        // the "Last commit" callout reflect Manual vs Auto-sync from first paint.
+        const level = await window.dotden.automation.getLevel()
+        if (active) setAutomationLevel(level)
         const view = await window.dotden.den.tree()
         if (active) {
           setFiles(view.files)
@@ -298,6 +311,20 @@ export function Workspace({ role }: { role: Role }) {
     }
   }, [role])
 
+  // Subscribe to the TrayPoller's detect-only incoming push (issue 1-12): when the
+  // always-on watcher sees another environment changed the Remote, refresh THIS window's
+  // Remote axis + banner so the in-app surface matches the OS notification the poller
+  // raised. Detect-only — this never Applies; it just re-checks for incoming. Only env A's
+  // everyday view consumes it (env B drives its own explicit Detect).
+  useEffect(() => {
+    if (role !== 'a') return
+    const unsubscribe = window.dotden.trayPoller.onIncoming(() => {
+      void refreshIncoming()
+    })
+    return unsubscribe
+    // refreshIncoming is a stable useCallback (no deps), so this binds once per mount.
+  }, [role, refreshIncoming])
+
   // ── env A verbs ── (each refreshes the tree so decorations reflect new state)
   const track = () =>
     run('track', async () => {
@@ -316,12 +343,20 @@ export function Workspace({ role }: { role: Role }) {
       if (changed.length === 0) return
       const result = await window.dotden.den.commit(changed)
       setLastCommitMessage(result.message)
+      // Under Auto-sync the main process auto-pushed this Commit (result.pushed === true);
+      // under Manual it stays local until Sync now. Reflect that so the callout copy is honest.
+      setLastCommitPushed(result.pushed)
       await reloadTree()
+      // An auto-pushed Commit also fetched incoming as part of the round-trip — refresh the
+      // Remote axis + banner so they stay live without the user pressing Sync now.
+      if (result.pushed) await refreshIncoming()
     })
 
   const push = () =>
     run('push', async () => {
       await window.dotden.den.syncPush()
+      // The local Commit(s) have now left this environment.
+      setLastCommitPushed(true)
       // A Sync also checks for incoming, so refresh the Remote axis + banner afterwards.
       await refreshIncoming()
     })
@@ -642,7 +677,19 @@ export function Workspace({ role }: { role: Role }) {
             <div className="ml-auto flex items-center gap-2">
               {role === 'a' ? (
                 <>
-                  <Button size="sm" disabled={busy !== null || changedCount === 0} onClick={commit}>
+                  <Button
+                    size="sm"
+                    disabled={busy !== null || changedCount === 0}
+                    onClick={commit}
+                    // Commit is never automatic at any level (ADR 0006/0008); the tooltip
+                    // makes the Auto-sync nuance explicit: Auto-sync only auto-PUSHES the
+                    // Commit you make here — it never decides WHAT to Commit.
+                    title={
+                      autoSyncOn
+                        ? 'Record these changes into your Den. Auto-sync will push them automatically — but Committing is always your call.'
+                        : 'Record these changes into your Den. They stay local until you Sync now.'
+                    }
+                  >
                     {busy === 'commit' ? (
                       <Loader2 className="size-4 animate-spin" />
                     ) : (
@@ -650,7 +697,16 @@ export function Workspace({ role }: { role: Role }) {
                     )}
                     Commit changes
                   </Button>
-                  <Button size="sm" variant="secondary" disabled={busy !== null} onClick={push}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={busy !== null}
+                    onClick={push}
+                    // Sync-now polish (issue 1-12): the tooltip makes the transport-not-apply
+                    // distinction transparent. "Sync now" pushes pending Commits and fetches
+                    // incoming, then PRESENTS incoming for review — it does NOT Apply.
+                    title="Sync now: push your pending Commits and fetch incoming changes, then review them before Applying. Sync never Applies for you."
+                  >
                     {busy === 'push' ? (
                       <Loader2 className="size-4 animate-spin" />
                     ) : (
@@ -878,9 +934,18 @@ export function Workspace({ role }: { role: Role }) {
             <section className="border-border bg-card rounded-md border p-3">
               <h2 className="mb-1 text-xs font-semibold tracking-wide">LAST COMMIT</h2>
               <p className="font-mono text-xs break-words">{lastCommitMessage}</p>
-              <p className="text-dd-blue-400 mt-2 text-xs">
-                Committed locally — this stays on this environment until you Sync now.
-              </p>
+              {/* Honest about where the change actually is: Auto-sync auto-pushed it to the
+                  Remote; Manual leaves it local until Sync now (never imply a sync that did
+                  not happen). */}
+              {lastCommitPushed ? (
+                <p className="text-dd-green-400 mt-2 text-xs">
+                  Committed and synced — Auto-sync pushed this to your repo.
+                </p>
+              ) : (
+                <p className="text-dd-blue-400 mt-2 text-xs">
+                  Committed locally — this stays on this environment until you Sync now.
+                </p>
+              )}
             </section>
           ) : null}
         </aside>

@@ -49,6 +49,8 @@ describe('IpcBridge', () => {
       denService: async () => den as never,
       discoveryScanner: async () => ({}) as never,
       environmentRegistry: async () => ({}) as never,
+      getAutomationLevel: async () => 'manual' as const,
+      setAutomationLevel: async () => undefined,
     })
 
     await handlers.get('den:track')?.({}, {
@@ -107,6 +109,8 @@ describe('IpcBridge', () => {
       denService: async () => den as never,
       discoveryScanner: async () => ({}) as never,
       environmentRegistry: async () => ({}) as never,
+      getAutomationLevel: async () => 'manual' as const,
+      setAutomationLevel: async () => undefined,
     })
 
     await handlers.get('den:detect-conflicts')?.({}, { _trace: { traceId: 'c1' } } as never)
@@ -147,6 +151,8 @@ describe('IpcBridge', () => {
       denService: async () => den as never,
       discoveryScanner: async () => ({}) as never,
       environmentRegistry: async () => ({}) as never,
+      getAutomationLevel: async () => 'manual' as const,
+      setAutomationLevel: async () => undefined,
     })
 
     await handlers.get('den:create-workspace')?.({}, {
@@ -194,6 +200,8 @@ describe('IpcBridge', () => {
       denService: async () => ({}) as never,
       discoveryScanner: async () => ({}) as never,
       environmentRegistry: async () => ({}) as never,
+      getAutomationLevel: async () => 'manual' as const,
+      setAutomationLevel: async () => undefined,
     })
 
     await handlers.get('remote:preflight')?.({}, {
@@ -213,6 +221,8 @@ describe('IpcBridge', () => {
       denService: async () => ({ syncPush: async () => undefined }) as never,
       discoveryScanner: async () => ({}) as never,
       environmentRegistry: async () => ({}) as never,
+      getAutomationLevel: async () => 'manual' as const,
+      setAutomationLevel: async () => undefined,
     })
 
     await expect(handlers.get('den:sync-push')?.({}, {} as never)).rejects.toThrow(
@@ -231,6 +241,8 @@ describe('IpcBridge', () => {
       denService: async () => ({}) as never,
       discoveryScanner: async () => scanner as never,
       environmentRegistry: async () => ({}) as never,
+      getAutomationLevel: async () => 'manual' as const,
+      setAutomationLevel: async () => undefined,
     })
 
     await expect(
@@ -272,6 +284,8 @@ describe('IpcBridge', () => {
       denService: async () => ({}) as never,
       discoveryScanner: async () => ({}) as never,
       environmentRegistry: async () => registry as never,
+      getAutomationLevel: async () => 'manual' as const,
+      setAutomationLevel: async () => undefined,
     })
 
     await expect(
@@ -288,6 +302,36 @@ describe('IpcBridge', () => {
 
     // Every env:* channel still hard-fails without a _trace envelope.
     await expect(handlers.get('env:list')?.({}, {} as never)).rejects.toThrow(
+      'without a _trace envelope',
+    )
+  })
+
+  it('routes the automation:* channels and asserts _trace (issue 1-12)', async () => {
+    const getAutomationLevel = vi.fn(async () => 'auto-sync' as const)
+    const setAutomationLevel = vi.fn(async () => undefined)
+    const { registrar, handlers } = fakeRegistrar()
+    registerIpcBridge(registrar, {
+      remoteClient: async () => ({}) as never,
+      denService: async () => ({}) as never,
+      discoveryScanner: async () => ({}) as never,
+      environmentRegistry: async () => ({}) as never,
+      getAutomationLevel,
+      setAutomationLevel,
+    })
+
+    // get-level forwards the environment-local rung.
+    await expect(
+      handlers.get('automation:get-level')?.({}, { _trace: { traceId: 'a1' } } as never),
+    ).resolves.toBe('auto-sync')
+    // set-level forwards the chosen level so index.ts can persist + re-arm the services.
+    await handlers.get('automation:set-level')?.({}, {
+      level: 'manual',
+      _trace: { traceId: 'a2' },
+    } as never)
+    expect(setAutomationLevel).toHaveBeenCalledWith('manual')
+
+    // Both channels still hard-fail without a _trace envelope (uniform correlation).
+    await expect(handlers.get('automation:get-level')?.({}, {} as never)).rejects.toThrow(
       'without a _trace envelope',
     )
   })

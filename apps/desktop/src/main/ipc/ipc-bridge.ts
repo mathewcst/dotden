@@ -19,6 +19,7 @@ import type { ResolutionChoice } from '../foundation/conflict-model.js'
 import type { DiscoveryScanner } from '../foundation/discovery-scanner.js'
 import type { EnvironmentRegistry } from '../foundation/environment-registry.js'
 import type { RemoteClient } from '../foundation/remote-client.js'
+import type { AutomationLevel } from '../foundation/automation-policy.js'
 
 /**
  * The minimal trace envelope every IPC payload carries.
@@ -61,6 +62,18 @@ export interface IpcBridgeDeps {
   readonly discoveryScanner: () => Promise<DiscoveryScanner>
   /** Lazily resolves the shared {@link EnvironmentRegistry} for identity/labels/attribution. */
   readonly environmentRegistry: () => Promise<EnvironmentRegistry>
+  /**
+   * Read this environment's selected automation level (issue 1-12). Environment-local,
+   * defaulting to Manual — the bridge just forwards it to `automation:get-level`.
+   */
+  readonly getAutomationLevel: () => Promise<AutomationLevel>
+  /**
+   * Persist this environment's automation level AND re-arm the automation-dependent
+   * services (rebuild the DenService so its policy uses the new level; re-pace/dormant the
+   * TrayPoller). index.ts owns that re-arming; the bridge only routes the user's choice.
+   * Rejects a level the MVP does not expose (never persist an unbuilt rung).
+   */
+  readonly setAutomationLevel: (level: AutomationLevel) => Promise<void>
 }
 
 /**
@@ -74,6 +87,8 @@ export interface IpcBridgeDeps {
  *   `den:diff` / `den:untrack` / `den:delete-everywhere` /
  *   `den:affected-environments` → {@link DenService}
  * - `discover:scan` / `discover:inspect-path` → {@link DiscoveryScanner} (issue 1-06)
+ * - `automation:get-level` / `automation:set-level` → environment-local automation
+ *   settings (issue 1-12); set-level re-arms the automation services via index.ts
  *
  * The bridge asserts the `_trace` envelope is present on every call ({@link traceId}
  * throws on a missing id), making "an Operation crossed the boundary uncorrelated" a
@@ -264,6 +279,23 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   registrar.handle('env:suggest-claims', async (_event, payload: TracedPayload) => {
     traceId(payload)
     return (await deps.environmentRegistry()).suggestClaims()
+  })
+
+  // ── Automation channels (issue 1-12): the environment-local automation ladder ──
+  // get-level is read-only; set-level MUTATES local settings and re-arms the automation
+  // services (DenService policy + TrayPoller), so index.ts owns the re-arming behind
+  // `setAutomationLevel`. Both still assert the `_trace` envelope so EVERY IPC call is
+  // uniformly correlated, even though the level read/write does not take a trace id today.
+  registrar.handle('automation:get-level', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    return deps.getAutomationLevel()
+  })
+  registrar.handle('automation:set-level', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    const { level } = payload as TracedPayload & { level: AutomationLevel }
+    // The store rejects a non-MVP level; let that surface to the renderer (never persist
+    // an unbuilt rung). index.ts's setAutomationLevel also re-arms the services on success.
+    await deps.setAutomationLevel(level)
   })
 }
 
