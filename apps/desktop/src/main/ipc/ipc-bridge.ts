@@ -21,6 +21,7 @@ import type { EnvironmentRegistry } from '../foundation/environment-registry.js'
 import type { RemoteClient } from '../foundation/remote-client.js'
 import type { AutomationLevel } from '../foundation/automation-policy.js'
 import type { Scope } from '../foundation/os-scope.js'
+import type { UnsubscribeDisposition } from '../foundation/subscription-settings.js'
 
 /**
  * The minimal trace envelope every IPC payload carries.
@@ -75,6 +76,21 @@ export interface IpcBridgeDeps {
    * Rejects a level the MVP does not expose (never persist an unbuilt rung).
    */
   readonly setAutomationLevel: (level: AutomationLevel) => Promise<void>
+  /**
+   * **Claim a returning registry entry** (issue 1-13): adopt `envId` as THIS install's local
+   * identity (`claimLocalIdentity`) and re-arm the id-bound services (rebuild the DenService +
+   * EnvironmentRegistry so they use the claimed id), so the returning environment keeps its
+   * history/attribution. index.ts owns the re-arming + the userData write; the bridge only
+   * routes the user's claim, then registers the subscription via the freshly-rebuilt registry.
+   */
+  readonly claimEnvironment: (envId: string) => Promise<void>
+  /**
+   * Read this environment's remembered un-subscribe disposition default (issue 1-13).
+   * Environment-local (`userData`, never synced); the bridge just forwards it.
+   */
+  readonly getUnsubscribeDisposition: () => Promise<UnsubscribeDisposition>
+  /** Persist this environment's remembered un-subscribe disposition default (issue 1-13). */
+  readonly setUnsubscribeDisposition: (disposition: UnsubscribeDisposition) => Promise<void>
 }
 
 /**
@@ -272,6 +288,46 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     return (await deps.denService()).setGroupScope(workspaceId, groupId, scope, traceId(payload))
   })
 
+  // The per-environment Workspace subscription (issue 1-13): the returning second-environment
+  // pick. subscription-state is read-only (asserts `_trace` only); set-subscriptions + unsubscribe
+  // MUTATE the synced registry + regenerate the templated `.chezmoiignore`, so each forwards its
+  // `_trace` so the organize Operation emits a correlated wide event. The bridge never re-checks
+  // the access invariant — the templated ignore + ApplicabilityResolver own it.
+  registrar.handle('den:subscription-state', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    return (await deps.denService()).subscriptionState()
+  })
+  registrar.handle('den:set-subscriptions', async (_event, payload: TracedPayload) => {
+    const { workspaceIds } = payload as TracedPayload & { workspaceIds?: readonly string[] }
+    return (await deps.denService()).setSubscriptions(workspaceIds, traceId(payload))
+  })
+  registrar.handle('den:unsubscribe-workspace', async (_event, payload: TracedPayload) => {
+    const { workspaceId, disposition } = payload as TracedPayload & {
+      workspaceId: string
+      disposition: UnsubscribeDisposition
+    }
+    return (await deps.denService()).unsubscribeWorkspace(
+      workspaceId,
+      disposition,
+      traceId(payload),
+    )
+  })
+  // The remembered "keep vs remove un-subscribed Files" default (issue 1-13). Both are
+  // environment-local (`userData`, never synced); index.ts owns the read/write. get is
+  // read-only; remember MUTATES local settings — both assert `_trace` for uniform correlation.
+  registrar.handle('den:unsubscribe-disposition', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    return deps.getUnsubscribeDisposition()
+  })
+  registrar.handle(
+    'den:remember-unsubscribe-disposition',
+    async (_event, payload: TracedPayload) => {
+      traceId(payload)
+      const { disposition } = payload as TracedPayload & { disposition: UnsubscribeDisposition }
+      await deps.setUnsubscribeDisposition(disposition)
+    },
+  )
+
   // ── Discovery channels (issue 1-06): first-run tool-catalog scan + drag-in inspect ──
   // Read-only: discovery only FINDS candidate Files; Tracking a pick is the den:track path.
   // Each still asserts the `_trace` envelope so EVERY IPC call is uniformly correlated.
@@ -311,6 +367,31 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   registrar.handle('env:suggest-claims', async (_event, payload: TracedPayload) => {
     traceId(payload)
     return (await deps.environmentRegistry()).suggestClaims()
+  })
+  // The new-or-returning fork (issue 1-13): register a brand-new second environment, or claim
+  // an existing registry entry's id. Both write THIS env's subscription (default: all) BEFORE
+  // any apply (the registry-entry guard's ordering layer). register-new keeps the freshly-minted
+  // id; claim first adopts the chosen entry's id (re-arming the id-bound services via index.ts)
+  // so the returning environment keeps its history. Each asserts `_trace` for uniform correlation.
+  registrar.handle('env:register-new', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    const { workspaceIds } = payload as TracedPayload & { workspaceIds?: readonly string[] }
+    const registry = await deps.environmentRegistry()
+    await registry.registerWithSubscription(workspaceIds)
+    return registry.list()
+  })
+  registrar.handle('env:claim', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    const { envId, workspaceIds } = payload as TracedPayload & {
+      envId: string
+      workspaceIds?: readonly string[]
+    }
+    // Adopt the claimed id locally + re-arm the id-bound services (index.ts owns this) so the
+    // registry below is rebuilt against the claimed id — then register its subscription.
+    await deps.claimEnvironment(envId)
+    const registry = await deps.environmentRegistry()
+    await registry.registerWithSubscription(workspaceIds)
+    return registry.list()
   })
 
   // ── Automation channels (issue 1-12): the environment-local automation ladder ──

@@ -342,4 +342,52 @@ describe('MyenvStore — OS Scope + inheritance (1-15)', () => {
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
     await expect(store.setFileScope('.nope', ['linux'])).rejects.toThrow(/not placed/)
   })
+
+  // ── Per-environment Workspace subscription (issue 1-13) ──
+
+  it('setSubscriptions creates this env entry if absent (the registry-entry ordering guard)', async () => {
+    const store = new MyenvStore(source)
+    await store.seedDefault({ id: 'env-a', label: 'this-mac', os: 'darwin' })
+    const work = await store.createWorkspace('Work')
+
+    // A second environment (no entry yet) subscribes to a subset — the entry is CREATED.
+    const entry = await store.setSubscriptions({ id: 'env-b', label: 'work-laptop', os: 'linux' }, [
+      work.id,
+    ])
+    expect(entry).toEqual({
+      id: 'env-b',
+      label: 'work-laptop',
+      os: 'linux',
+      subscribedWorkspaces: [work.id],
+    })
+    const reg = await store.readEnvironments()
+    expect(reg.environments.find((e) => e.id === 'env-b')?.subscribedWorkspaces).toEqual([work.id])
+  })
+
+  it('setSubscriptions dedupes + drops non-existent Workspaces (no stale ids linger)', async () => {
+    const store = new MyenvStore(source)
+    await store.seedDefault({ id: 'env-a', label: 'mac', os: 'darwin' })
+    const entry = await store.setSubscriptions(
+      { id: 'env-a', label: 'mac', os: 'darwin' },
+      // Duplicate default id + a Workspace that does not exist.
+      [DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_ID, 'ws-ghost'],
+    )
+    expect(entry.subscribedWorkspaces).toEqual([DEFAULT_WORKSPACE_ID])
+  })
+
+  it('setSubscriptions preserves a user-edited label when the entry already exists', async () => {
+    const store = new MyenvStore(source)
+    await store.seedDefault({ id: 'env-a', label: 'mac', os: 'darwin' })
+    // Rename, then change subscription using the ORIGINAL default label — the rename survives.
+    await store.registerEnvironment({
+      id: 'env-a',
+      label: 'renamed-mac',
+      os: 'darwin',
+      subscribedWorkspaces: [DEFAULT_WORKSPACE_ID],
+    })
+    const entry = await store.setSubscriptions({ id: 'env-a', label: 'mac', os: 'darwin' }, [
+      DEFAULT_WORKSPACE_ID,
+    ])
+    expect(entry.label).toBe('renamed-mac')
+  })
 })

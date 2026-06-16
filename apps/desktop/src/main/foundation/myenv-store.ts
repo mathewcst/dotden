@@ -533,6 +533,45 @@ export class MyenvStore {
   }
 
   /**
+   * Set an environment's **subscribed Workspaces** — the access boundary a second
+   * environment picks during returning onboarding (issue 1-13, ADR 0005).
+   *
+   * Subscription is the realized access axis: this environment applies only Files in the
+   * Workspaces it subscribes to, compiled into the templated `.chezmoiignore`. This upserts
+   * the entry's `subscribedWorkspaces`, creating the entry if the environment is not yet
+   * registered (a fresh clone before claim) so the **registry-entry guard's ordering layer**
+   * (write the entry BEFORE any apply, issue 1-13) holds — the apply never hits the
+   * "no entry yet" gap. The set is de-duplicated and only kept to Workspaces that actually
+   * exist, so a stale id never lingers in the registry.
+   *
+   * @param env This environment's id/label/os (used to create the entry if absent).
+   * @param workspaceIds The Workspace ids to subscribe to (deduped + existence-filtered).
+   * @returns The resulting registry entry as stored.
+   */
+  async setSubscriptions(
+    env: Pick<EnvironmentEntry, 'id' | 'label' | 'os'>,
+    workspaceIds: readonly string[],
+  ): Promise<EnvironmentEntry> {
+    const [registry, { workspaces }] = await Promise.all([
+      this.readEnvironments(),
+      this.readWorkspaces(),
+    ])
+    const existingIds = new Set(workspaces.map((w) => w.id))
+    // Keep only real Workspaces, de-duplicated, so a removed/renamed Workspace never lingers.
+    const subscribedWorkspaces = [...new Set(workspaceIds)].filter((id) => existingIds.has(id))
+    const previous = registry.environments.find((e) => e.id === env.id)
+    const entry: EnvironmentEntry = {
+      id: env.id,
+      // Preserve a user-edited label when the entry already exists; else default from setup.
+      label: previous?.label ?? env.label,
+      os: previous?.os ?? env.os,
+      subscribedWorkspaces,
+    }
+    await this.registerEnvironment(entry)
+    return entry
+  }
+
+  /**
    * Read the Workspace tree + placements, returning an empty doc when absent.
    *
    * Normalizes the on-disk shape so callers always see the canonical model regardless

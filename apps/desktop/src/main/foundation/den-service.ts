@@ -18,7 +18,7 @@
  * It never re-checks an invariant an owner guarantees (ADR 0008): applicability is
  * proven by an `AppliesHere` witness from {@link SyncEngine}, never re-derived here.
  */
-import { access } from 'node:fs/promises'
+import { access, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { ChezmoiAdapter, UncommittedLocalEditError } from './chezmoi-adapter.js'
 import { GitTransport } from './git-transport.js'
@@ -49,6 +49,7 @@ import {
 import type { Os, Scope } from './os-scope.js'
 import { PushQueue } from './push-queue.js'
 import { isOfflineError } from './offline.js'
+import type { UnsubscribeDisposition } from './subscription-settings.js'
 
 /** Construction wiring for a {@link DenService}, bound to one environment's dirs. */
 export interface DenServiceOptions {
@@ -293,6 +294,45 @@ export interface AffectedEnvironment {
   readonly isSelf: boolean
 }
 
+/** One Workspace this environment can subscribe to, for the returning-flow pick (issue 1-13). */
+export interface SubscribableWorkspace {
+  /** Stable Workspace id (the subscription key, ADR 0005). */
+  readonly id: string
+  /** User-facing Workspace label (e.g. "Personal", "Work"). */
+  readonly label: string
+  /** Whether THIS environment currently subscribes to it (drives the checklist's checked state). */
+  readonly subscribed: boolean
+}
+
+/**
+ * This environment's **subscription state** — what the returning-flow pick + the
+ * never-silent unregistered-env guard read (issue 1-13, ADR 0005 / ADR 0024).
+ *
+ * It answers three questions in one read: which Workspaces exist (and which this env is
+ * subscribed to), whether this environment has a registry entry yet, and — when it does NOT
+ * (or subscribes to nothing) — the human reason + fix to surface, so an unregistered env that
+ * would materialize an EMPTY Den never renders a confusing blank quietly (the template's
+ * ignore-everything fail-safe is paired with this honest explanation).
+ */
+export interface SubscriptionState {
+  /** Every Workspace in the Den, each flagged with whether this environment subscribes. */
+  readonly workspaces: readonly SubscribableWorkspace[]
+  /**
+   * `true` when this environment has a registry entry recorded (so the templated
+   * `.chezmoiignore` resolves a subscription rather than hitting the fail-safe). A fresh clone
+   * before claim/registration is `false`.
+   */
+  readonly registered: boolean
+  /**
+   * A human warning to surface when this environment would materialize an EMPTY Den — it has no
+   * registry entry yet, or its subscription is empty (the `.chezmoiignore` fail-safe ignored
+   * everything). `null` when the Den will materialize normally. NEVER let this be silent: the
+   * returning flow shows it with the fix ("this environment isn't registered yet — finish setup
+   * to choose your Workspaces").
+   */
+  readonly emptyDenWarning: string | null
+}
+
 /**
  * One File in **Conflict** the user must resolve, with the three sides for the merge view
  * (issue 1-11). The cross-environment axis: two environments Committed the same File so
@@ -488,6 +528,12 @@ export class DenService {
       await this.store.seedDefault(this.options.environment)
       await this.chezmoi.track(targetPath)
       await this.store.placeFile(targetPath)
+      // Keep the generated `.chezmoiignore` in lock-step with the new placement so the
+      // committed file is always the live templated ignore (issue 1-13): when a `configPath`
+      // is present it carries the subscription template that a second environment relies on,
+      // so it must TRAVEL with the Commit (not the stale `.myenv/`-only file `seedDefault`
+      // wrote). No-op net change for a subscribe-all single-Workspace Den.
+      await this.regenerateOsScopeIgnore()
       span?.setAttribute('fileCount', 1)
       span?.end('ok')
     } catch (error) {
@@ -1231,6 +1277,167 @@ export class DenService {
     return affected.sort((a, b) => Number(b.isSelf) - Number(a.isSelf))
   }
 
+  // ── Per-environment Workspace subscription (issue 1-13, ADR 0005 / ADR 0024) ──
+  // The returning second-environment flow: a freshly-cloned env picks which Workspaces it
+  // subscribes to (defaulting to all), realized as a templated `.chezmoiignore` that joins
+  // this env's `dotden_env_id` against the synced registry and ignores un-subscribed Files.
+
+  /**
+   * Read this environment's **subscription state** for the returning-flow pick + the
+   * never-silent unregistered-env guard (issue 1-13).
+   *
+   * Read-only (no Operation/wide event): it returns every Workspace flagged with whether this
+   * environment subscribes, whether this env has a registry entry yet, and — critically — a
+   * human `emptyDenWarning` when this env would materialize an EMPTY Den (no entry, or an empty
+   * subscription). That warning is the visible half of the registry-entry guard: the template's
+   * ignore-everything fail-safe keeps `chezmoi apply` from erroring, and THIS surfaces *why* so
+   * dotden never renders a confusing empty Den quietly (never fail silently, issue 1-13).
+   *
+   * @returns The Workspaces (with per-Workspace subscribed flags), `registered`, and the warning.
+   */
+  async subscriptionState(): Promise<SubscriptionState> {
+    const [{ environments }, { workspaces }] = await Promise.all([
+      this.store.readEnvironments(),
+      this.store.readWorkspaces(),
+    ])
+    const self = environments.find((e) => e.id === this.options.environment.id) ?? null
+    const subscribed = new Set(self?.subscribedWorkspaces ?? [])
+    const subscribableWorkspaces: SubscribableWorkspace[] = workspaces.map((w) => ({
+      id: w.id,
+      label: w.label,
+      subscribed: subscribed.has(w.id),
+    }))
+    // The Den materializes EMPTY here when this env is unregistered OR subscribes to nothing —
+    // exactly when the templated `.chezmoiignore` hits its ignore-everything fail-safe.
+    const empty = self === null || subscribed.size === 0
+    return {
+      workspaces: subscribableWorkspaces,
+      registered: self !== null,
+      emptyDenWarning: empty
+        ? self === null
+          ? "This environment isn't registered in your Den yet, so nothing will apply here. " +
+            'Finish setup to choose which Workspaces this environment subscribes to.'
+          : 'This environment subscribes to no Workspaces, so nothing applies here. ' +
+            'Choose at least one Workspace to start applying your Den.'
+        : null,
+    }
+  }
+
+  /**
+   * **Set this environment's Workspace subscription** — the returning-flow pick + the
+   * registry-entry guard's primary (ordering) layer (issue 1-13, ADR 0005).
+   *
+   * Writes this environment's `subscribedWorkspaces` into the synced registry, re-compiles the
+   * templated `.chezmoiignore` so chezmoi ignores un-subscribed Workspaces' Files here, and
+   * commits the metadata LOCALLY (ADR 0006) so the subscription travels. Writing the entry
+   * BEFORE any Apply is the ordering guard: the templated ignore never hits the "no entry yet"
+   * gap (issue 1-13). It does NOT apply any File — the first materialization is the deliberate,
+   * reviewed Apply that follows (ADR 0024 "claiming only re-associates identity").
+   *
+   * Defaults to ALL Workspaces when `workspaceIds` is omitted (the issue's "defaulting to all"),
+   * so a second environment that just wants the whole Den needs no choices.
+   *
+   * @param workspaceIds The Workspace ids to subscribe to; omitted ⇒ all Workspaces.
+   * @param traceId Correlation id for the wide event.
+   * @returns The resulting subscription state (so the UI re-renders in one round-trip).
+   */
+  async setSubscriptions(
+    workspaceIds: readonly string[] | undefined,
+    traceId: string,
+  ): Promise<SubscriptionState> {
+    const span = this.tracer?.startOperation('organize', traceId)
+    try {
+      const all = (await this.store.readWorkspaces()).workspaces.map((w) => w.id)
+      // 1) Write this env's subscription into the synced registry BEFORE any apply (the
+      //    ordering guard). Default to ALL Workspaces when the user made no choice.
+      await this.store.setSubscriptions(this.options.environment, workspaceIds ?? all)
+      // 2) Re-compile the templated `.chezmoiignore` so un-subscribed Files are ignored here.
+      await this.regenerateOsScopeIgnore()
+      // 3) Commit the registry + regenerated ignore LOCALLY so the subscription travels.
+      await this.commitMetadata('Set Workspace subscription')
+      span?.setAttribute('workspaceCount', (workspaceIds ?? all).length)
+      span?.end('ok')
+      return await this.subscriptionState()
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * **Un-subscribe a Workspace** on this environment, with the user's explicit keep-or-remove
+   * choice for the Files it leaves behind (issue 1-13, ADR 0005).
+   *
+   * Subscription is the access boundary, so dropping a Workspace re-compiles the templated
+   * `.chezmoiignore` to ignore its Files here. But `.chezmoiignore` alone only stops chezmoi
+   * *managing* those Files — it does NOT delete them — so the caller must decide their fate:
+   *
+   * - `disposition: 'keep'` — leave the Files on disk as untracked orphans (the safe default).
+   *   Nothing is deleted; the Files simply stop being managed here.
+   * - `disposition: 'remove'` — explicitly delete the un-subscribed Files from THIS
+   *   environment's home directory (a plain destination-path removal). This is deliberately
+   *   NOT `chezmoi destroy`/`forget`: those mutate the SHARED source state (and would travel on
+   *   the next Commit), whereas un-subscribing must touch ONLY this environment's local copy —
+   *   the source state and every other environment keep the File. So the removal is a local
+   *   `fs.rm` of the destination path, never committed, never Den-wide.
+   *
+   * The choice's remembered default lives in environment-local settings (issue 1-13); this
+   * method just carries out the chosen disposition. The subscription change is committed
+   * LOCALLY (ADR 0006) so it travels; the on-disk removal is local-only (never committed).
+   *
+   * @param workspaceId The Workspace to un-subscribe from.
+   * @param disposition Whether to `keep` the un-subscribed Files on disk or `remove` them here.
+   * @param traceId Correlation id for the wide event.
+   * @returns The resulting subscription state.
+   */
+  async unsubscribeWorkspace(
+    workspaceId: string,
+    disposition: UnsubscribeDisposition,
+    traceId: string,
+  ): Promise<SubscriptionState> {
+    const span = this.tracer?.startOperation('organize', traceId)
+    try {
+      const [{ environments }, workspacesDoc] = await Promise.all([
+        this.store.readEnvironments(),
+        this.store.readWorkspaces(),
+      ])
+      const self = environments.find((e) => e.id === this.options.environment.id)
+      const current = self?.subscribedWorkspaces ?? workspacesDoc.workspaces.map((w) => w.id)
+      const next = current.filter((id) => id !== workspaceId)
+      // The Files this un-subscription orphans here = placements in the dropped Workspace.
+      const orphans = workspacesDoc.placements
+        .filter((p) => p.workspaceId === workspaceId)
+        .map((p) => p.targetPath)
+      // 1) Write the narrowed subscription + re-compile the ignore so the Files are ignored here.
+      await this.store.setSubscriptions(this.options.environment, next)
+      await this.regenerateOsScopeIgnore()
+      await this.commitMetadata(`Unsubscribe Workspace ${workspaceId}`)
+      // 2) Carry out the user's keep/remove choice for the now-un-subscribed Files. `keep`
+      //    leaves them as untracked orphans (do nothing — `.chezmoiignore` already stopped
+      //    managing them here). `remove` deletes THIS env's local copy explicitly, because the
+      //    ignore never removes a File (the spike's load-bearing finding).
+      if (disposition === 'remove') {
+        for (const targetPath of orphans) {
+          // Remove ONLY this environment's local home-dir copy (never the shared source state,
+          // never committed) so other environments keep the File. Best-effort + per-File
+          // tolerant: a File already absent is fine, and one missing orphan never blocks the
+          // rest — never fail the whole un-subscription over a local cleanup miss.
+          try {
+            await rm(this.destinationPath(targetPath), { force: true })
+          } catch {
+            // Best-effort local cleanup: a File already gone is fine; keep removing the rest.
+          }
+        }
+      }
+      span?.setAttribute('fileCount', disposition === 'remove' ? orphans.length : 0)
+      span?.end('ok')
+      return await this.subscriptionState()
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
   /**
    * Build the three-pane tree view (issue 1-07): the managed Files joined with their
    * Workspace placement, local-axis git status, and out-of-OS-Scope muted flag.
@@ -1339,6 +1546,9 @@ export class DenService {
     const span = this.tracer?.startOperation('organize', traceId)
     try {
       const workspace = await this.store.createWorkspace(label)
+      // A new Workspace is exactly when subscription starts to matter, so refresh the templated
+      // `.chezmoiignore` (issue 1-13) and commit it alongside the metadata so it travels.
+      await this.regenerateOsScopeIgnore()
       await this.commitMetadata(`Create Workspace ${label}`)
       span?.setAttribute('workspaceCount', (await this.store.readWorkspaces()).workspaces.length)
       span?.end('ok')
@@ -1422,6 +1632,9 @@ export class DenService {
     const span = this.tracer?.startOperation('organize', traceId)
     try {
       await this.store.setFileWorkspace(targetPath, workspaceId)
+      // The File's Workspace (its access boundary) changed, so the subscription template's
+      // per-File ignore set changes — refresh + commit the templated `.chezmoiignore` (1-13).
+      await this.regenerateOsScopeIgnore()
       await this.commitMetadata(`Move ${targetPath} to another Workspace`)
       span?.setAttribute('fileCount', 1)
       span?.end('ok')
@@ -1509,24 +1722,45 @@ export class DenService {
 
   /**
    * Re-compile the native `.chezmoiignore` from the WHOLE Den's per-File **effective** OS
-   * Scopes for THIS environment (issue 1-15).
+   * Scopes (issue 1-15) AND the per-environment Workspace subscription (issue 1-13).
    *
    * Reads every placement, folds each File's inheritance into an effective Scope
-   * ({@link MyenvStore.effectiveScopeOf}), and hands the set to
-   * {@link ChezmoiAdapter.writeOsScopeIgnore}, which emits the `.myenv/` rule plus exactly
-   * the paths scoped out of this environment's OS. The adapter is the single writer of the
-   * file, so this never clobbers the `.myenv/` rule. Idempotent — safe to call after any
-   * Scope/placement change to keep the ignore in lock-step with the synced intent.
+   * ({@link MyenvStore.effectiveScopeOf}), and hands the set to one of two single-writer
+   * adapter methods so the OS-scope, subscription, and `.myenv/` concerns share ONE generated
+   * file (never clobber each other, never drift):
+   *
+   * - When this environment has a `configPath` (so `[data].dotden_env_id` is in scope —
+   *   production always does, issue 1-05), it emits the **subscription template** via
+   *   {@link ChezmoiAdapter.writeSubscriptionIgnore}: the static OS-scoped-out lines PLUS a
+   *   chezmoi Go-template block that ignores every File of an un-subscribed Workspace at apply
+   *   time (ADR 0005). This is what makes one repo materialize different subsets per env.
+   * - Without a `configPath` (config-less unit/e2e contexts that don't exercise subscription),
+   *   it falls back to the static OS-scope-only file ({@link ChezmoiAdapter.writeOsScopeIgnore})
+   *   — the template would reference an undefined `dotden_env_id` and error, so we don't emit it.
+   *
+   * Idempotent — safe to call after any Scope/placement/subscription change to keep the ignore
+   * in lock-step with the synced intent.
    */
   private async regenerateOsScopeIgnore(): Promise<void> {
     const doc = await this.store.readWorkspaces()
-    await this.chezmoi.writeOsScopeIgnore({
+    const scope = {
       currentOs: this.options.environment.os as Os,
       paths: doc.placements.map((p) => ({
         targetPath: p.targetPath,
         scope: this.store.effectiveScopeOf(doc, p.targetPath),
       })),
-    })
+    }
+    // The subscription template self-identifies via `[data].dotden_env_id`, which is only in
+    // scope when a config file carries it — so emit it only when this env has one (issue 1-13).
+    if (this.options.configPath) {
+      // Mirror the own id into the local config BEFORE writing the template, so the very next
+      // chezmoi command that evaluates `.chezmoiignore` (status/apply/re-add) always finds
+      // `dotden_env_id` defined — never an "undefined .dotden_env_id" template error. Idempotent.
+      await this.chezmoi.writeEnvId(this.options.environment.id)
+      await this.chezmoi.writeSubscriptionIgnore(scope)
+    } else {
+      await this.chezmoi.writeOsScopeIgnore(scope)
+    }
   }
 
   /**

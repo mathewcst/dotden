@@ -29,8 +29,10 @@ import type {
   FileTreeView,
   IncomingReviewItem,
   IncomingSummary,
+  SubscriptionState,
   SyncPushResult,
 } from '../main/foundation/den-service.js'
+import type { UnsubscribeDisposition } from '../main/foundation/subscription-settings.js'
 import type { ResolutionChoice } from '../main/foundation/conflict-model.js'
 import type { Group, Workspace } from '../main/foundation/myenv-store.js'
 import type { Scope } from '../main/foundation/os-scope.js'
@@ -270,6 +272,46 @@ export interface DotdenApi {
      * Group's resulting EFFECTIVE Scope. Committed LOCALLY.
      */
     setGroupScope(workspaceId: string, groupId: string, scope: Scope): Promise<Scope>
+    /**
+     * Read this environment's **Workspace-subscription state** (issue 1-13) — every Workspace
+     * flagged with whether this environment subscribes, whether this env has a registry entry
+     * yet, and a never-silent `emptyDenWarning` when this env would materialize an EMPTY Den
+     * (unregistered / empty subscription, the templated `.chezmoiignore` fail-safe). Drives the
+     * returning-flow subscription pick and the honest empty-Den explanation. Read-only.
+     */
+    subscriptionState(): Promise<SubscriptionState>
+    /**
+     * **Set this environment's Workspace subscription** (issue 1-13, ADR 0005) — the returning
+     * second-environment pick. Writes the chosen Workspaces into the synced registry BEFORE any
+     * Apply (the registry-entry guard's ordering layer), re-compiles the templated
+     * `.chezmoiignore` so un-subscribed Files are ignored here, and commits LOCALLY (ADR 0006).
+     * Pass `undefined` to subscribe to ALL Workspaces (the default). Applies no File — the first
+     * materialization is the deliberate reviewed Apply that follows.
+     */
+    setSubscriptions(workspaceIds?: readonly string[]): Promise<SubscriptionState>
+    /**
+     * **Un-subscribe a Workspace** on this environment (issue 1-13), with the explicit choice of
+     * what to do with the Files it leaves behind: `keep` them on disk as untracked orphans (the
+     * safe default), or `remove` this environment's local copies. `.chezmoiignore` alone never
+     * deletes Files, so `remove` is an explicit local removal that touches only this env (the
+     * shared source state + other environments keep the File). Committed LOCALLY (ADR 0006).
+     */
+    unsubscribeWorkspace(
+      workspaceId: string,
+      disposition: UnsubscribeDisposition,
+    ): Promise<SubscriptionState>
+    /**
+     * Read this environment's **remembered** "what to do with un-subscribed Files" default
+     * (issue 1-13) — `keep` (leave on disk, the safe default) or `remove` (delete this env's
+     * local copies). Environment-local (`userData`, never synced, ADR 0024). Pre-selects the
+     * un-subscribe confirm so the user is not re-asked every time.
+     */
+    unsubscribeDisposition(): Promise<UnsubscribeDisposition>
+    /**
+     * **Remember** this environment's un-subscribe disposition default ("don't ask me again",
+     * issue 1-13). Persists `keep`/`remove` locally; the next un-subscribe confirm pre-selects it.
+     */
+    rememberUnsubscribeDisposition(disposition: UnsubscribeDisposition): Promise<void>
   }
   /**
    * First-run **discovery** operations (issue 1-06), forwarded to `discover:*` IPC
@@ -314,6 +356,25 @@ export interface DotdenApi {
      * dotden never auto-merges.
      */
     suggestClaims(): Promise<readonly ClaimSuggestion[]>
+    /**
+     * Register THIS environment as a **brand-new** second environment (the "new" branch of the
+     * FoundDen new-or-returning fork, issue 1-13). Writes this env's registry entry with its
+     * chosen Workspace subscription (defaulting to ALL) BEFORE any Apply — the registry-entry
+     * guard's ordering layer — and mirrors its id into the local chezmoi config. Applies no
+     * File; the first materialization is the reviewed Apply that follows.
+     */
+    registerNew(workspaceIds?: readonly string[]): Promise<readonly EnvironmentWithAttribution[]>
+    /**
+     * **Claim an existing registry entry** as THIS install's identity (the "returning" branch,
+     * issue 1-13, ADR 0024). Adopts the chosen entry's stable id locally so this environment
+     * keeps its history/attribution (continuous), re-arms the id-bound services, then registers
+     * its subscription (defaulting to ALL). Claiming only re-associates identity — Files are
+     * applied fresh via the normal reviewed Apply, and dotden never auto-merges.
+     */
+    claim(
+      envId: string,
+      workspaceIds?: readonly string[],
+    ): Promise<readonly EnvironmentWithAttribution[]>
   }
   /**
    * Automation-ladder operations (issue 1-12), forwarded to `automation:*` IPC channels.

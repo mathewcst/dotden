@@ -18,7 +18,7 @@ import { autoUpdater } from 'electron-updater'
 import { join } from 'node:path'
 import { DenService } from './foundation/den-service.js'
 import { DiscoveryScanner } from './foundation/discovery-scanner.js'
-import { loadEnvironmentIdentity } from './foundation/environment-identity.js'
+import { claimLocalIdentity, loadEnvironmentIdentity } from './foundation/environment-identity.js'
 import { EnvironmentRegistry } from './foundation/environment-registry.js'
 import { OperationTracer } from './foundation/operation-tracer.js'
 import { RemoteClient } from './foundation/remote-client.js'
@@ -26,6 +26,11 @@ import { resolveBundledTools } from './foundation/tools.js'
 import { registerIpcBridge } from './ipc/ipc-bridge.js'
 import { readAutomationLevel, writeAutomationLevel } from './foundation/automation-settings.js'
 import type { AutomationLevel } from './foundation/automation-policy.js'
+import {
+  readUnsubscribeDisposition,
+  writeUnsubscribeDisposition,
+} from './foundation/subscription-settings.js'
+import type { UnsubscribeDisposition } from './foundation/subscription-settings.js'
 import { TrayPoller } from './foundation/tray-poller.js'
 
 /**
@@ -216,6 +221,36 @@ async function setAutomationLevel(level: AutomationLevel): Promise<void> {
 }
 
 /**
+ * **Claim a returning registry entry's id** as THIS install's local identity (issue 1-13,
+ * ADR 0024) and re-arm the id-bound services.
+ *
+ * Adopting the claimed id is what lets a reinstalled environment keep its history/attribution
+ * (continuous). The id is environment-LOCAL (`userData`), so this writes it via
+ * {@link claimLocalIdentity}, then drops the DenService + EnvironmentRegistry memos so both
+ * rebuild against the claimed id on next use (mirroring {@link setAutomationLevel}'s re-arm).
+ * The IPC bridge then registers the claimed env's subscription through the rebuilt registry.
+ */
+async function claimEnvironment(envId: string): Promise<void> {
+  await claimLocalIdentity(app.getPath('userData'), envId)
+  // The id changed, so every id-bound singleton must rebuild against it on next resolve.
+  denService = undefined
+  environmentRegistry = undefined
+}
+
+/**
+ * Read this environment's remembered un-subscribe disposition default (issue 1-13).
+ * Environment-local (`userData`, never synced — ADR 0024); defaults to the safe `keep`.
+ */
+function getUnsubscribeDisposition(): Promise<UnsubscribeDisposition> {
+  return readUnsubscribeDisposition(app.getPath('userData'))
+}
+
+/** Persist this environment's remembered un-subscribe disposition default (issue 1-13). */
+function setUnsubscribeDisposition(disposition: UnsubscribeDisposition): Promise<void> {
+  return writeUnsubscribeDisposition(app.getPath('userData'), disposition)
+}
+
+/**
  * Fire the detect-only side effects when the TrayPoller sees the Remote move (issue 1-12):
  * an OS {@link Notification} (so the user learns even with the window closed) AND a
  * `tray-poller:incoming` push to an open window (so it can refresh its Incoming banner).
@@ -399,6 +434,9 @@ app.whenReady().then(() => {
     environmentRegistry: getEnvironmentRegistry,
     getAutomationLevel,
     setAutomationLevel,
+    claimEnvironment,
+    getUnsubscribeDisposition,
+    setUnsubscribeDisposition,
   })
   createWindow()
 

@@ -53,6 +53,9 @@ describe('IpcBridge', () => {
       environmentRegistry: async () => ({}) as never,
       getAutomationLevel: async () => 'manual' as const,
       setAutomationLevel: async () => undefined,
+      claimEnvironment: async () => undefined,
+      getUnsubscribeDisposition: async () => 'keep' as const,
+      setUnsubscribeDisposition: async () => undefined,
     })
 
     await handlers.get('den:track')?.({}, {
@@ -120,6 +123,9 @@ describe('IpcBridge', () => {
       environmentRegistry: async () => ({}) as never,
       getAutomationLevel: async () => 'manual' as const,
       setAutomationLevel: async () => undefined,
+      claimEnvironment: async () => undefined,
+      getUnsubscribeDisposition: async () => 'keep' as const,
+      setUnsubscribeDisposition: async () => undefined,
     })
 
     await handlers.get('den:detect-conflicts')?.({}, { _trace: { traceId: 'c1' } } as never)
@@ -169,6 +175,9 @@ describe('IpcBridge', () => {
       environmentRegistry: async () => ({}) as never,
       getAutomationLevel: async () => 'manual' as const,
       setAutomationLevel: async () => undefined,
+      claimEnvironment: async () => undefined,
+      getUnsubscribeDisposition: async () => 'keep' as const,
+      setUnsubscribeDisposition: async () => undefined,
     })
 
     await handlers.get('den:create-workspace')?.({}, {
@@ -218,6 +227,91 @@ describe('IpcBridge', () => {
     ).rejects.toThrow('without a _trace envelope')
   })
 
+  it('routes the subscription + new-or-returning channels (issue 1-13)', async () => {
+    const den = {
+      subscriptionState: vi.fn(async () => ({
+        workspaces: [],
+        registered: false,
+        emptyDenWarning: null,
+      })),
+      setSubscriptions: vi.fn(async () => ({
+        workspaces: [],
+        registered: true,
+        emptyDenWarning: null,
+      })),
+      unsubscribeWorkspace: vi.fn(async () => ({
+        workspaces: [],
+        registered: true,
+        emptyDenWarning: null,
+      })),
+    }
+    const registry = {
+      registerWithSubscription: vi.fn(async () => ({
+        id: 'env-b',
+        label: 'b',
+        os: 'linux',
+        subscribedWorkspaces: [],
+      })),
+      list: vi.fn(async () => []),
+    }
+    const claimEnvironment = vi.fn(async () => undefined)
+    const getUnsubscribeDisposition = vi.fn(async () => 'keep' as const)
+    const setUnsubscribeDisposition = vi.fn(async () => undefined)
+    const { registrar, handlers } = fakeRegistrar()
+    registerIpcBridge(registrar, {
+      remoteClient: async () => ({}) as never,
+      denService: async () => den as never,
+      discoveryScanner: async () => ({}) as never,
+      environmentRegistry: async () => registry as never,
+      getAutomationLevel: async () => 'manual' as const,
+      setAutomationLevel: async () => undefined,
+      claimEnvironment,
+      getUnsubscribeDisposition,
+      setUnsubscribeDisposition,
+    })
+
+    await handlers.get('den:subscription-state')?.({}, { _trace: { traceId: 's1' } } as never)
+    await handlers.get('den:set-subscriptions')?.({}, {
+      workspaceIds: ['personal'],
+      _trace: { traceId: 's2' },
+    } as never)
+    await handlers.get('den:unsubscribe-workspace')?.({}, {
+      workspaceId: 'ws-work',
+      disposition: 'remove',
+      _trace: { traceId: 's3' },
+    } as never)
+    await handlers.get('den:unsubscribe-disposition')?.({}, { _trace: { traceId: 's4' } } as never)
+    await handlers.get('den:remember-unsubscribe-disposition')?.({}, {
+      disposition: 'remove',
+      _trace: { traceId: 's5' },
+    } as never)
+    // The new-or-returning fork: register a brand-new env, or claim an existing entry's id.
+    await handlers.get('env:register-new')?.({}, {
+      workspaceIds: ['personal'],
+      _trace: { traceId: 's6' },
+    } as never)
+    await handlers.get('env:claim')?.({}, {
+      envId: 'env-existing',
+      workspaceIds: undefined,
+      _trace: { traceId: 's7' },
+    } as never)
+
+    // set-subscriptions forwards the trace id (it mutates); subscription-state is read-only.
+    expect(den.setSubscriptions).toHaveBeenCalledWith(['personal'], 's2')
+    expect(den.subscriptionState).toHaveBeenCalledTimes(1) // just the direct s1 read
+    expect(den.unsubscribeWorkspace).toHaveBeenCalledWith('ws-work', 'remove', 's3')
+    expect(getUnsubscribeDisposition).toHaveBeenCalledTimes(1)
+    expect(setUnsubscribeDisposition).toHaveBeenCalledWith('remove')
+    // register-new writes the subscription then lists; claim adopts the id FIRST, then registers.
+    expect(registry.registerWithSubscription).toHaveBeenCalledTimes(2)
+    expect(claimEnvironment).toHaveBeenCalledWith('env-existing')
+
+    // Each still hard-fails without a _trace envelope (never an uncorrelated call).
+    await expect(
+      handlers.get('den:set-subscriptions')?.({}, { workspaceIds: [] } as never),
+    ).rejects.toThrow('without a _trace envelope')
+  })
+
   it('forwards the _trace envelope into the RemoteClient on every remote:* channel', async () => {
     const remote = {
       preflightRemote: vi.fn(async () => ({ reachable: true, gitCommand: 'git' })),
@@ -232,6 +326,9 @@ describe('IpcBridge', () => {
       environmentRegistry: async () => ({}) as never,
       getAutomationLevel: async () => 'manual' as const,
       setAutomationLevel: async () => undefined,
+      claimEnvironment: async () => undefined,
+      getUnsubscribeDisposition: async () => 'keep' as const,
+      setUnsubscribeDisposition: async () => undefined,
     })
 
     await handlers.get('remote:preflight')?.({}, {
@@ -253,6 +350,9 @@ describe('IpcBridge', () => {
       environmentRegistry: async () => ({}) as never,
       getAutomationLevel: async () => 'manual' as const,
       setAutomationLevel: async () => undefined,
+      claimEnvironment: async () => undefined,
+      getUnsubscribeDisposition: async () => 'keep' as const,
+      setUnsubscribeDisposition: async () => undefined,
     })
 
     await expect(handlers.get('den:sync-push')?.({}, {} as never)).rejects.toThrow(
@@ -273,6 +373,9 @@ describe('IpcBridge', () => {
       environmentRegistry: async () => ({}) as never,
       getAutomationLevel: async () => 'manual' as const,
       setAutomationLevel: async () => undefined,
+      claimEnvironment: async () => undefined,
+      getUnsubscribeDisposition: async () => 'keep' as const,
+      setUnsubscribeDisposition: async () => undefined,
     })
 
     await expect(
@@ -316,6 +419,9 @@ describe('IpcBridge', () => {
       environmentRegistry: async () => registry as never,
       getAutomationLevel: async () => 'manual' as const,
       setAutomationLevel: async () => undefined,
+      claimEnvironment: async () => undefined,
+      getUnsubscribeDisposition: async () => 'keep' as const,
+      setUnsubscribeDisposition: async () => undefined,
     })
 
     await expect(
@@ -347,6 +453,9 @@ describe('IpcBridge', () => {
       environmentRegistry: async () => ({}) as never,
       getAutomationLevel,
       setAutomationLevel,
+      claimEnvironment: async () => undefined,
+      getUnsubscribeDisposition: async () => 'keep' as const,
+      setUnsubscribeDisposition: async () => undefined,
     })
 
     // get-level forwards the environment-local rung.

@@ -20,6 +20,7 @@ import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, relative, resolve } from 'node:path'
 import { parseChezmoiStatus } from './chezmoi-status.js'
 import { scopedOutPaths, type Os, type Scope } from './os-scope.js'
+import { renderSubscriptionIgnore } from './subscription-ignore.js'
 import { runCommand } from './process.js'
 
 /**
@@ -313,6 +314,39 @@ export class ChezmoiAdapter {
     const path = resolve(this.options.sourceDir, '.chezmoiignore')
     await mkdir(dirname(path), { recursive: true })
     await writeFile(path, renderOsScopeIgnore(scope), 'utf8')
+    return path
+  }
+
+  /**
+   * Compile the FULL `.chezmoiignore` — `.myenv/` rule + static OS-scope lines + the
+   * dynamic **per-environment Workspace subscription** template (issue 1-13).
+   *
+   * This SUPERSEDES {@link writeOsScopeIgnore} as the single writer once a Den has more than
+   * the default Workspace: the generated file additionally carries a chezmoi Go-template block
+   * that self-identifies via `[data].dotden_env_id` (issue 1-05) and ignores every File whose
+   * Workspace this environment does NOT subscribe to (ADR 0005). The OS-scope concern is still
+   * folded in (the same static scoped-out paths {@link writeOsScopeIgnore} emits) so the two
+   * never drift or clobber each other — it is one generated file with one writer.
+   *
+   * Because the subscription is decided *inside chezmoi at apply time*, ONE repo materializes
+   * different subsets per environment — flipping `dotden_env_id` flips which Files are managed
+   * (proven by the subscription spike). The registry-entry guard's fail-safe (a missing/empty
+   * subscription ignores everything, never errors, never apply-all) lives in the template; the
+   * primary ordering guard (write the entry before any apply) is the DenService's job.
+   *
+   * @param scope The current OS plus the per-path EFFECTIVE OS scoping (issue 1-15), whose
+   *   scoped-out paths become the static OS lines alongside the subscription template.
+   * @returns Absolute path to the written `.chezmoiignore` file.
+   */
+  async writeSubscriptionIgnore(scope: OsScopeIgnore): Promise<string> {
+    const path = resolve(this.options.sourceDir, '.chezmoiignore')
+    await mkdir(dirname(path), { recursive: true })
+    // Reuse the OS-scope translation for the static scoped-out lines, then hand them to the
+    // subscription renderer which appends the dynamic, self-identifying template block.
+    const osScopedOutPaths = scopedOutPaths(scope.paths, scope.currentOs).map((targetPath) =>
+      relative('.', targetPath).replaceAll('\\', '/'),
+    )
+    await writeFile(path, renderSubscriptionIgnore({ osScopedOutPaths }), 'utf8')
     return path
   }
 

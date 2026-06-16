@@ -174,6 +174,41 @@ describe('EnvironmentRegistry', () => {
     if (process.platform === 'win32') expect(ids).toContain('env-windows')
     else expect(ids).not.toContain('env-windows')
   })
+
+  // ── new-or-returning registration with subscription (issue 1-13) ──
+
+  it('registerWithSubscription defaults to ALL Workspaces and mirrors the env id', async () => {
+    // Seed a Den with two Workspaces from a peer environment.
+    const store = new MyenvStore(source)
+    await store.seedDefault({ id: 'env-peer', label: 'peer', os: process.platform })
+    const work = await store.createWorkspace('Work')
+
+    // A fresh second environment registers with NO explicit pick → subscribes to ALL.
+    const entry = await registryFor().registerWithSubscription()
+    expect(entry.id).toBe('env-self-1')
+    expect([...entry.subscribedWorkspaces].sort()).toEqual([work.id, 'personal'].sort())
+
+    // The own id is mirrored so the templated `.chezmoiignore` can self-identify (issue 1-05).
+    expect(await readFile(configPath, 'utf8')).toContain('dotden_env_id = "env-self-1"')
+  })
+
+  it('registerWithSubscription honors an explicit subset (the returning pick)', async () => {
+    const store = new MyenvStore(source)
+    await store.seedDefault({ id: 'env-peer', label: 'peer', os: process.platform })
+    await store.createWorkspace('Work')
+
+    // The user picks ONLY the default Personal Workspace.
+    const entry = await registryFor().registerWithSubscription(['personal'])
+    expect(entry.subscribedWorkspaces).toEqual(['personal'])
+  })
+
+  it('workspaces() lists the Den’s Workspaces for the subscription pick', async () => {
+    const store = new MyenvStore(source)
+    await store.seedDefault({ id: 'env-peer', label: 'peer', os: process.platform })
+    await store.createWorkspace('Work')
+    const list = await registryFor().workspaces()
+    expect(list.map((w) => w.label).sort()).toEqual(['Personal', 'Work'])
+  })
 })
 
 /** Initialize a git source repo with a deterministic identity (host config-independent). */

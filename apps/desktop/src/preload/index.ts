@@ -220,6 +220,40 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['setGroupScope']>
     },
+    // → IPC channel 'den:subscription-state' (returning-flow subscription pick + empty-Den guard)
+    subscriptionState() {
+      return ipcRenderer.invoke('den:subscription-state', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['subscriptionState']>
+    },
+    // → IPC channel 'den:set-subscriptions' (pick which Workspaces this environment applies)
+    setSubscriptions(workspaceIds) {
+      return ipcRenderer.invoke('den:set-subscriptions', {
+        workspaceIds,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['setSubscriptions']>
+    },
+    // → IPC channel 'den:unsubscribe-workspace' (drop a Workspace + keep/remove its Files here)
+    unsubscribeWorkspace(workspaceId, disposition) {
+      return ipcRenderer.invoke('den:unsubscribe-workspace', {
+        workspaceId,
+        disposition,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['unsubscribeWorkspace']>
+    },
+    // → IPC channel 'den:unsubscribe-disposition' (read the remembered keep/remove default)
+    unsubscribeDisposition() {
+      return ipcRenderer.invoke('den:unsubscribe-disposition', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['unsubscribeDisposition']>
+    },
+    // → IPC channel 'den:remember-unsubscribe-disposition' (persist "don't ask me again")
+    rememberUnsubscribeDisposition(disposition) {
+      return ipcRenderer.invoke('den:remember-unsubscribe-disposition', {
+        disposition,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['rememberUnsubscribeDisposition']>
+    },
   },
   discover: {
     // → IPC channel 'discover:scan'
@@ -255,6 +289,21 @@ const api: DotdenApi = {
       return ipcRenderer.invoke('env:suggest-claims', {
         _trace: trace(),
       }) as ReturnType<DotdenApi['environment']['suggestClaims']>
+    },
+    // → IPC channel 'env:register-new' (the "new" branch of the new-or-returning fork)
+    registerNew(workspaceIds) {
+      return ipcRenderer.invoke('env:register-new', {
+        workspaceIds,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['environment']['registerNew']>
+    },
+    // → IPC channel 'env:claim' (the "returning" branch: adopt an existing entry's id + history)
+    claim(envId, workspaceIds) {
+      return ipcRenderer.invoke('env:claim', {
+        envId,
+        workspaceIds,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['environment']['claim']>
     },
   },
   automation: {

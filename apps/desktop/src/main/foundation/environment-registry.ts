@@ -175,6 +175,54 @@ export class EnvironmentRegistry {
   }
 
   /**
+   * Read the Workspaces of the Den (id + label), for the returning flow's subscription pick
+   * (issue 1-13). A second environment chooses which of these it subscribes to.
+   *
+   * @returns Every Workspace in the synced `.myenv/` (the default Den seeds exactly one).
+   */
+  async workspaces(): Promise<readonly { id: string; label: string }[]> {
+    const { workspaces } = await this.store.readWorkspaces()
+    return workspaces.map((w) => ({ id: w.id, label: w.label }))
+  }
+
+  /**
+   * **Register this (new or returning) environment with its chosen Workspace subscription**,
+   * mirror its id into the local chezmoi config, and return the stored entry (issue 1-13).
+   *
+   * This is the **registry-entry guard's primary (ordering) layer**: it writes this
+   * environment's entry — with its subscription, defaulting to ALL Workspaces — into the synced
+   * registry BEFORE any apply, so the templated `.chezmoiignore` never hits the "no entry yet"
+   * gap (the template's `*` fail-safe is only the backstop). It also mirrors `dotden_env_id` so
+   * the template self-identifies. It does NOT touch any File on disk — Files are applied fresh
+   * via the normal reviewed Apply (ADR 0024 "claiming only re-associates identity").
+   *
+   * Used for BOTH branches of the new-or-returning fork: a brand-new second environment, and a
+   * returning one whose id was already adopted via
+   * {@link import('./environment-identity.js').claimLocalIdentity} (so `this.options.identity.id`
+   * is the claimed id and this upserts that existing entry's subscription).
+   *
+   * @param workspaceIds The Workspaces to subscribe to; defaults to ALL when omitted.
+   * @returns This environment's registry entry as stored.
+   */
+  async registerWithSubscription(workspaceIds?: readonly string[]): Promise<EnvironmentEntry> {
+    // Ensure the Workspace doc + `.myenv/` ignore rule exist (idempotent), then default the
+    // subscription to ALL Workspaces (the issue's "defaulting to all") when none was chosen.
+    const all = (await this.workspaces()).map((w) => w.id)
+    const chosen = workspaceIds ?? all
+    const entry = await this.store.setSubscriptions(
+      {
+        id: this.options.identity.id,
+        label: this.options.identity.label,
+        os: this.options.identity.os,
+      },
+      chosen,
+    )
+    // Mirror the own id so the templated `.chezmoiignore` can self-identify (issue 1-05).
+    await this.chezmoi.writeEnvId(this.options.identity.id)
+    return entry
+  }
+
+  /**
    * Rename THIS environment's label in the synced registry — a one-line diff, no churn.
    *
    * Renaming the label only changes the `label` field of this environment's entry; the
