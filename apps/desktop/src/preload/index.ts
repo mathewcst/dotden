@@ -198,6 +198,14 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['fileVersionDiff']>
     },
+    // → IPC channel 'den:restore-version' (restore-forward → new Commit, never rewrite, issue 2-02)
+    restoreVersion(targetPath, sha) {
+      return ipcRenderer.invoke('den:restore-version', {
+        targetPath,
+        sha,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['restoreVersion']>
+    },
     // → IPC channel 'den:untrack' (the Untrack verb → chezmoi forget)
     untrack(targetPath) {
       return ipcRenderer.invoke('den:untrack', {

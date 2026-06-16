@@ -277,6 +277,13 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     const { targetPath, sha } = payload as TracedPayload & { targetPath: string; sha: string }
     return (await deps.denService()).fileVersionDiff(targetPath, sha)
   })
+  // Restore-forward (issue 2-02): capture a past version as a NEW Commit (never rewrite
+  // history). It MUTATES the Den (records a commit), so its `_trace` id IS forwarded so the
+  // restore emits a correlated wide event — unlike the two read-only History calls above.
+  registrar.handle('den:restore-version', async (_event, payload: TracedPayload) => {
+    const { targetPath, sha } = payload as TracedPayload & { targetPath: string; sha: string }
+    return (await deps.denService()).restoreFileVersion(targetPath, sha, traceId(payload))
+  })
   // The destructive/lifecycle verbs (issue 1-08): Untrack (`forget`) and Delete
   // everywhere (`destroy`) MUTATE the Den, so their `_trace` id IS forwarded so each
   // emits a correlated wide event. affected-environments is the read-only blast-radius

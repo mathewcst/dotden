@@ -18,7 +18,7 @@
  * It never re-checks an invariant an owner guarantees (ADR 0008): applicability is
  * proven by an `AppliesHere` witness from {@link SyncEngine}, never re-derived here.
  */
-import { access, readFile, rm } from 'node:fs/promises'
+import { access, readFile, rm, writeFile } from 'node:fs/promises'
 import { relative, resolve } from 'node:path'
 import { ChezmoiAdapter, UncommittedLocalEditError } from './chezmoi-adapter.js'
 import { GitTransport } from './git-transport.js'
@@ -52,7 +52,7 @@ import { isOfflineError } from './offline.js'
 import type { UnsubscribeDisposition } from './subscription-settings.js'
 import { scanForSecrets, type SecretFinding } from './secret-scanner.js'
 import { partitionFindings, type SecretAllowlist } from './secret-allowlist.js'
-import { parseFileHistory, type FileVersion } from './file-history.js'
+import { parseFileHistory, shortSha, type FileVersion } from './file-history.js'
 import {
   detectPasswordManagers,
   type DetectedPasswordManager,
@@ -160,6 +160,29 @@ export interface CommitResult {
    * Always `false` under Manual (no auto-push attempted) and when the auto-push succeeded.
    */
   readonly queued: boolean
+}
+
+/**
+ * Result of a **restore-forward** ({@link DenService.restoreFileVersion}, issue 2-02).
+ *
+ * Restore-forward never rewrites history: it captures a past version's content forward
+ * as a brand-new Commit, so the result reads like a {@link CommitResult} — the prior
+ * current version stays reachable in the History list, nothing is destroyed. The UI's
+ * confirm copy ("Saved as a new commit; your current version stays in history") describes
+ * exactly this shape.
+ */
+export interface RestoreResult {
+  /** The 7-char short SHA of the version that was restored forward (the previewed version). */
+  readonly restoredShortSha: string
+  /** Destination-relative File path that was restored (e.g. `.zshrc`). */
+  readonly targetPath: string
+  /**
+   * `true` when the restore actually recorded a NEW Commit. `false` is a clean no-op:
+   * the previewed version's content already equals the current source state (restoring the
+   * Current version onto itself), so there is nothing to record — never invent an empty
+   * commit, and never fail the action. The UI can say "already at this version".
+   */
+  readonly committed: boolean
 }
 
 /**
@@ -1900,6 +1923,91 @@ export class DenService {
     const sourcePath = await this.repoRelativeSourcePath(targetPath)
     if (sourcePath === null) return ''
     return this.git.showFile(sha, sourcePath)
+  }
+
+  /**
+   * **Restore a past version FORWARD** — the single Restore action in the History tab
+   * (issue 2-02). It captures the previewed version's content as a brand-new Commit; it
+   * **never rewrites history**, so the prior current version stays reachable in the list
+   * and nothing is destroyed (the non-destructive contract the confirm dialog states:
+   * "Saved as a new commit; your current version stays in history").
+   *
+   * The mechanism is restore-FORWARD, not a git reset/checkout (which would move HEAD and
+   * orphan the current version). Faithful chezmoi wrapper (ADR 0003): every Commit is a
+   * git commit, so a restore is just another Commit whose source content equals the old
+   * version. The flow is:
+   *  1. resolve the File's current source-state path (`chezmoi source-path`, repo-relative);
+   *  2. read the **exact source bytes** that version had via `git show <sha>:<sourcePath>`
+   *     ({@link GitTransport.readFileAtCommit}) — the full content, not a diff;
+   *  3. write those bytes forward over the current source file (the previewed version's
+   *     content becomes the new source state);
+   *  4. `chezmoi apply <file>` so the destination/home copy is materialized to match the
+   *     restored source state (the user's dotfile actually changes back);
+   *  5. `git commit` exactly that source path with a clear restore message — a NEW commit
+   *     on top of history. {@link GitTransport.commitIfChanged} is used so restoring the
+   *     **Current** version onto itself is a clean no-op (no empty commit invented), which
+   *     {@link RestoreResult.committed} reports as `false`.
+   *
+   * Because step 5 only ever ADDS a commit (no reset/rebase/amend), the prior current
+   * version remains a reachable ancestor — verified at the ChezmoiAdapter/GitTransport
+   * seam (the issue's load-bearing acceptance criterion). A File whose source path can't be
+   * resolved (not managed) throws rather than silently doing nothing (never fail silently):
+   * the History tab only offers Restore on a managed File's real version.
+   *
+   * @param targetPath Destination-relative File path being restored (e.g. `.zshrc`).
+   * @param sha The previewed version's commit SHA (full or short) to restore forward.
+   * @param traceId Correlation id for the wide event (traced as a `commit` — it records one).
+   * @returns Which version was restored and whether a new Commit was actually recorded.
+   * @throws CommandFailedError if the File is not managed, the SHA is unknown, or chezmoi/git fail.
+   */
+  async restoreFileVersion(
+    targetPath: string,
+    sha: string,
+    traceId: string,
+  ): Promise<RestoreResult> {
+    // Restore-forward records a new version, so it is a `commit` Operation (it produces a
+    // git commit) — no new tracer kind is needed and the allowlist stays intact.
+    const span = this.tracer?.startOperation('commit', traceId)
+    try {
+      const sourcePath = await this.repoRelativeSourcePath(targetPath)
+      // A Restore is only offered on a managed File's real version; an unresolvable path
+      // means the File is not managed, which is a real error to surface (never fail silently).
+      if (sourcePath === null) {
+        throw new Error(
+          `Cannot restore ${targetPath}: it is not a managed File, so it has no version history to restore from.`,
+        )
+      }
+      // The full bytes of the File as of the previewed version — the content we write forward.
+      const restoredBytes = await this.git.readFileAtCommit(sha, sourcePath)
+      // Overwrite the CURRENT source-state file with the old version's content. We write the
+      // source (not the destination) because the source state is what is versioned and what
+      // travels on Sync; `chezmoi apply` below propagates it to the destination/home copy.
+      await writeFile(resolve(this.options.sourceDir, sourcePath), restoredBytes, 'utf8')
+      // Materialize the restored source onto the destination so the user's real dotfile
+      // changes back to the version they restored (chezmoi apply <file>).
+      await this.chezmoi.apply([targetPath])
+      // Record the restore as a NEW commit on top of history — commitIfChanged so restoring
+      // the Current version onto itself is a clean no-op (no empty commit), not a failure.
+      const rendered = renderCommitMessage(
+        { targetPaths: [targetPath], environmentLabel: this.options.environment.label },
+        DEFAULT_COMMIT_TEMPLATE,
+      )
+      const restoreMessage = `Restore ${targetPath} to ${shortSha(sha)} (${rendered.message})`
+      // Stage the source file PLUS `.myenv`/`.chezmoiignore` for parity with commitTracked,
+      // though a restore changes only the File's bytes. commitIfChanged returns whether a
+      // commit was actually recorded: restoring the Current version onto itself stages no
+      // change, so it is a clean no-op (no empty commit invented) → committed=false.
+      const committed = await this.git.commitIfChanged(
+        [sourcePath, '.myenv', '.chezmoiignore'],
+        restoreMessage,
+      )
+      span?.setAttribute('fileCount', 1)
+      span?.end('ok')
+      return { restoredShortSha: shortSha(sha), targetPath, committed }
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
   }
 
   /**

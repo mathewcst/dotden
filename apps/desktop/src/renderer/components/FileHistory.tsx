@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { PatchDiff } from '@pierre/diffs/react'
-import { GripHorizontal, History, Loader2, ShieldCheck } from 'lucide-react'
+import { GripHorizontal, History, Loader2, RotateCcw, ShieldCheck } from 'lucide-react'
 import { CommitRow } from '@/components/CommitRow'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { Button } from '@/components/ui/button'
 import type { FileVersion } from '../../main/foundation/file-history'
 
 /**
@@ -35,7 +37,14 @@ const DEFAULT_LIST_FRACTION = 0.5
  * The first version is auto-selected so the preview is never blank on open. History is
  * strictly per-File (`targetPath`) — there is no Den-wide timeline.
  *
- * Restore-forward (the single panel action) is issue 2-02; this slice is read-only preview.
+ * **Restore-forward (issue 2-02).** The preview panel carries exactly ONE Restore action —
+ * a filled ember Primary `Restore this version` button on the previewed version (never a
+ * per-row button: a row button + panel button would mean two restores for one version). It
+ * is **restore-forward**: confirming captures the previewed version's content as a brand-new
+ * Commit (`den.restoreVersion`), so the prior current version is never destroyed and stays
+ * reachable in the list — which we re-read after a restore to prove it. The confirm uses the
+ * **Default (non-danger) tone**, not the destructive red reserved for Delete, with the copy
+ * "Saved as a new commit; your current version stays in history" — because nothing is lost.
  */
 export function FileHistory({ targetPath }: { targetPath: string }) {
   const [versions, setVersions] = useState<readonly FileVersion[]>([])
@@ -46,6 +55,10 @@ export function FileHistory({ targetPath }: { targetPath: string }) {
   const [error, setError] = useState<string | null>(null)
   // The list/preview split as a fraction of the tab height; dragged via the resize handle.
   const [listFraction, setListFraction] = useState(DEFAULT_LIST_FRACTION)
+  // Restore-forward (issue 2-02): whether the Default-tone confirm is open, and whether a
+  // restore is in flight (so the button shows progress + can't be double-fired).
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [restoring, setRestoring] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
   // A monotonic token guards the preview against out-of-order responses when the user clicks
@@ -83,24 +96,33 @@ export function FileHistory({ targetPath }: { targetPath: string }) {
     [loadPreview],
   )
 
+  // Apply a freshly-fetched version list to state + auto-select the newest version so the
+  // preview is never blank (on open OR after a restore, where the newest IS the just-restored
+  // version). Pure state-writer — its callers run it only AFTER an `await`, so it never trips
+  // the set-state-in-effect rule (the linter accepts setState that is unreachable synchronously).
+  const applyVersions = useCallback(
+    (list: readonly FileVersion[]) => {
+      setVersions(list)
+      const first = list[0]
+      if (first) {
+        setSelectedSha(first.sha)
+        void loadPreview(first.sha)
+      }
+    },
+    [loadPreview],
+  )
+
   // Load the version list on mount. The parent keys this component by the selected File
   // (`key={selected}` in Workspace.tsx), so switching Files REMOUNTS it — the initial state
   // (loadingList=true, empty list/preview) is the reset, and this effect never resets state
-  // synchronously (which the set-state-in-effect lint rule forbids). The `active` guard drops
-  // a late reply after unmount (the codebase convention; accepts post-await setState).
+  // synchronously (which the set-state-in-effect lint rule forbids; all setState here is past
+  // an `await`). The `active` guard drops a late reply after unmount (the codebase convention).
   useEffect(() => {
     let active = true
     async function load() {
       try {
         const list = await window.dotden.den.fileHistory(targetPath)
-        if (!active) return
-        setVersions(list)
-        // Auto-select the newest version so the preview is never blank on open.
-        const first = list[0]
-        if (first) {
-          setSelectedSha(first.sha)
-          void loadPreview(first.sha)
-        }
+        if (active) applyVersions(list)
       } catch (caught) {
         if (active) {
           setError(caught instanceof Error ? caught.message : 'Could not read this File’s history.')
@@ -113,7 +135,28 @@ export function FileHistory({ targetPath }: { targetPath: string }) {
     return () => {
       active = false
     }
-  }, [targetPath, loadPreview])
+  }, [targetPath, applyVersions])
+
+  // Confirm restore-forward (issue 2-02): capture the previewed version forward as a NEW
+  // Commit, then re-read the list so the new version appears on top with the prior current
+  // version still reachable below (nothing destroyed). Never rewrites history —
+  // `den.restoreVersion` only ever ADDS a commit. Errors surface in the banner (never fail
+  // silently). All setState here is past an `await`, so the set-state-in-effect rule is moot.
+  const confirmRestore = useCallback(
+    async (sha: string) => {
+      setRestoring(true)
+      setError(null)
+      try {
+        await window.dotden.den.restoreVersion(targetPath, sha)
+        applyVersions(await window.dotden.den.fileHistory(targetPath))
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : 'Could not restore this version.')
+      } finally {
+        setRestoring(false)
+      }
+    },
+    [targetPath, applyVersions],
+  )
 
   // Drag the resize handle: translate the pointer's Y into a bounded list fraction so the
   // user can re-split list vs preview. Bound so neither region can be dragged shut.
@@ -222,11 +265,49 @@ export function FileHistory({ targetPath }: { targetPath: string }) {
                 </p>
               )}
             </div>
-            {/* Reassurance line — the feature reads as safe on first use (file-history.md). */}
-            <div className="border-border text-muted-foreground flex items-center gap-1.5 border-t px-4 py-2 text-xs">
-              <ShieldCheck className="text-dd-green-400 size-3.5 shrink-0" aria-hidden />
-              Kept in history — nothing is deleted. Every version you Commit stays here.
+            {/* Footer — reassurance line + the SINGLE Restore action (issue 2-02). The button
+                lives only here (never per-row), so the version it restores is unambiguous. */}
+            <div className="border-border flex items-center gap-3 border-t px-4 py-2">
+              <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
+                <ShieldCheck className="text-dd-green-400 size-3.5 shrink-0" aria-hidden />
+                Kept in history — nothing is deleted. Every version you Commit stays here.
+              </span>
+              {/* Filled ember Primary — obviously a button at rest (affordance pass). */}
+              <Button
+                variant="default"
+                size="sm"
+                className="ml-auto shrink-0"
+                disabled={restoring}
+                onClick={() => setConfirmOpen(true)}
+              >
+                {restoring ? (
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <RotateCcw className="size-3.5" aria-hidden />
+                )}
+                Restore this version
+              </Button>
             </div>
+            {/* Restore confirm — DEFAULT tone (non-danger), never the destructive red:
+                restore-forward saves a NEW commit and keeps the current version in history. */}
+            <ConfirmDialog
+              open={confirmOpen}
+              onOpenChange={setConfirmOpen}
+              tone="default"
+              badge={<RotateCcw className="size-5" />}
+              title="Restore this version?"
+              body={
+                <>
+                  Saved as a new commit; your current version stays in history. This rolls{' '}
+                  <span className="text-foreground font-mono">{selectedVersion.shortSha}</span>{' '}
+                  forward as the latest version of this File — nothing is deleted, and you can
+                  restore any other version the same way.
+                </>
+              }
+              confirmLabel="Restore"
+              confirmDisabled={restoring}
+              onConfirm={() => void confirmRestore(selectedVersion.sha)}
+            />
           </>
         ) : (
           <p className="text-muted-foreground p-4 text-sm">

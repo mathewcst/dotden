@@ -31,6 +31,7 @@ import type {
   ConvertSecretResult,
   IncomingReviewItem,
   IncomingSummary,
+  RestoreResult,
   SubscriptionState,
   SyncPushResult,
 } from '../main/foundation/den-service.js'
@@ -277,6 +278,18 @@ export interface DotdenApi {
      * unresolvable), shown honestly rather than as a fake patch.
      */
     fileVersionDiff(targetPath: string, sha: string): Promise<string>
+    /**
+     * **Restore a past version FORWARD** — the single Restore action in the History tab
+     * (issue 2-02). Captures the previewed version's content as a brand-new Commit; it
+     * **never rewrites history**, so the prior current version stays reachable in the list
+     * and nothing is destroyed. Maps to `git show <sha>:<file>` → write forward →
+     * `chezmoi apply` → `git commit` (a NEW commit). The renderer confirms with the
+     * **Default-tone** dialog ("Saved as a new commit; your current version stays in
+     * history") — NOT the destructive red reserved for Delete — because nothing is lost.
+     * The result reports which version was restored and whether a new Commit was recorded
+     * (`committed: false` is a clean no-op when restoring the Current version onto itself).
+     */
+    restoreVersion(targetPath: string, sha: string): Promise<RestoreResult>
     /**
      * **Untrack** a File (issue 1-08) — stop managing it while the real path **stays
      * on disk on every environment**. Maps to chezmoi `forget` + drop the synced

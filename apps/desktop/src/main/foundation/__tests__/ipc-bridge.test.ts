@@ -49,6 +49,12 @@ describe('IpcBridge', () => {
       // The History tab (issue 2-01): per-File version list + read-only version preview.
       fileHistory: vi.fn(async () => []),
       fileVersionDiff: vi.fn(async () => ''),
+      // Restore-forward (issue 2-02): a MUTATING Operation (records a new Commit).
+      restoreFileVersion: vi.fn(async () => ({
+        restoredShortSha: 'abc1234',
+        targetPath: '.zshrc',
+        committed: true,
+      })),
     }
     const { registrar, handlers } = fakeRegistrar()
     registerIpcBridge(registrar, {
@@ -110,6 +116,12 @@ describe('IpcBridge', () => {
       sha: 'abc1234',
       _trace: { traceId: 't14' },
     } as never)
+    // Restore-forward (issue 2-02): a MUTATING Operation — its trace id IS forwarded.
+    await handlers.get('den:restore-version')?.({}, {
+      targetPath: '.zshrc',
+      sha: 'abc1234',
+      _trace: { traceId: 't15' },
+    } as never)
     // The Review & Apply surface (issue 1-09): incoming-summary fetches (forwards the
     // trace id); incoming-diff is read-only (asserts _trace, forwards no id).
     await handlers.get('den:incoming-summary')?.({}, { _trace: { traceId: 't8' } } as never)
@@ -133,6 +145,8 @@ describe('IpcBridge', () => {
     // file-history / file-version-diff are read-only (assert _trace, forward no id).
     expect(den.fileHistory).toHaveBeenCalledWith('.zshrc')
     expect(den.fileVersionDiff).toHaveBeenCalledWith('.zshrc', 'abc1234')
+    // restore-version MUTATES (records a Commit), so the trace id IS forwarded.
+    expect(den.restoreFileVersion).toHaveBeenCalledWith('.zshrc', 'abc1234', 't15')
     // incoming-summary is a sync Operation (id forwarded); incoming-diff is read-only.
     expect(den.incomingSummary).toHaveBeenCalledWith('t8')
     expect(den.incomingDiff).toHaveBeenCalledWith('.zshrc')

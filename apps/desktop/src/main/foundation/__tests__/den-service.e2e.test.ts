@@ -248,6 +248,105 @@ describe('DenService end-to-end thread (real chezmoi/git)', () => {
     await expect(env.fileVersionDiff('.does-not-exist', history[0]!.sha)).resolves.toBe('')
   })
 
+  it('restoreFileVersion() restores a past version FORWARD as a NEW commit — history preserved, nothing destroyed (issue 2-02)', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const home = join(root, 'home')
+    const source = join(root, 'source')
+    await mkdir(home, { recursive: true })
+    await initSourceRepo(source, remote)
+    const tracer = new OperationTracer()
+    const env = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: source,
+      destinationDir: home,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+      tracer,
+    })
+
+    // Commit THREE versions so there is a clear past version to roll forward.
+    await writeFile(join(home, '.zshrc'), 'export EDITOR=nvim\n')
+    await env.trackFile('.zshrc', 'trace-track')
+    await env.commitTracked(['.zshrc'], 'trace-commit-1')
+    await writeFile(join(home, '.zshrc'), 'export EDITOR=nvim\nexport PAGER=less\n')
+    await env.commitTracked(['.zshrc'], 'trace-commit-2')
+    await writeFile(join(home, '.zshrc'), 'export EDITOR=nvim\nexport PAGER=bat\n')
+    await env.commitTracked(['.zshrc'], 'trace-commit-3')
+
+    const before = await env.fileHistory('.zshrc')
+    expect(before).toHaveLength(3)
+    // The version we will restore: the OLDEST (the File's introduction, PAGER not yet present).
+    const oldest = before[2]!
+    // The current version right now (PAGER=bat) — it must survive the restore, reachable below.
+    const priorCurrent = before[0]!
+    expect(priorCurrent.current).toBe(true)
+    const headBefore = (
+      await runCommand(gitBin, ['rev-parse', 'HEAD'], { cwd: source })
+    ).stdout.trim()
+
+    // Restore the oldest version FORWARD.
+    const result = await env.restoreFileVersion('.zshrc', oldest.sha, 'trace-restore')
+    expect(result.committed).toBe(true)
+    expect(result.restoredShortSha).toBe(oldest.sha.slice(0, 7))
+
+    // ── A NEW commit was produced (restore-forward never rewrites history) ──
+    const headAfter = (
+      await runCommand(gitBin, ['rev-parse', 'HEAD'], { cwd: source })
+    ).stdout.trim()
+    expect(headAfter).not.toBe(headBefore)
+    // The prior HEAD is the new commit's parent — history is APPENDED, not rewritten.
+    const parent = (await runCommand(gitBin, ['rev-parse', 'HEAD^'], { cwd: source })).stdout.trim()
+    expect(parent).toBe(headBefore)
+
+    const after = await env.fileHistory('.zshrc')
+    // One MORE version than before (the restore commit), newest first.
+    expect(after).toHaveLength(4)
+    // ── The prior current version stays REACHABLE in history (nothing destroyed) ──
+    expect(after.some((v) => v.sha === priorCurrent.sha)).toBe(true)
+    // …and so do every other prior version (the full original history survives).
+    for (const v of before) {
+      expect(after.some((entry) => entry.sha === v.sha)).toBe(true)
+    }
+    // The new top is the restore commit (its subject names the restore + the short SHA).
+    expect(after[0]!.current).toBe(true)
+    expect(after[0]!.message).toContain('Restore .zshrc')
+    expect(after[0]!.message).toContain(oldest.sha.slice(0, 7))
+
+    // ── The new source state EQUALS the restored version's content ──
+    const restoredSource = await readFile(join(source, 'dot_zshrc'), 'utf8')
+    const oldestSource = (
+      await runCommand(gitBin, ['show', `${oldest.sha}:dot_zshrc`], { cwd: source })
+    ).stdout
+    expect(restoredSource).toBe(oldestSource)
+    // The destination/home File was materialized to match (PAGER is gone again).
+    const restoredHome = await readFile(join(home, '.zshrc'), 'utf8')
+    expect(restoredHome).toContain('EDITOR=nvim')
+    expect(restoredHome).not.toContain('PAGER')
+
+    // The restore recorded ONE wide event (a commit Operation), and the source tree is clean.
+    expect(tracer.events().filter((e) => e.kind === 'commit').length).toBeGreaterThanOrEqual(1)
+    await expect(new GitTransport({ gitBin, repoDir: source }).status()).resolves.toBe('')
+
+    // ── No-op: restoring the CURRENT version onto itself records nothing (no empty commit) ──
+    const currentSha = (await env.fileHistory('.zshrc'))[0]!.sha
+    const headBeforeNoop = (
+      await runCommand(gitBin, ['rev-parse', 'HEAD'], { cwd: source })
+    ).stdout.trim()
+    const noop = await env.restoreFileVersion('.zshrc', currentSha, 'trace-restore-noop')
+    expect(noop.committed).toBe(false)
+    const headAfterNoop = (
+      await runCommand(gitBin, ['rev-parse', 'HEAD'], { cwd: source })
+    ).stdout.trim()
+    expect(headAfterNoop).toBe(headBeforeNoop)
+
+    // ── A File that is not managed throws (never fail silently) ──
+    await expect(
+      env.restoreFileVersion('.does-not-exist', oldest.sha, 'trace-restore-missing'),
+    ).rejects.toThrow(/not a managed File/)
+  })
+
   it('env B never applies a File outside its subscription (invariant #3 end-to-end)', async () => {
     const remote = join(root, 'remote.git')
     await runCommand(gitBin, ['init', '--bare', remote])

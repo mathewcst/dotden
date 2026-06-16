@@ -150,12 +150,16 @@ export class GitTransport {
    *
    * @param paths Repo-relative or absolute paths to stage (passed verbatim after `--`).
    * @param message Commit message to record when there is a staged change.
+   * @returns `true` when a commit was actually recorded, `false` on a clean no-op (the
+   *   staged tree matched HEAD). Callers that don't care can ignore it; restore-forward
+   *   (issue 2-02) uses it to report whether a new version was created.
    * @throws CommandFailedError if staging or the (non-empty) commit exits non-zero.
    */
-  async commitIfChanged(paths: readonly string[], message: string): Promise<void> {
+  async commitIfChanged(paths: readonly string[], message: string): Promise<boolean> {
     await this.git(['add', '--', ...paths])
-    if (!(await this.hasStagedChanges())) return // index matches HEAD — nothing to record.
+    if (!(await this.hasStagedChanges())) return false // index matches HEAD — nothing to record.
     await this.git(['commit', '--message', message])
+    return true
   }
 
   /**
@@ -482,6 +486,32 @@ export class GitTransport {
     // `--` separates the revision from the pathspec so a path that looks like a ref is
     // never misread; the diff is scoped to exactly this File (no unrelated hunks).
     return (await this.git(['show', sha, '--', path])).stdout
+  }
+
+  /**
+   * Read the **exact source-state bytes** a File had AT a given commit — the
+   * `<sha>:<path>` blob, not a diff. This is the input to **restore-forward** (issue
+   * 2-02): the previewed version's content, which dotden writes back into the current
+   * source state and records as a NEW Commit (never a checkout/reset, so history is
+   * never rewritten).
+   *
+   * Maps to `git show <sha>:<path>`, which prints the *contents* of the path as of that
+   * commit (the `<rev>:<path>` object syntax), in contrast to {@link showFile}'s
+   * `git show <sha> -- <path>` which prints the *patch*. Restore needs the full bytes,
+   * not the delta, so it can overwrite the source file forward.
+   *
+   * @param sha The commit SHA whose version of the File to read (full or unambiguous short).
+   * @param path Repo-relative source-state path of the File (e.g. `dot_zshrc`).
+   * @returns The File's full contents as of that commit.
+   * @throws CommandFailedError if the SHA/path pair is unknown (the File did not exist
+   *   in that commit) or git exits non-zero — the caller surfaces that, never silently
+   *   restoring empty bytes.
+   */
+  async readFileAtCommit(sha: string, path: string): Promise<string> {
+    // `<rev>:<path>` is git's object syntax for "the blob at this path in this commit" —
+    // distinct from `<rev> -- <path>` (a patch). No `--` is used because there is no
+    // pathspec here; the path is part of the single revision argument.
+    return (await this.git(['show', `${sha}:${path}`])).stdout
   }
 
   /**

@@ -28,6 +28,13 @@ export interface ConfirmDialogProps {
   readonly confirmLabel: string
   /** Tone: ember Primary (safe) or red Destructive (deletes). Defaults to `default`. */
   readonly tone?: ConfirmTone
+  /**
+   * Optional badge glyph for the **Default-tone** dialog (e.g. the `rotate-ccw` restore
+   * badge, file-history.md). The destructive tone always shows its own red alert-triangle
+   * badge, so this prop is honored only when `tone === 'default'` — it lets a safe action
+   * carry a meaningful glyph without borrowing the red-reserved destructive treatment.
+   */
+  readonly badge?: ReactNode
   /** Run when the user confirms; the dialog then closes via {@link onOpenChange}. */
   readonly onConfirm: () => void
   /** Disable the Confirm button while a related operation is in flight. */
@@ -57,6 +64,7 @@ export function ConfirmDialog({
   body,
   confirmLabel,
   tone = 'default',
+  badge,
   onConfirm,
   confirmDisabled = false,
 }: ConfirmDialogProps) {
@@ -75,6 +83,15 @@ export function ConfirmDialog({
               aria-hidden
             >
               <AlertTriangle className="size-5" />
+            </div>
+          ) : badge ? (
+            // Default-tone badge (e.g. restore's rotate-ccw) — ember, never red, so a SAFE
+            // action reads as safe (file-history.md: restore-forward is non-destructive).
+            <div
+              className="bg-dd-amber-950 text-dd-amber-400 mb-3 inline-flex size-9 items-center justify-center rounded-full"
+              aria-hidden
+            >
+              {badge}
             </div>
           ) : null}
           <AlertDialog.Title className="text-base font-semibold">{title}</AlertDialog.Title>
