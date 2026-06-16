@@ -97,6 +97,27 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['diff']>
     },
+    // → IPC channel 'den:untrack' (the Untrack verb → chezmoi forget)
+    untrack(targetPath) {
+      return ipcRenderer.invoke('den:untrack', {
+        targetPath,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['untrack']>
+    },
+    // → IPC channel 'den:delete-everywhere' (the Delete everywhere verb → chezmoi destroy)
+    deleteEverywhere(targetPath) {
+      return ipcRenderer.invoke('den:delete-everywhere', {
+        targetPath,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['deleteEverywhere']>
+    },
+    // → IPC channel 'den:affected-environments' (blast radius for the destructive confirm)
+    affectedEnvironments(targetPath) {
+      return ipcRenderer.invoke('den:affected-environments', {
+        targetPath,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['affectedEnvironments']>
+    },
   },
   discover: {
     // → IPC channel 'discover:scan'

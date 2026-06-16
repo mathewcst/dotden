@@ -69,7 +69,8 @@ export interface IpcBridgeDeps {
  * Channels (all payloads carry `_trace`):
  * - `remote:preflight` / `remote:connect` / `remote:latest-sha` → {@link RemoteClient}
  * - `den:track` / `den:commit` / `den:sync-push` / `den:list-incoming` / `den:apply` /
- *   `den:tree` / `den:diff` → {@link DenService}
+ *   `den:tree` / `den:diff` / `den:untrack` / `den:delete-everywhere` /
+ *   `den:affected-environments` → {@link DenService}
  * - `discover:scan` / `discover:inspect-path` → {@link DiscoveryScanner} (issue 1-06)
  *
  * The bridge asserts the `_trace` envelope is present on every call ({@link traceId}
@@ -130,6 +131,23 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     traceId(payload)
     const { targetPath } = payload as TracedPayload & { targetPath: string }
     return (await deps.denService()).fileDiff(targetPath)
+  })
+  // The destructive/lifecycle verbs (issue 1-08): Untrack (`forget`) and Delete
+  // everywhere (`destroy`) MUTATE the Den, so their `_trace` id IS forwarded so each
+  // emits a correlated wide event. affected-environments is the read-only blast-radius
+  // query the destructive confirm names before proceeding (it asserts `_trace` only).
+  registrar.handle('den:untrack', async (_event, payload: TracedPayload) => {
+    const { targetPath } = payload as TracedPayload & { targetPath: string }
+    return (await deps.denService()).untrackFile(targetPath, traceId(payload))
+  })
+  registrar.handle('den:delete-everywhere', async (_event, payload: TracedPayload) => {
+    const { targetPath } = payload as TracedPayload & { targetPath: string }
+    return (await deps.denService()).deleteEverywhereFile(targetPath, traceId(payload))
+  })
+  registrar.handle('den:affected-environments', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    const { targetPath } = payload as TracedPayload & { targetPath: string }
+    return (await deps.denService()).affectedEnvironments(targetPath)
   })
 
   // ── Discovery channels (issue 1-06): first-run tool-catalog scan + drag-in inspect ──

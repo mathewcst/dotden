@@ -51,7 +51,17 @@ export type AllowlistedAttributeValue = number | string | boolean
  * The named Operations dotden traces. One wide event is emitted per completed
  * Operation of one of these kinds (CONTEXT.md "Operation trace").
  */
-export type OperationKind = 'commit' | 'sync' | 'apply' | 'track' | 'onboarding' | 'poll'
+export type OperationKind =
+  | 'commit'
+  | 'sync'
+  | 'apply'
+  | 'track'
+  // The destructive/lifecycle verbs (issue 1-08): Untrack (`forget`) and
+  // Delete everywhere (`destroy`), each a real Operation that mutates the Den.
+  | 'untrack'
+  | 'delete-everywhere'
+  | 'onboarding'
+  | 'poll'
 
 /** Terminal disposition of an Operation, recorded on its wide event. */
 export type OperationOutcome = 'ok' | 'error'

@@ -97,6 +97,24 @@ export interface ApplyResult {
 }
 
 /**
+ * One environment a destructive verb would touch — the blast-radius surface the
+ * **Delete everywhere** confirm must enumerate before the user proceeds (issue 1-08).
+ *
+ * A File "affects" an environment when that environment subscribes to the File's
+ * Workspace (its access boundary, ADR 0005). The label is what the confirm names so
+ * the user sees plainly *which* environments lose the real path (`this-mac`,
+ * `work-laptop`, …); `isSelf` marks the one the user is sitting at.
+ */
+export interface AffectedEnvironment {
+  /** Stable environment id (identity, never the hostname — ADR 0024). */
+  readonly id: string
+  /** User-facing label shown in the confirm (e.g. `this-mac`). */
+  readonly label: string
+  /** Whether this is the environment the user is acting from. */
+  readonly isSelf: boolean
+}
+
+/**
  * One managed File in the three-pane tree view (issue 1-07), carrying everything the
  * renderer needs to place, decorate, and inspect the row WITHOUT a second round-trip:
  * its path, Workspace placement, local-axis git status, and whether it is muted.
@@ -356,6 +374,129 @@ export class DenService {
       span?.end('error')
       throw error
     }
+  }
+
+  /**
+   * **Untrack** a File: stop dotden managing it, leaving the real path on disk on
+   * every environment (CONTEXT.md "Untrack"; the non-destructive removal).
+   *
+   * Maps to `chezmoi forget <file>` (source state entry removed, destination copy
+   * kept) plus dropping the File's synced `.myenv/` placement so a second environment
+   * no longer sees it as incoming. The source removal + the placement removal are
+   * committed together so the Untrack travels through the Remote — otherwise the File
+   * would silently reappear on the next Sync. Per ADR 0006 this Commit is LOCAL until
+   * a later Sync now pushes it.
+   *
+   * The File is NOT deleted from any disk: that is the distinct {@link deleteEverywhereFile}
+   * verb. The confirmation copy (issue 1-08) states plainly that the File stays on disk.
+   *
+   * @param targetPath Destination-relative File path to Untrack (e.g. `.zshrc`).
+   * @param traceId Correlation id for the wide event.
+   */
+  async untrackFile(targetPath: string, traceId: string): Promise<void> {
+    const span = this.tracer?.startOperation('untrack', traceId)
+    try {
+      // 1) chezmoi forget: drop the source-state entry, keep the destination copy.
+      //    This DELETES the File's source-state file (e.g. `dot_zshrc`) from the repo.
+      await this.chezmoi.untrack(targetPath)
+      // 2) Drop the synced placement so env B stops seeing the File as incoming.
+      await this.store.removePlacement(targetPath)
+      // 3) Commit the forget + the `.myenv/` placement removal together (LOCAL until
+      //    pushed, ADR 0006) so the Untrack travels and the File does not reappear.
+      //    `commitAll` (git add --all) is required, not a path-scoped commit: the forget
+      //    *removed* the source-state file, and that DELETION must be staged too —
+      //    otherwise the source file would still be committed in the Remote and re-appear
+      //    on the next Sync. At this point the only dirty paths are exactly the forget's
+      //    deletion plus the `.myenv/` placement edit, so add --all records just those.
+      await this.git.commitAll(`Untrack ${targetPath}`)
+      span?.setAttribute('fileCount', 1)
+      span?.end('ok')
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * **Delete everywhere** a File: remove it from the Den AND delete the real path on
+   * every environment where it applies (CONTEXT.md "Delete everywhere"; destructive,
+   * always confirmed).
+   *
+   * Maps to `chezmoi destroy --force <file>` (source state AND destination removed)
+   * plus dropping the File's synced `.myenv/` placement, committed together so the
+   * deletion travels: when another environment next Applies, chezmoi removes the real
+   * path there too. This is a DISTINCT verb from {@link untrackFile} so the destructive
+   * intent is separate; the confirm names every affected environment (see
+   * {@link affectedEnvironments}) before proceeding. LOCAL until a later Sync (ADR 0006).
+   *
+   * @param targetPath Destination-relative File path to delete everywhere (e.g. `.zshrc`).
+   * @param traceId Correlation id for the wide event.
+   */
+  async deleteEverywhereFile(targetPath: string, traceId: string): Promise<void> {
+    const span = this.tracer?.startOperation('delete-everywhere', traceId)
+    try {
+      // 1) chezmoi destroy: remove BOTH the source-state entry and the destination copy here.
+      //    This DELETES the File's source-state file (e.g. `dot_zshrc`) from the repo.
+      await this.chezmoi.deleteEverywhere(targetPath)
+      // 2) Drop the synced placement so the File leaves the Den entirely.
+      await this.store.removePlacement(targetPath)
+      // 3) Commit the destroy + the `.myenv/` placement removal together (LOCAL until
+      //    pushed, ADR 0006) so the deletion travels and reaches every environment.
+      //    `commitAll` (git add --all) is required, not a path-scoped commit: the destroy
+      //    *removed* the source-state file, and that DELETION must be staged so the
+      //    removal is recorded — otherwise another environment would still receive (and
+      //    re-apply) the File on Sync. The only dirty paths here are exactly the destroy's
+      //    deletion plus the `.myenv/` placement edit, so add --all records just those.
+      await this.git.commitAll(`Delete ${targetPath} everywhere`)
+      span?.setAttribute('fileCount', 1)
+      span?.end('ok')
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * Enumerate the environments a **Delete everywhere** of `targetPath` would touch —
+   * the blast-radius surface the destructive confirm must name (issue 1-08).
+   *
+   * An environment is affected when it subscribes to the File's Workspace (its access
+   * boundary, ADR 0005): only there does the File apply, so only there does `destroy`
+   * delete the real path. Read-only — it mutates nothing, so like {@link fileTree} it
+   * emits no wide event. Falls back to the default Workspace for an unplaced File so a
+   * managed-but-unplaced File still reports a non-empty, honest blast radius rather than
+   * an empty (misleadingly safe) one (never fail silently).
+   *
+   * @param targetPath Destination-relative File path the confirm is about (e.g. `.zshrc`).
+   * @returns Every affected environment (id/label/isSelf), self listed first.
+   */
+  async affectedEnvironments(targetPath: string): Promise<readonly AffectedEnvironment[]> {
+    const [{ environments }, { placements }] = await Promise.all([
+      this.store.readEnvironments(),
+      this.store.readWorkspaces(),
+    ])
+    // The Workspace that owns the File is its access boundary; default an unplaced
+    // managed File to the default Workspace so it still names a blast radius.
+    const workspaceId =
+      placements.find((p) => p.targetPath === targetPath)?.workspaceId ?? DEFAULT_WORKSPACE_ID
+    const affected = environments
+      .filter((env) => env.subscribedWorkspaces.includes(workspaceId))
+      .map((env) => ({
+        id: env.id,
+        label: env.label,
+        isSelf: env.id === this.options.environment.id,
+      }))
+    // Surface the environment the user is acting from first so the confirm reads
+    // "this environment, then the others" — and never silently omit self if the synced
+    // registry has not recorded it yet (a fresh env A before its first push).
+    if (!affected.some((env) => env.isSelf)) {
+      affected.unshift({
+        id: this.options.environment.id,
+        label: this.options.environment.label,
+        isSelf: true,
+      })
+    }
+    return affected.sort((a, b) => Number(b.isSelf) - Number(a.isSelf))
   }
 
   /**

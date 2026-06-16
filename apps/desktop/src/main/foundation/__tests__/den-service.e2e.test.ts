@@ -218,6 +218,172 @@ describe('DenService end-to-end thread (real chezmoi/git)', () => {
   })
 })
 
+// The destructive/lifecycle verbs (issue 1-08): Untrack (`forget`) keeps the File on
+// disk everywhere; Delete everywhere (`destroy`) removes it from the Den AND disk; the
+// blast-radius query names every environment subscribed to the File's Workspace.
+describe('DenService Untrack / Delete everywhere verbs (issue 1-08)', () => {
+  it('untrackFile maps to forget: source + placement removed, but the File STAYS on disk', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const home = join(root, 'home')
+    const source = join(root, 'source')
+    await mkdir(home, { recursive: true })
+    await initSourceRepo(source, remote)
+    const tracer = new OperationTracer()
+    const env = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: source,
+      destinationDir: home,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+      tracer,
+    })
+
+    // Track + Commit a File so it is managed and placed in the synced `.myenv/`.
+    await writeFile(join(home, '.zshrc'), 'keep me on disk\n')
+    await env.trackFile('.zshrc', 'trace-track')
+    await env.commitTracked(['.zshrc'], 'trace-commit')
+    const store = new MyenvStore(source)
+    expect((await store.readWorkspaces()).placements).toContainEqual({
+      targetPath: '.zshrc',
+      workspaceId: 'personal',
+    })
+
+    await env.untrackFile('.zshrc', 'trace-untrack')
+
+    // forget removes the source-state entry…
+    expect(existsSync(join(source, 'dot_zshrc'))).toBe(false)
+    // …the synced placement is dropped so env B stops seeing it as incoming…
+    expect((await store.readWorkspaces()).placements).toEqual([])
+    // …and the real File is UNTOUCHED on disk (the non-destructive Untrack contract).
+    await expect(readFile(join(home, '.zshrc'), 'utf8')).resolves.toBe('keep me on disk\n')
+    // The Untrack is a recorded Operation (a wide event landed for it).
+    expect(tracer.events().map((e) => e.kind)).toContain('untrack')
+    // It is committed LOCALLY (ADR 0006): nothing dirty left in the source tree.
+    await expect(new GitTransport({ gitBin, repoDir: source }).status()).resolves.toBe('')
+  })
+
+  it('deleteEverywhereFile maps to destroy: File removed from the Den AND from disk', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const home = join(root, 'home')
+    const source = join(root, 'source')
+    await mkdir(home, { recursive: true })
+    await initSourceRepo(source, remote)
+    const tracer = new OperationTracer()
+    const env = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: source,
+      destinationDir: home,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+      tracer,
+    })
+
+    await writeFile(join(home, '.zshrc'), 'delete me everywhere\n')
+    await env.trackFile('.zshrc', 'trace-track')
+    await env.commitTracked(['.zshrc'], 'trace-commit')
+
+    await env.deleteEverywhereFile('.zshrc', 'trace-delete')
+
+    // destroy removes BOTH the source-state entry and the destination copy here…
+    expect(existsSync(join(source, 'dot_zshrc'))).toBe(false)
+    expect(existsSync(join(home, '.zshrc'))).toBe(false)
+    // …and the File leaves the synced `.myenv/` entirely so the deletion travels.
+    expect((await new MyenvStore(source).readWorkspaces()).placements).toEqual([])
+    // It is a recorded Operation, committed LOCALLY (clean source tree after).
+    expect(tracer.events().map((e) => e.kind)).toContain('delete-everywhere')
+    await expect(new GitTransport({ gitBin, repoDir: source }).status()).resolves.toBe('')
+  })
+
+  it('Delete everywhere TRAVELS: after Sync, a second environment no longer receives the File', async () => {
+    // The whole point of `destroy` over `forget` is that the removal reaches every
+    // environment. This proves the source-file deletion is actually committed + pushed
+    // (the bug a path-scoped commit would hide), so env B clones a Den without the File.
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const aHome = join(root, 'a-home')
+    const aSource = join(root, 'a-source')
+    await mkdir(aHome, { recursive: true })
+    await initSourceRepo(aSource, remote)
+    const envA = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: aHome,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+
+    // env A Tracks + Commits + Syncs a File, then Deletes it everywhere and Syncs again.
+    await writeFile(join(aHome, '.zshrc'), 'doomed bytes\n')
+    await envA.trackFile('.zshrc', 'trace-track')
+    await envA.commitTracked(['.zshrc'], 'trace-commit')
+    await envA.syncPush('trace-push-1')
+    await envA.deleteEverywhereFile('.zshrc', 'trace-delete')
+    await envA.syncPush('trace-push-2')
+
+    // env B clones the Den AFTER the deletion travelled — it must not see the File at all.
+    const bSource = join(root, 'b-source')
+    await cloneRepo(gitBin, remote, bSource)
+    const bStore = new MyenvStore(bSource)
+    // The placement is gone from the synced model…
+    expect((await bStore.readWorkspaces()).placements).toEqual([])
+    // …and the source-state file itself is absent from the cloned Den (the deletion
+    // was committed, not left dangling), so it can never be applied on env B.
+    expect(existsSync(join(bSource, 'dot_zshrc'))).toBe(false)
+  })
+
+  it('affectedEnvironments names EVERY environment subscribed to the File’s Workspace', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const home = join(root, 'home')
+    const source = join(root, 'source')
+    await mkdir(home, { recursive: true })
+    await initSourceRepo(source, remote)
+    const env = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: source,
+      destinationDir: home,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+
+    // Track a File (placed in the default 'personal' Workspace) and register a SECOND
+    // environment that also subscribes to it, plus a THIRD that does NOT — only the
+    // subscribers are in the destructive verb's blast radius (their access boundary).
+    await writeFile(join(home, '.zshrc'), 'shared bytes\n')
+    await env.trackFile('.zshrc', 'trace-track')
+    const store = new MyenvStore(source)
+    await store.registerEnvironment({
+      id: 'env-b',
+      label: 'work-laptop',
+      os: process.platform,
+      subscribedWorkspaces: ['personal'],
+    })
+    await store.registerEnvironment({
+      id: 'env-c',
+      label: 'home-pc',
+      os: process.platform,
+      // Subscribed to a DIFFERENT Workspace, so the File does not apply here.
+      subscribedWorkspaces: ['work'],
+    })
+
+    const affected = await env.affectedEnvironments('.zshrc')
+    const labels = affected.map((a) => a.label)
+
+    // Both subscribers are named; the non-subscriber is NOT (it would not lose the File).
+    expect(labels).toEqual(expect.arrayContaining(['this-mac', 'work-laptop']))
+    expect(labels).not.toContain('home-pc')
+    // The environment the user is acting from is surfaced first AND flagged isSelf.
+    expect(affected[0]).toMatchObject({ id: 'env-a', label: 'this-mac', isSelf: true })
+    expect(affected.filter((a) => a.isSelf)).toHaveLength(1)
+  })
+})
+
 /**
  * Initialize an env's source repo as a git working tree wired to the shared bare
  * Remote, with a deterministic commit identity (so `git commit` works without the

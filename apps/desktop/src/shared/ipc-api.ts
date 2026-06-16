@@ -22,6 +22,7 @@
  */
 import type { ConnectResult, PreflightResult } from '../main/foundation/remote-client.js'
 import type {
+  AffectedEnvironment,
   ApplyResult,
   CommitResult,
   FileTreeView,
@@ -116,6 +117,28 @@ export interface DotdenApi {
      * straight into `@pierre/diffs` `PatchDiff`.
      */
     diff(targetPath: string): Promise<string>
+    /**
+     * **Untrack** a File (issue 1-08) — stop managing it while the real path **stays
+     * on disk on every environment**. Maps to chezmoi `forget` + drop the synced
+     * placement, committed LOCALLY (ADR 0006). Non-destructive: the renderer confirms
+     * with the Default-tone dialog whose copy states the File stays on disk.
+     */
+    untrack(targetPath: string): Promise<void>
+    /**
+     * **Delete everywhere** a File (issue 1-08) — remove it from the Den **and delete
+     * the real path on every environment where it applies**. Maps to chezmoi
+     * `destroy` + drop the synced placement, committed LOCALLY (ADR 0006). Destructive
+     * and DISTINCT from {@link DotdenApi.den.untrack}: the renderer confirms with the
+     * Destructive-tone dialog after naming the affected environments.
+     */
+    deleteEverywhere(targetPath: string): Promise<void>
+    /**
+     * The environments a {@link DotdenApi.den.deleteEverywhere} would touch — every
+     * environment subscribed to the File's Workspace (issue 1-08). Read-only; drives
+     * the destructive confirm's blast-radius list so the user sees which environments
+     * lose the real path before confirming.
+     */
+    affectedEnvironments(targetPath: string): Promise<readonly AffectedEnvironment[]>
   }
   /**
    * First-run **discovery** operations (issue 1-06), forwarded to `discover:*` IPC

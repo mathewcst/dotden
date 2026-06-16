@@ -21,7 +21,13 @@ import {
 import { Button } from '@/components/ui/button'
 import { StatusTag, type FileStatus } from '@/components/StatusTag'
 import { EnvironmentBadge } from '@/components/EnvironmentBadge'
-import type { FileTreeEntry, IncomingReviewItem } from '../../main/foundation/den-service'
+import { RowContextMenu, type RowVerb } from '@/components/RowContextMenu'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import type {
+  AffectedEnvironment,
+  FileTreeEntry,
+  IncomingReviewItem,
+} from '../../main/foundation/den-service'
 
 /** Discriminates which environment's role this shell is driving (A vs B copy/actions). */
 type Role = 'a' | 'b'
@@ -70,10 +76,19 @@ export function Workspace({ role }: { role: Role }) {
   const [diff, setDiff] = useState<string | null>(null)
   const [lastCommitMessage, setLastCommitMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState<
-    null | 'load' | 'track' | 'commit' | 'push' | 'list' | 'apply' | 'diff'
+    null | 'load' | 'track' | 'commit' | 'push' | 'list' | 'apply' | 'diff' | 'untrack' | 'delete'
   >(null)
   const [error, setError] = useState<string | null>(null)
   const [newPath, setNewPath] = useState('')
+
+  // The pending destructive/lifecycle confirm (issue 1-08): which row verb is awaiting
+  // confirmation, on which File, and — for Delete everywhere — the affected environments
+  // the confirm must name before proceeding (null while none is open).
+  const [confirm, setConfirm] = useState<{
+    verb: 'untrack' | 'delete-everywhere'
+    path: string
+    affected: readonly AffectedEnvironment[]
+  } | null>(null)
 
   // The paths the tree renders: real managed Files on A, incoming Files on B.
   const paths = useMemo(
@@ -256,6 +271,59 @@ export function Workspace({ role }: { role: Role }) {
       setIncoming((prev) => prev.filter((i) => !applied.includes(i.targetPath)))
     })
 
+  // ── Right-click row verbs (issue 1-08) ──
+  // The four verbs the row context menu offers, routed by intent:
+  // - Commit/Apply: everyday verbs, run immediately on the one right-clicked File.
+  // - Untrack/Delete everywhere: destructive/lifecycle verbs — never run on the click.
+  //   They OPEN a confirm first (never fail silently); Delete everywhere additionally
+  //   fetches the affected environments so the confirm can name the blast radius.
+  const onRowVerb = useCallback(
+    (path: string, verb: RowVerb) => {
+      if (verb === 'commit') {
+        void run('commit', async () => {
+          const result = await window.dotden.den.commit([path])
+          setLastCommitMessage(result.message)
+          await reloadTree()
+        })
+        return
+      }
+      if (verb === 'apply') {
+        void run('apply', async () => {
+          await window.dotden.den.apply([path])
+          await reloadTree()
+        })
+        return
+      }
+      if (verb === 'untrack') {
+        // Untrack is non-destructive (the File stays on disk), so it needs no blast radius.
+        setConfirm({ verb: 'untrack', path, affected: [] })
+        return
+      }
+      // Delete everywhere: load the affected environments BEFORE opening the confirm so
+      // the destructive dialog can name every environment that loses the real path.
+      void run('delete', async () => {
+        const affected = await window.dotden.den.affectedEnvironments(path)
+        setConfirm({ verb: 'delete-everywhere', path, affected })
+      })
+    },
+    [run, reloadTree],
+  )
+
+  // Carry out the verb the user CONFIRMED in the dialog. Each maps faithfully onto a
+  // chezmoi verb (Untrack→forget, Delete everywhere→destroy) in the main process, then
+  // refreshes the tree so the removed File disappears from the decorations.
+  const runConfirmedVerb = useCallback(() => {
+    if (!confirm) return
+    const { verb, path } = confirm
+    void run(verb === 'untrack' ? 'untrack' : 'delete', async () => {
+      if (verb === 'untrack') await window.dotden.den.untrack(path)
+      else await window.dotden.den.deleteEverywhere(path)
+      // The File is gone from the Den: clear it from selection and refresh the tree.
+      if (selected === path) await selectFile(null)
+      await reloadTree()
+    })
+  }, [confirm, run, reloadTree, selectFile, selected])
+
   // The header/inspector status pill for the selected File (the honest dotden state).
   const selectedFile = files.find((f) => f.targetPath === selected)
   const selectedIncoming = incoming.find((i) => i.targetPath === selected)
@@ -315,7 +383,11 @@ export function Workspace({ role }: { role: Role }) {
                   : 'No incoming Files. Detect the Remote, then refresh.'}
               </p>
             ) : (
-              <FileTree model={model} className="text-sm" />
+              // Right-click any row for the verbs (Commit · Apply · Untrack · Delete
+              // everywhere); the menu resolves which File from the row's data-item-path.
+              <RowContextMenu onVerb={onRowVerb}>
+                <FileTree model={model} className="text-sm" />
+              </RowContextMenu>
             )}
           </div>
           {/* This environment's editable label + git-log attribution (issue 1-05). */}
@@ -507,6 +579,54 @@ export function Workspace({ role }: { role: Role }) {
           ) : null}
         </aside>
       </div>
+
+      {/* The Untrack / Delete-everywhere confirm (confirm-dialogs screen spec). Untrack
+          is Default tone with copy that the File STAYS ON DISK everywhere; Delete
+          everywhere is Destructive tone and NAMES every affected environment, so the
+          user sees the blast radius before confirming (never fail silently). */}
+      {confirm ? (
+        <ConfirmDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setConfirm(null)
+          }}
+          tone={confirm.verb === 'delete-everywhere' ? 'destructive' : 'default'}
+          confirmLabel={confirm.verb === 'untrack' ? 'Untrack' : 'Delete everywhere'}
+          confirmDisabled={busy !== null}
+          onConfirm={runConfirmedVerb}
+          title={
+            confirm.verb === 'untrack'
+              ? `Untrack ${confirm.path}?`
+              : `Delete ${confirm.path} everywhere?`
+          }
+          body={
+            confirm.verb === 'untrack' ? (
+              <>
+                dotden will stop managing <span className="font-mono">{confirm.path}</span>. The
+                real file <strong>stays on disk on every environment</strong> — nothing is deleted,
+                and you can Track it again later.
+              </>
+            ) : (
+              <>
+                This removes <span className="font-mono">{confirm.path}</span> from your Den
+                <strong> and deletes the real file</strong> on every environment where it applies:
+                <span className="mt-2 flex flex-wrap gap-1.5">
+                  {confirm.affected.map((env) => (
+                    <span
+                      key={env.id}
+                      className="border-border text-foreground rounded border px-1.5 py-0.5 text-xs"
+                    >
+                      {env.label}
+                      {env.isSelf ? ' (this environment)' : ''}
+                    </span>
+                  ))}
+                </span>
+                <span className="mt-2 block">This can&rsquo;t be undone.</span>
+              </>
+            )
+          }
+        />
+      ) : null}
     </div>
   )
 }

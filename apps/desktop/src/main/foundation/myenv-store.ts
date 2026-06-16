@@ -149,6 +149,26 @@ export class MyenvStore {
   }
 
   /**
+   * Drop a File's placement from the Workspace tree — the synced half of the
+   * **Untrack** (`forget`) and **Delete everywhere** (`destroy`) verbs (CONTEXT.md).
+   *
+   * Both verbs stop dotden managing the File, so its placement must leave the synced
+   * `.myenv/` too, otherwise a second environment would still see the (now removed)
+   * File as incoming. No-op when the path is not placed, so calling it twice — or
+   * after chezmoi already forgot/destroyed the source — is idempotent.
+   *
+   * @param targetPath Destination-relative File path whose placement to remove.
+   */
+  async removePlacement(targetPath: string): Promise<void> {
+    const doc = await this.readWorkspaces()
+    const placements = doc.placements.filter((p) => p.targetPath !== targetPath)
+    // Skip the write entirely when nothing changed so an idempotent call produces no
+    // git churn in `.myenv/workspaces.json`.
+    if (placements.length === doc.placements.length) return
+    await this.writeWorkspaces({ ...doc, placements })
+  }
+
+  /**
    * Insert or replace an environment in the registry (write on first run, rename,
    * or subscription change, per ADR 0024). Keyed on the stable `id`.
    *
