@@ -24,6 +24,7 @@ import type { ConnectResult, PreflightResult } from '../main/foundation/remote-c
 import type {
   ApplyResult,
   CommitResult,
+  FileTreeView,
   IncomingReviewItem,
 } from '../main/foundation/den-service.js'
 import type {
@@ -101,6 +102,20 @@ export interface DotdenApi {
     listIncoming(): Promise<readonly IncomingReviewItem[]>
     /** **Apply** reviewed incoming Files to disk (env B). Maps to `chezmoi apply`. */
     apply(targetPaths: readonly string[]): Promise<ApplyResult>
+    /**
+     * The three-pane tree view (issue 1-07): every managed File joined with its
+     * Workspace placement, local-axis git status (M/A/D/R/U), and out-of-OS-Scope
+     * muted flag. Read-only (no Operation/wide event), refreshed after each verb so
+     * the tree, status decorations, and change dots stay live. Maps to
+     * `chezmoi managed`/`status`/`ignored` + the synced `.myenv/` placements.
+     */
+    tree(): Promise<FileTreeView>
+    /**
+     * Real unified diff for the selected File's center pane (issue 1-07). Maps to
+     * `chezmoi diff <file>`; an empty string means the File is unchanged. Fed
+     * straight into `@pierre/diffs` `PatchDiff`.
+     */
+    diff(targetPath: string): Promise<string>
   }
   /**
    * First-run **discovery** operations (issue 1-06), forwarded to `discover:*` IPC

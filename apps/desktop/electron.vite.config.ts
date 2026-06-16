@@ -22,7 +22,22 @@ export default defineConfig(async ({ mode }) => {
     renderer: {
       root: 'src/renderer',
       base: './',
-      resolve: { alias: { '@': resolve(__dirname, 'src/renderer') } },
+      resolve: {
+        alias: [
+          { find: '@', replacement: resolve(__dirname, 'src/renderer') },
+          // Trim Shiki to dotden's config languages (issue 1-07): `@pierre/diffs`
+          // imports `bundledLanguages` from the bare `shiki` specifier, which is a
+          // map of ~330 lazy grammar imports — Rollup can't tree-shake it, so the
+          // build emits a chunk per grammar. This shim re-exports real Shiki but
+          // overrides `bundledLanguages` with only the config-language grammars.
+          // The `^shiki$` anchor matches ONLY the bare specifier, so the shim's own
+          // `shiki/dist/index.mjs` re-export (a subpath) is left untouched.
+          {
+            find: /^shiki$/,
+            replacement: resolve(__dirname, 'src/renderer/vendor/shiki-config-langs.mjs'),
+          },
+        ],
+      },
       plugins: [react({}), reactCompiler, tailwindcss()],
       build: { outDir: 'out/renderer', sourcemap: true },
     },

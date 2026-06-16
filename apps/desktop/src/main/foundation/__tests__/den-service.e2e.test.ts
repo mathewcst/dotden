@@ -118,6 +118,54 @@ describe('DenService end-to-end thread (real chezmoi/git)', () => {
     await expect(readFile(join(bHome, '.zshrc'), 'utf8')).resolves.toBe('export EDITOR=nvim\n')
   })
 
+  it('fileTree() reads managed Files with their placement, local status, and diff (issue 1-07)', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const home = join(root, 'home')
+    const source = join(root, 'source')
+    await mkdir(home, { recursive: true })
+    await initSourceRepo(source, remote)
+    const env = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: source,
+      destinationDir: home,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+
+    // Track + Commit one File so it is managed and clean, then a second File that we
+    // leave dirty on disk so the tree shows a real local-axis status letter.
+    await writeFile(join(home, '.zshrc'), 'export EDITOR=nvim\n')
+    await env.trackFile('.zshrc', 'trace-track-1')
+    await env.commitTracked(['.zshrc'], 'trace-commit-1')
+    await writeFile(join(home, '.gitconfig'), 'name = a\n')
+    await env.trackFile('.gitconfig', 'trace-track-2')
+    await env.commitTracked(['.gitconfig'], 'trace-commit-2')
+
+    // Now edit .zshrc on disk WITHOUT committing — it must show as a local modification.
+    await writeFile(join(home, '.zshrc'), 'export EDITOR=nvim\nexport PAGER=less\n')
+
+    const view = await env.fileTree()
+    const byPath = new Map(view.files.map((f) => [f.targetPath, f]))
+    // Both Tracked Files appear, placed in the default Workspace.
+    expect(byPath.get('.zshrc')?.workspaceId).toBe('personal')
+    expect(byPath.get('.gitconfig')?.workspaceId).toBe('personal')
+    // The edited File carries a real local-axis status; the untouched one is clean.
+    expect(byPath.get('.zshrc')?.status).toBe('modified')
+    expect(byPath.get('.gitconfig')?.status).toBeNull()
+    // Neither File is OS-scoped-out, so neither is muted.
+    expect(byPath.get('.zshrc')?.muted).toBe(false)
+    // The default Workspace travels in the view so the tree can section by Workspace.
+    expect(view.workspaces[0]?.id).toBe('personal')
+
+    // fileDiff() returns chezmoi's real unified diff for the edited File…
+    const diff = await env.fileDiff('.zshrc')
+    expect(diff).toContain('PAGER=less')
+    // …and an empty diff for the clean File (no fabricated patch).
+    await expect(env.fileDiff('.gitconfig')).resolves.toBe('')
+  })
+
   it('env B never applies a File outside its subscription (invariant #3 end-to-end)', async () => {
     const remote = join(root, 'remote.git')
     await runCommand(gitBin, ['init', '--bare', remote])
@@ -181,6 +229,9 @@ async function initSourceRepo(sourceDir: string, remote: string): Promise<void> 
   await git.init()
   await runCommand(gitBin, ['config', 'user.name', 'dotden tests'], { cwd: sourceDir })
   await runCommand(gitBin, ['config', 'user.email', 'dotden@example.invalid'], { cwd: sourceDir })
+  // Hermetic sandbox: force commit signing off so the host's global `commit.gpgsign`
+  // (which may target an interactive 1Password/SSH agent) can't hang/fail `git commit`.
+  await runCommand(gitBin, ['config', 'commit.gpgsign', 'false'], { cwd: sourceDir })
   await git.addRemote('origin', remote)
 }
 

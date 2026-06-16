@@ -68,8 +68,8 @@ export interface IpcBridgeDeps {
  *
  * Channels (all payloads carry `_trace`):
  * - `remote:preflight` / `remote:connect` / `remote:latest-sha` → {@link RemoteClient}
- * - `den:track` / `den:commit` / `den:sync-push` / `den:list-incoming` / `den:apply` →
- *   {@link DenService}
+ * - `den:track` / `den:commit` / `den:sync-push` / `den:list-incoming` / `den:apply` /
+ *   `den:tree` / `den:diff` → {@link DenService}
  * - `discover:scan` / `discover:inspect-path` → {@link DiscoveryScanner} (issue 1-06)
  *
  * The bridge asserts the `_trace` envelope is present on every call ({@link traceId}
@@ -118,6 +118,18 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   registrar.handle('den:apply', async (_event, payload: TracedPayload) => {
     const { targetPaths } = payload as TracedPayload & { targetPaths: readonly string[] }
     return (await deps.denService()).applyIncoming(targetPaths, traceId(payload))
+  })
+  // The three-pane view queries (issue 1-07): managed File tree + per-File diff.
+  // Read-only, so DenService emits no wide event for them, but each still asserts the
+  // `_trace` envelope (via traceId) so EVERY IPC call crosses the boundary correlated.
+  registrar.handle('den:tree', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    return (await deps.denService()).fileTree()
+  })
+  registrar.handle('den:diff', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    const { targetPath } = payload as TracedPayload & { targetPath: string }
+    return (await deps.denService()).fileDiff(targetPath)
   })
 
   // ── Discovery channels (issue 1-06): first-run tool-catalog scan + drag-in inspect ──

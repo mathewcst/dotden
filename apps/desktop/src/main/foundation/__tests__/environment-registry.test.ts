@@ -183,6 +183,9 @@ async function initSourceRepo(dir: string): Promise<void> {
   await git.init()
   await runCommand(gitBin, ['config', 'user.name', 'dotden tests'], { cwd: dir })
   await runCommand(gitBin, ['config', 'user.email', 'dotden@example.invalid'], { cwd: dir })
+  // Hermetic sandbox: force commit signing off so the host's global `commit.gpgsign`
+  // (which may target an interactive 1Password/SSH agent) can't hang/fail `git commit`.
+  await runCommand(gitBin, ['config', 'commit.gpgsign', 'false'], { cwd: dir })
 }
 
 /** Make a real commit authored by a specific name/email so attribution can join on it. */

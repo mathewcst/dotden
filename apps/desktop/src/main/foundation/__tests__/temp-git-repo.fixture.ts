@@ -80,6 +80,11 @@ export async function createTempDotdenRepo(): Promise<DotdenTestRepo> {
   // config. This belongs in the test fixture, not production GitTransport.init().
   await runCommand(gitBin, ['config', 'user.name', 'dotden tests'], { cwd: source })
   await runCommand(gitBin, ['config', 'user.email', 'dotden@example.invalid'], { cwd: source })
+  // Disable commit signing in the sandbox: a developer's global git config may enable
+  // `commit.gpgsign` against an interactive signer (e.g. a 1Password/SSH agent), which
+  // cannot complete in a headless test run and would hang/fail `git commit`. The test
+  // repo must be hermetic, so we force signing off regardless of the host config.
+  await runCommand(gitBin, ['config', 'commit.gpgsign', 'false'], { cwd: source })
   // Bare remote = a valid push/fetch target with no working tree of its own.
   await runCommand(gitBin, ['init', '--bare', remote])
   await git.addRemote('origin', remote)

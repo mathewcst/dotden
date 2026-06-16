@@ -84,6 +84,19 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['apply']>
     },
+    // → IPC channel 'den:tree'
+    tree() {
+      return ipcRenderer.invoke('den:tree', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['tree']>
+    },
+    // → IPC channel 'den:diff'
+    diff(targetPath) {
+      return ipcRenderer.invoke('den:diff', {
+        targetPath,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['diff']>
+    },
   },
   discover: {
     // → IPC channel 'discover:scan'

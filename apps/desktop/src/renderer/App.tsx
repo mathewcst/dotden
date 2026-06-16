@@ -41,7 +41,9 @@ export function App() {
           Environment B
         </button>
       </div>
-      <Workspace role={role} />
+      {/* Key by role so switching environments remounts the Workspace and resets all
+          of its state (the React `key` reset pattern), keeping the A/B thread clean. */}
+      <Workspace key={role} role={role} />
     </div>
   )
 }

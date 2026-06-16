@@ -38,6 +38,8 @@ describe('IpcBridge', () => {
       syncPush: vi.fn(async () => undefined),
       listIncomingClean: vi.fn(async () => []),
       applyIncoming: vi.fn(async () => ({ applied: [] })),
+      fileTree: vi.fn(async () => ({ files: [], workspaces: [] })),
+      fileDiff: vi.fn(async () => ''),
     }
     const { registrar, handlers } = fakeRegistrar()
     registerIpcBridge(registrar, {
@@ -61,12 +63,21 @@ describe('IpcBridge', () => {
       targetPaths: ['.zshrc'],
       _trace: { traceId: 't5' },
     } as never)
+    // The three-pane view queries (issue 1-07): read-only, still _trace-correlated.
+    await handlers.get('den:tree')?.({}, { _trace: { traceId: 't6' } } as never)
+    await handlers.get('den:diff')?.({}, {
+      targetPath: '.zshrc',
+      _trace: { traceId: 't7' },
+    } as never)
 
     expect(den.trackFile).toHaveBeenCalledWith('.zshrc', 't1')
     expect(den.commitTracked).toHaveBeenCalledWith(['.zshrc'], 't2')
     expect(den.syncPush).toHaveBeenCalledWith('t3')
     expect(den.listIncomingClean).toHaveBeenCalledWith('t4')
     expect(den.applyIncoming).toHaveBeenCalledWith(['.zshrc'], 't5')
+    // tree/diff are read-only: the bridge asserts _trace but does not forward an id.
+    expect(den.fileTree).toHaveBeenCalledTimes(1)
+    expect(den.fileDiff).toHaveBeenCalledWith('.zshrc')
   })
 
   it('forwards the _trace envelope into the RemoteClient on every remote:* channel', async () => {

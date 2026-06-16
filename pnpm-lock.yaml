@@ -140,6 +140,9 @@ catalogs:
       specifier: ^19.2.3
       version: 19.2.7
 
+patchedDependencies:
+  '@pierre/trees@1.0.0-beta.4': 84a841ea0310b67913776c5a65e629714f373e6ae03cd268c6fbdd267ac31de4
+
 importers:
 
   .:
@@ -173,7 +176,10 @@ importers:
         version: 1.2.10(@shikijs/themes@4.2.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@pierre/trees':
         specifier: 1.0.0-beta.4
-        version: 1.0.0-beta.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 1.0.0-beta.4(patch_hash=84a841ea0310b67913776c5a65e629714f373e6ae03cd268c6fbdd267ac31de4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@shikijs/langs':
+        specifier: 4.2.0
+        version: 4.2.0
       class-variance-authority:
         specifier: catalog:desktop
         version: 0.7.1
@@ -192,6 +198,9 @@ importers:
       react-dom:
         specifier: catalog:react19
         version: 19.2.7(react@19.2.7)
+      shiki:
+        specifier: 4.2.0
+        version: 4.2.0
       tailwind-merge:
         specifier: catalog:desktop
         version: 3.6.0
@@ -5523,7 +5532,7 @@ snapshots:
       react-dom: 19.2.7(react@19.2.7)
       shiki: 4.2.0
 
-  '@pierre/trees@1.0.0-beta.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@pierre/trees@1.0.0-beta.4(patch_hash=84a841ea0310b67913776c5a65e629714f373e6ae03cd268c6fbdd267ac31de4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       preact: 11.0.0-beta.0
       preact-render-to-string: 6.6.5(preact@11.0.0-beta.0)

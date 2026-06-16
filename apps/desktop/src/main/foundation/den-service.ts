@@ -28,9 +28,15 @@ import {
   type CommitMessageTemplate,
   type RenderedCommitMessage,
 } from './commit-message-renderer.js'
-import { MyenvStore, type EnvironmentEntry, type WorkspacesDoc } from './myenv-store.js'
+import {
+  DEFAULT_WORKSPACE_ID,
+  MyenvStore,
+  type EnvironmentEntry,
+  type WorkspacesDoc,
+} from './myenv-store.js'
 import type { OperationTracer } from './operation-tracer.js'
 import { SyncEngine, type IncomingFile } from './sync-engine.js'
+import { parseChezmoiStatus, type FileGitStatus } from './chezmoi-status.js'
 
 /** Construction wiring for a {@link DenService}, bound to one environment's dirs. */
 export interface DenServiceOptions {
@@ -88,6 +94,44 @@ export interface IncomingReviewItem {
 export interface ApplyResult {
   /** The destination-relative File paths actually written to disk by `chezmoi apply`. */
   readonly applied: readonly string[]
+}
+
+/**
+ * One managed File in the three-pane tree view (issue 1-07), carrying everything the
+ * renderer needs to place, decorate, and inspect the row WITHOUT a second round-trip:
+ * its path, Workspace placement, local-axis git status, and whether it is muted.
+ */
+export interface FileTreeEntry {
+  /** Destination-relative File path (e.g. `.zshrc`) — the `@pierre/trees` row id. */
+  readonly targetPath: string
+  /** The Workspace this File belongs to, from the synced `.myenv/` placements. */
+  readonly workspaceId: string
+  /**
+   * The File's local-axis git status (M/A/D/R/U → modified/added/deleted/…), or `null`
+   * when chezmoi reports no change for it. The renderer maps these onto `setGitStatus`
+   * so each row shows the coloured status letter (the 1-00 spike recipe).
+   */
+  readonly status: FileGitStatus['status'] | null
+  /**
+   * `true` when this File is scoped out of THIS environment's OS and therefore
+   * ignored by chezmoi here (it appears in `chezmoi ignored`). The renderer renders
+   * the row **muted/ignored** (issue 1-07 owns the muted rendering; the OS-Scope rule
+   * that produces it lands in issue 1-15).
+   */
+  readonly muted: boolean
+}
+
+/**
+ * The whole local Workspace view for the three-pane tree (issue 1-07): the managed
+ * Files (placed, decorated, muted-or-not) plus the Workspaces they live in. Computed
+ * in one IPC call so the tree, the git-status axis, and the change dots all derive
+ * from a single consistent snapshot.
+ */
+export interface FileTreeView {
+  /** Every managed File, with its placement + local status + muted flag. */
+  readonly files: readonly FileTreeEntry[]
+  /** The Workspaces in the Den (so the tree can group/section by Workspace). */
+  readonly workspaces: WorkspacesDoc['workspaces']
 }
 
 /**
@@ -312,6 +356,64 @@ export class DenService {
       span?.end('error')
       throw error
     }
+  }
+
+  /**
+   * Build the three-pane tree view (issue 1-07): the managed Files joined with their
+   * Workspace placement, local-axis git status, and out-of-OS-Scope muted flag.
+   *
+   * Faithful composition over chezmoi (ADR 0003): the File set is `chezmoi managed
+   * --include files`, the local status axis is {@link parseChezmoiStatus} over
+   * `chezmoi status`, the muted set is `chezmoi ignored`, and the Workspace placement
+   * comes from the synced `.myenv/`. Read-only — it mutates nothing and is therefore
+   * NOT a traced Operation (the IpcBridge still asserts the `_trace` envelope so the
+   * call is correlated; the `traceId` is accepted to keep the IPC surface uniform).
+   *
+   * Files that have never been placed (managed on disk but missing from `.myenv/`)
+   * still appear, defaulted to the default Workspace, so a managed File never silently
+   * disappears from the tree (never fail silently).
+   *
+   * No `traceId` parameter: this read-only query emits no wide event, and the
+   * IpcBridge already asserts the `_trace` envelope for the channel (like the other
+   * read-only `discover:*`/`env:*` channels) — there is nothing here to correlate it to.
+   *
+   * @returns The Files (placed/decorated/muted) plus the Workspaces, for the renderer.
+   */
+  async fileTree(): Promise<FileTreeView> {
+    const [managed, statusRaw, ignored, workspacesDoc] = await Promise.all([
+      this.chezmoi.managed(),
+      this.chezmoi.status(),
+      this.chezmoi.ignoredPaths(),
+      this.store.readWorkspaces(),
+    ])
+    // Index the local-axis status + the muted set + placements for O(1) per-File joins.
+    const statusByPath = new Map(parseChezmoiStatus(statusRaw).map((s) => [s.path, s.status]))
+    const ignoredSet = new Set(ignored)
+    const placementOf = new Map(workspacesDoc.placements.map((p) => [p.targetPath, p.workspaceId]))
+    const files: FileTreeEntry[] = managed.map((targetPath) => ({
+      targetPath,
+      // Default an unplaced managed File to the default Workspace rather than dropping it.
+      workspaceId: placementOf.get(targetPath) ?? DEFAULT_WORKSPACE_ID,
+      status: statusByPath.get(targetPath) ?? null,
+      muted: ignoredSet.has(targetPath),
+    }))
+    return { files, workspaces: workspacesDoc.workspaces }
+  }
+
+  /**
+   * Real unified diff for the selected File in the center pane (issue 1-07).
+   *
+   * Maps to `chezmoi diff <file>` (the source→destination diff chezmoi would apply),
+   * which the renderer feeds straight into `@pierre/diffs` `PatchDiff`. Read-only, so
+   * like {@link fileTree} it emits no wide event (the IpcBridge still asserts the
+   * `_trace` envelope for the channel). An empty string means the File is unchanged
+   * (the pane shows that honestly rather than a fake patch).
+   *
+   * @param targetPath Destination-relative File path to diff (e.g. `.zshrc`).
+   * @returns chezmoi's raw unified diff for the File (empty when unchanged).
+   */
+  async fileDiff(targetPath: string): Promise<string> {
+    return this.chezmoi.diff([targetPath])
   }
 
   /** Read the synced model (this environment's registry entry + the Workspace doc). */

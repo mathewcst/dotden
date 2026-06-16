@@ -1,0 +1,17 @@
+diff --git a/dist/model/virtualization.js b/dist/model/virtualization.js
+index 2a934c6bf58226ba004e4c88dbbb1cc760e80ccd..c320a147bd9d98e7c0c871df012383f9541b42af 100644
+--- a/dist/model/virtualization.js
++++ b/dist/model/virtualization.js
+@@ -52,7 +52,11 @@ function computeStickyWindowLayout({ itemCount, itemHeight, range, viewportHeigh
+ 	};
+ 	const offsetHeight = range.start * itemHeight;
+ 	const windowHeight = (range.end - range.start + 1) * itemHeight;
+-	const randomStickyOffset = Math.random() * itemHeight >> 0;
++	// dotden patch (issue 1-07): the upstream beta added `Math.random() * itemHeight`
++	// jitter to the sticky-folder inset. That non-determinism makes the sticky header
++	// shimmer on every scroll/resize and breaks snapshot/visual stability. Pin it to 0
++	// so the sticky inset is purely a function of the viewport/window geometry.
++	const randomStickyOffset = 0;
+ 	return {
+ 		totalHeight,
+ 		offsetHeight,

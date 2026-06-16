@@ -157,6 +157,46 @@ export class ChezmoiAdapter {
   }
 
   /**
+   * List the destination-relative paths of every **File** chezmoi manages.
+   *
+   * Maps to `chezmoi managed --include files` (the `--include files` filter drops
+   * managed directories so the caller gets only the leaf Files the three-pane tree
+   * renders, issue 1-07). Paths are home-relative (`.zshrc`, `.config/nvim/init.lua`)
+   * — the same id space as {@link status}/{@link diff}, so the renderer keys the tree,
+   * the git-status axis, and the diff off one consistent path set.
+   *
+   * @returns The managed File paths, one per non-empty output line, sorted by chezmoi.
+   * @throws CommandFailedError if chezmoi exits non-zero.
+   */
+  async managed(): Promise<string[]> {
+    const { stdout } = await this.chezmoi(['managed', '--include', 'files'])
+    return stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+  }
+
+  /**
+   * List the destination-relative paths chezmoi is **ignoring** in this environment.
+   *
+   * Maps to `chezmoi ignored`. These are the Files a `.chezmoiignore` rule excludes
+   * from Apply here — in dotden that is the OS-Scope "scoped out of this OS" set
+   * (issue 1-15). The three-pane tree renders these rows **muted/ignored** (issue
+   * 1-07 owns that rendering; the rule that drives it is compiled by
+   * {@link writeOsScopeIgnore}). Returns an empty list when nothing is ignored.
+   *
+   * @returns The ignored destination-relative paths, one per non-empty output line.
+   * @throws CommandFailedError if chezmoi exits non-zero.
+   */
+  async ignoredPaths(): Promise<string[]> {
+    const { stdout } = await this.chezmoi(['ignored'])
+    return stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+  }
+
+  /**
    * Show the diff chezmoi would apply from the source state to the destination.
    *
    * Maps to `chezmoi diff [<dest>…]`.
