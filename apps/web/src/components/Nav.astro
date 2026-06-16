@@ -1,0 +1,46 @@
+---
+import { SITE } from '../consts'
+import DownloadButton from './DownloadButton.astro'
+import Icon from './Icon.astro'
+import Wordmark from './Wordmark.astro'
+
+/** Sticky top navigation (Figma node 731:2). */
+const links = [
+  { label: 'Features', href: '#features' },
+  { label: 'How it works', href: '#how-it-works' },
+  { label: 'Open source', href: SITE.github },
+]
+---
+
+<header class="border-border bg-background/80 sticky top-0 z-50 border-b backdrop-blur-md">
+  <nav class="mx-auto flex max-w-[1440px] items-center justify-between px-6 py-5 md:px-8">
+    <a href="/" class="shrink-0" aria-label="dotden home">
+      <Wordmark size={22} />
+    </a>
+
+    <div class="text-muted-foreground hidden items-center gap-8 text-sm font-medium md:flex">
+      {
+        links.map((link) => (
+          <a href={link.href} class="hover:text-dd-ink-100 transition-colors">
+            {link.label}
+          </a>
+        ))
+      }
+    </div>
+
+    <div class="flex items-center gap-2">
+      <a
+        href={SITE.github}
+        class="dd-cta border-border text-dd-ink-200 hover:border-dd-ink-600 hover:text-dd-ink-100 hidden items-center gap-[7px] rounded-lg border px-[14px] py-[9px] text-sm font-semibold sm:inline-flex"
+      >
+        <Icon name="github" size={16} />
+        View source
+      </a>
+      <DownloadButton
+        compact
+        iconSize={16}
+        class="dd-cta bg-primary text-primary-foreground hover:bg-dd-ember-600 hover:shadow-ember inline-flex items-center rounded-lg px-4 py-[9px] text-sm font-semibold"
+      />
+    </div>
+  </nav>
+</header>

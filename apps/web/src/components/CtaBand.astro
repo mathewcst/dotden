@@ -1,0 +1,35 @@
+---
+import { SITE } from '../consts'
+import Icon from './Icon.astro'
+import DownloadButton from './DownloadButton.astro'
+
+/** Closing call-to-action band (Figma node 738:2). */
+---
+
+<section class="px-6 pt-12 pb-24 md:px-20">
+  <div
+    data-reveal
+    class="bg-card border-border mx-auto flex w-full max-w-[1180px] flex-col items-center gap-5 rounded-[22px] border px-8 py-16 text-center sm:px-16 sm:py-14"
+  >
+    <h2
+      class="text-foreground text-3xl leading-[1.13] font-semibold tracking-[-0.03em] sm:text-[46px]"
+    >
+      your environment, <span class="text-primary">anywhere</span>.
+    </h2>
+    <p class="text-muted-foreground max-w-[560px] text-[17px] leading-[1.55] sm:text-lg">
+      Free and open source. Get dotden on every computer you work from.
+    </p>
+    <div class="mt-[10px] flex flex-col items-center gap-3 sm:flex-row">
+      <DownloadButton
+        class="dd-cta bg-primary text-primary-foreground hover:bg-dd-ember-600 hover:shadow-ember inline-flex items-center gap-[9px] rounded-xl py-[13px] pr-[22px] pl-5 text-[15px] font-semibold"
+      />
+      <a
+        href={SITE.github}
+        class="dd-cta border-border text-foreground hover:border-dd-ink-600 hover:bg-dd-ink-850 inline-flex items-center gap-[9px] rounded-xl border py-[13px] pr-5 pl-[18px] text-[15px] font-semibold"
+      >
+        <Icon name="github" size={17} />
+        View source
+      </a>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,29 @@
+---
+import { Image } from 'astro:assets'
+import appHome from '../assets/screens/app-home.png'
+
+/**
+ * Hero media — the full app window, exported at 2x from the source Figma
+ * screen (node 114:368) rather than from the marketing mock so it stays crisp.
+ * Optimized to responsive WebP at build via astro:assets (Sharp).
+ * Figma node 733:2 / App preview 743:690 (956×608 frame, ember-tinted shadow).
+ */
+---
+
+<section class="px-6 md:px-20">
+  <div class="mx-auto -mt-20 w-full max-w-[1000px] overflow-hidden">
+    <div data-reveal class="shadow-app relative top-20 w-full overflow-hidden">
+      <Image
+        src={appHome}
+        alt="The dotden desktop app showing uncommitted changes to a zsh config, with a workspace sidebar, a diff view, and an inspector listing incoming changes."
+        format="webp"
+        quality={82}
+        widths={[956, 1440, 1912]}
+        sizes="(min-width: 1024px) 956px, 100vw"
+        loading="eager"
+        fetchpriority="high"
+        class="size-full object-cover object-top"
+      />
+    </div>
+  </div>
+</section>

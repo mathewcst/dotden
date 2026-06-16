@@ -1,0 +1,45 @@
+---
+import Icon from './Icon.astro'
+import { SITE } from '../consts'
+
+/**
+ * Primary download CTA that adapts its label + brand glyph to the visitor's OS.
+ *
+ * It renders all four variants (default / mac / windows / linux) up front; the
+ * inline detector in BaseLayout sets `html[data-os]` and the `.dd-os-*` rules in
+ * global.css reveal the matching one. This keeps the swap server-rendered and
+ * CSS-only — no layout shift, and a graceful "Download" fallback when JS is off
+ * or the platform is unknown (e.g. mobile).
+ *
+ * `compact` (nav) keeps the label a plain "Download"; otherwise it reads
+ * "Download for macOS / Windows / Linux" like a typical product hero.
+ */
+interface Props {
+  /** Tailwind classes for the <a> (color, padding, radius…). */
+  class: string
+  /** Plain "Download" label instead of "Download for <OS>". */
+  compact?: boolean
+  iconSize?: number
+}
+
+const { class: className, compact = false, iconSize = 17 } = Astro.props
+
+// slot key → [icon name, OS suffix]. `default` is the no-JS / unknown fallback.
+const variants = [
+  { slot: 'default', icon: 'download', os: '' },
+  { slot: 'mac', icon: 'apple', os: 'macOS' },
+  { slot: 'windows', icon: 'windows', os: 'Windows' },
+  { slot: 'linux', icon: 'linux', os: 'Linux' },
+] as const
+---
+
+<a href={SITE.download} class={className}>
+  {
+    variants.map((v) => (
+      <span data-os-slot={v.slot} class="items-center gap-[9px]">
+        <Icon name={v.icon} size={iconSize} />
+        {compact || !v.os ? 'Download' : `Download for ${v.os}`}
+      </span>
+    ))
+  }
+</a>

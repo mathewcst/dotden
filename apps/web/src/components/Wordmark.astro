@@ -1,0 +1,30 @@
+---
+/**
+ * The dotden lockup: the ember "den" mark (a rounded square with a hollow
+ * opening, from docs/design-system/assets/icon.svg) next to the wordmark.
+ */
+interface Props {
+  /** Mark edge length in px; the wordmark scales alongside it. */
+  size?: number
+  class?: string
+}
+
+const { size = 22, class: className = '' } = Astro.props
+---
+
+<span class:list={['inline-flex items-center gap-2', className]}>
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 22 22"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+  >
+    <rect width="22" height="22" rx="6" fill="#E76A33"></rect>
+    <circle cx="11" cy="11" r="4" fill="#1A1208"></circle>
+  </svg>
+  <span class="text-dd-ink-100 font-semibold tracking-tight" style={`font-size:${size * 0.77}px`}
+    >dotden</span
+  >
+</span>

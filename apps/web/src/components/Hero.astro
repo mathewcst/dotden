@@ -1,0 +1,59 @@
+---
+import { SITE } from '../consts'
+import Icon from './Icon.astro'
+import DownloadButton from './DownloadButton.astro'
+
+/** Hero headline + CTAs (Figma node 732:2). */
+---
+
+<section class="flex flex-col items-center px-6 pt-24 pb-16 text-center md:px-20">
+  <!-- eyebrow pill -->
+  <div
+    data-rise
+    style="--rise-i: 0"
+    class="border-border flex items-center gap-2 rounded-full border py-[6px] pr-[14px] pl-3"
+  >
+    <span data-breathe class="bg-primary size-[6px] rounded-full"></span>
+    <span class="text-dd-ink-300 font-mono text-[11.5px] font-medium tracking-[0.4px]">
+      Open source · private by design
+    </span>
+  </div>
+
+  <h1
+    data-rise
+    style="--rise-i: 1"
+    class="text-foreground mt-6 max-w-[900px] text-[2.5rem] leading-[1.06] font-semibold tracking-[-0.04em] text-balance sm:text-5xl lg:text-[62px]"
+  >
+    Make yourself at home in <span class="text-primary">any environment</span>.
+  </h1>
+
+  <p
+    data-rise
+    style="--rise-i: 2"
+    class="text-muted-foreground mt-6 max-w-[640px] text-[17px] leading-[1.6] text-pretty sm:text-[19px]"
+  >
+    Your dotfiles, configs, and preferences, kept in sync across every computer you sit down at — in
+    a repository you own, with no command line in sight.
+  </p>
+
+  <div data-rise style="--rise-i: 3" class="mt-8 flex flex-col items-center gap-3 sm:flex-row">
+    <DownloadButton
+      class="dd-cta bg-primary text-primary-foreground hover:bg-dd-ember-600 hover:shadow-ember inline-flex items-center gap-[9px] rounded-xl py-[13px] pr-[22px] pl-5 text-[15px] font-semibold"
+    />
+    <a
+      href={SITE.github}
+      class="dd-cta border-border text-foreground hover:border-dd-ink-600 hover:bg-dd-ink-850 inline-flex items-center gap-[9px] rounded-xl border py-[13px] pr-5 pl-[18px] text-[15px] font-semibold"
+    >
+      <Icon name="github" size={17} />
+      View source
+    </a>
+  </div>
+
+  <p
+    data-rise
+    style="--rise-i: 4"
+    class="text-muted-foreground mt-6 font-mono text-xs tracking-[0.3px]"
+  >
+    Free and open source · macOS, Linux &amp; Windows
+  </p>
+</section>

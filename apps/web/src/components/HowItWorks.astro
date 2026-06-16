@@ -1,0 +1,48 @@
+---
+/** Three numbered steps (Figma node 737:9546). */
+const steps = [
+  {
+    title: 'Connect a repository',
+    body: "Point dotden at a private repository you own. That's where your Den lives — portable and yours.",
+  },
+  {
+    title: 'Choose what to sync',
+    body: 'Pick the dotfiles, configs, and folders that make a computer feel like yours.',
+  },
+  {
+    title: 'Sit down anywhere',
+    body: "Open dotden on the next computer, review what's incoming, and apply your Den.",
+  },
+]
+---
+
+<section id="how-it-works" class="dd-divide scroll-mt-24 px-6 pt-20 pb-20 md:px-20">
+  <div class="mx-auto flex max-w-[1100px] flex-col items-center gap-13">
+    <div data-reveal class="flex flex-col items-center gap-[14px] text-center">
+      <p class="text-primary font-mono text-xs font-medium tracking-[1.4px]">HOW IT WORKS</p>
+      <h2
+        class="text-foreground max-w-[760px] text-3xl leading-[1.15] font-semibold tracking-[-0.03em] sm:text-[38px]"
+      >
+        From zero to synced in three steps.
+      </h2>
+    </div>
+
+    <ol data-reveal class="grid w-full gap-8 md:grid-cols-3">
+      {
+        steps.map((step, i) => (
+          <li class="group flex flex-col items-start gap-4">
+            <span class="bg-primary text-primary-foreground dd-cta group-hover:shadow-ember flex size-[42px] items-center justify-center rounded-full text-lg font-semibold">
+              {i + 1}
+            </span>
+            <div class="flex flex-col gap-[9px]">
+              <h3 class="text-foreground text-[19px] font-semibold tracking-[-0.3px]">
+                {step.title}
+              </h3>
+              <p class="text-muted-foreground text-[14.5px] leading-[1.6]">{step.body}</p>
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>

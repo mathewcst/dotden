@@ -1,7 +1,61 @@
 ---
 import '../styles/global.css'
 
-const { title = 'dotden' } = Astro.props
+/**
+ * Document shell for the dotden marketing site.
+ *
+ * Loads the Geist / Geist Mono families used across the product (so the page
+ * chrome matches the embedded app screenshots) and wires up the favicon pack
+ * shipped in docs/design-system/assets.
+ */
+import { SITE } from '../consts'
+
+interface Props {
+  title?: string
+  description?: string
+  /** Social-share image, resolved against the site origin. */
+  image?: string
+}
+
+const {
+  title = 'dotden — your environment, anywhere.',
+  description = 'Keep your dotfiles, configs, and preferences in sync across every computer you sit down at — in a Git repository you own, with no command line in sight.',
+  image = '/og.png',
+} = Astro.props
+
+const canonical = new URL(Astro.url.pathname, Astro.site)
+const ogImage = new URL(image, Astro.site)
+
+/**
+ * Structured data so search engines and LLMs can read what dotden *is* without
+ * scraping the copy: a free, cross-platform developer app for syncing dotfiles.
+ * Kept in sync with the visible page — change one, change the other.
+ */
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'SoftwareApplication',
+      name: 'dotden',
+      description,
+      url: SITE.url,
+      downloadUrl: SITE.download,
+      applicationCategory: 'DeveloperApplication',
+      operatingSystem: 'macOS, Linux, Windows',
+      softwareRequirements: 'A Git repository you own',
+      isAccessibleForFree: true,
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+      license: 'https://opensource.org/licenses/MIT',
+      author: { '@type': 'Organization', name: 'dotden', url: SITE.url },
+    },
+    {
+      '@type': 'WebSite',
+      name: 'dotden',
+      url: SITE.url,
+      description,
+    },
+  ],
+}
 ---
 
 <!doctype html>
@@ -9,7 +63,73 @@ const { title = 'dotden' } = Astro.props
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    {
+      /* Detect the visitor's desktop OS before paint so the download CTAs can show
+        the right label/glyph (see DownloadButton + global.css). Runs synchronously
+        in <head>; mobile/unknown platforms fall through to the neutral default. */
+    }
+    <script is:inline>
+      ;(function () {
+        const ua = navigator.userAgentData
+        const p = (
+          (ua && ua.platform) ||
+          navigator.platform ||
+          navigator.userAgent ||
+          ''
+        ).toLowerCase()
+        let os = ''
+        if (/windows|win32|win64/.test(p)) os = 'windows'
+        else if (/mac/.test(p) && !/iphone|ipad|ipod/.test(p)) os = 'mac'
+        else if (/linux|x11|cros/.test(p) && !/android/.test(p)) os = 'linux'
+        if (os) document.documentElement.setAttribute('data-os', os)
+      })()
+    </script>
+
     <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta name="theme-color" content="#100E0B" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="application-name" content="dotden" />
+    <meta name="generator" content={Astro.generator} />
+
+    <!-- Favicon pack (docs/design-system/assets/favicon.zip) -->
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="dotden" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="dotden — make yourself at home in any environment" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+
+    <!-- Structured data (SEO + LLM grounding) -->
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+
+    <!-- Geist + Geist Mono (matches the desktop app's type system) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
     <slot />

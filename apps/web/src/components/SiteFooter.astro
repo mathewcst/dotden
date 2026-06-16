@@ -1,0 +1,74 @@
+---
+import { SITE } from '../consts'
+import Wordmark from './Wordmark.astro'
+
+/** Footer (Figma node 739:2). */
+const columns = [
+  {
+    heading: 'Product',
+    links: [
+      { label: 'Features', href: '#features' },
+      { label: 'How it works', href: '#how-it-works' },
+      { label: 'Download', href: SITE.download },
+    ],
+  },
+  {
+    heading: 'Resources',
+    links: [
+      { label: 'Documentation', href: SITE.docs },
+      { label: 'Source', href: SITE.github },
+      { label: 'Community', href: `${SITE.github}/discussions` },
+    ],
+  },
+  {
+    heading: 'Project',
+    links: [
+      { label: 'Roadmap', href: `${SITE.github}/milestones` },
+      { label: 'Changelog', href: `${SITE.github}/releases` },
+      { label: 'License', href: `${SITE.github}/blob/main/LICENSE` },
+    ],
+  },
+]
+---
+
+<footer class="bg-sidebar border-border border-t px-6 pt-14 pb-10 md:px-20">
+  <div class="mx-auto flex max-w-[1280px] flex-col gap-9">
+    <div class="flex flex-col justify-between gap-10 md:flex-row">
+      <div class="flex flex-col gap-4">
+        <Wordmark size={22} />
+        <p class="text-muted-foreground max-w-[260px] text-sm leading-normal">
+          Keep your setup in sync — private, portable, yours.
+        </p>
+      </div>
+
+      <div class="flex flex-wrap gap-12 sm:gap-[72px]">
+        {
+          columns.map((column) => (
+            <div class="flex flex-col gap-[14px]">
+              <p class="text-dd-ink-200 text-[13px] font-medium tracking-[0.2px]">
+                {column.heading}
+              </p>
+              {column.links.map((link) => (
+                <a
+                  href={link.href}
+                  class="text-muted-foreground hover:text-dd-ink-100 text-sm transition-colors"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </div>
+          ))
+        }
+      </div>
+    </div>
+
+    <div class="bg-border h-px w-full"></div>
+
+    <div
+      class="text-muted-foreground flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center"
+    >
+      <p class="text-[13px]">© 2026 dotden · Open source</p>
+      <p class="font-mono text-xs tracking-[0.3px]">your environment, anywhere.</p>
+    </div>
+  </div>
+</footer>

@@ -1,0 +1,51 @@
+---
+import Icon from './Icon.astro'
+
+/** "Why dotden" — three value cards (Figma node 737:2). */
+const props = [
+  {
+    icon: 'shield',
+    title: 'Private by design',
+    body: 'Your files live in a Git repository you own. dotden never stores them on a server — it just keeps them in sync.',
+  },
+  {
+    icon: 'refresh',
+    title: 'Every environment in sync',
+    body: 'Commit once and your setup follows you to the next computer. macOS, Linux, and Windows, side by side.',
+  },
+  {
+    icon: 'window',
+    title: 'No command line needed',
+    body: 'A clean desktop app for your dotfiles — all the safety of version control, none of the yak-shaving.',
+  },
+] as const
+---
+
+<section id="features" class="dd-divide scroll-mt-24 px-6 py-24 md:px-20">
+  <div class="mx-auto flex max-w-[1180px] flex-col items-center gap-12">
+    <div data-reveal class="flex flex-col items-center gap-[14px] text-center">
+      <p class="text-primary font-mono text-xs font-medium tracking-[1.4px]">WHY DOTDEN</p>
+      <h2
+        class="text-foreground max-w-[760px] text-3xl leading-[1.15] font-semibold tracking-[-0.03em] sm:text-[38px]"
+      >
+        Everything that makes a computer yours.
+      </h2>
+    </div>
+
+    <div data-reveal class="grid w-full gap-5 md:grid-cols-3">
+      {
+        props.map((prop) => (
+          <div class="dd-card bg-card border-border group flex flex-col gap-4 rounded-2xl border p-7">
+            <div class="bg-dd-ember-950 text-primary flex size-[46px] items-center justify-center rounded-[12px] transition-transform duration-300 group-hover:scale-105">
+              <Icon name={prop.icon} size={22} />
+            </div>
+            <div class="flex flex-col gap-2">
+              <h3 class="text-foreground text-lg font-semibold tracking-[-0.2px]">{prop.title}</h3>
+              <p class="text-muted-foreground text-[14.5px] leading-normal">{prop.body}</p>
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>

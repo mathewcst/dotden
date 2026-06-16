@@ -1,29 +1,26 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro'
+import Nav from '../components/Nav.astro'
+import Hero from '../components/Hero.astro'
+import AppShowcase from '../components/AppShowcase.astro'
+import ValueProps from '../components/ValueProps.astro'
+import FeatureManaging from '../components/FeatureManaging.astro'
+import HowItWorks from '../components/HowItWorks.astro'
+import CtaBand from '../components/CtaBand.astro'
+import SiteFooter from '../components/SiteFooter.astro'
 ---
 
-<BaseLayout title="dotden">
-  <main class="bg-dwelling-paper text-dwelling-ink min-h-screen px-6 py-20">
-    <section class="mx-auto grid max-w-5xl gap-10 md:grid-cols-[1.1fr_0.9fr] md:items-center">
-      <div class="space-y-6">
-        <p class="text-dwelling-ember text-sm font-medium tracking-[0.24em] uppercase">dotden</p>
-        <h1 class="max-w-3xl text-5xl leading-tight font-semibold tracking-tight md:text-7xl">
-          Your development dwelling, kept in sync.
-        </h1>
-        <p class="text-dwelling-ink/70 max-w-2xl text-lg leading-8">
-          Static marketing shell for the dotden desktop app. This page intentionally contains no
-          product features yet.
-        </p>
-      </div>
-      <div
-        class="border-dwelling-ink/10 shadow-dwelling-ember/10 rounded-[2rem] border bg-white/60 p-6 shadow-2xl"
-      >
-        <div class="bg-dwelling-night text-dwelling-paper rounded-[1.5rem] p-6">
-          <div class="bg-dwelling-flame mb-12 h-2 w-20 rounded-full"></div>
-          <p class="text-dwelling-paper/60 text-sm">Astro 6 · Tailwind v4 · static output</p>
-          <p class="mt-4 text-2xl font-semibold">Toolchain proof, not a feature surface.</p>
-        </div>
-      </div>
-    </section>
+<BaseLayout>
+  <Nav />
+  <main>
+    <div class="bg-grid">
+      <Hero />
+      <AppShowcase />
+    </div>
+    <ValueProps />
+    <FeatureManaging />
+    <HowItWorks />
+    <CtaBand />
   </main>
+  <SiteFooter />
 </BaseLayout>

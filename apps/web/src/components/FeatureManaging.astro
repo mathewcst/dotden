@@ -1,0 +1,61 @@
+---
+import { Image } from 'astro:assets'
+import appHistory from '../assets/screens/app-history.png'
+import Icon from './Icon.astro'
+
+/**
+ * "Managed, not just set up" — copy column + the File-history app screen,
+ * exported at 2x from source node 320:4252 and optimized to responsive WebP
+ * at build via astro:assets (Sharp). Figma node 745:129.
+ */
+const points = [
+  'Review every change before it syncs',
+  'Commit and roll back any file',
+  'Apply updates across every environment',
+]
+---
+
+<section class="dd-divide px-6 py-16 md:px-20">
+  <div class="mx-auto flex max-w-[1180px] flex-col items-center gap-16 lg:flex-row">
+    <div data-reveal class="flex w-full flex-col items-start gap-[18px] lg:max-w-[420px]">
+      <p class="text-primary font-mono text-xs font-medium tracking-[1.4px]">
+        MANAGED, NOT JUST SET UP
+      </p>
+      <h2
+        class="text-foreground text-3xl leading-[1.18] font-semibold tracking-[-0.025em] sm:text-[34px]"
+      >
+        Set up in a minute. Managed for good.
+      </h2>
+      <p class="text-muted-foreground text-base leading-[1.62]">
+        Point dotden at a repository you own and pick what to track — then it's synced. From there,
+        dotden handles the day-to-day: every change reviewed, committed, and applied across your
+        environments.
+      </p>
+      <ul class="mt-[6px] flex flex-col gap-3">
+        {
+          points.map((point) => (
+            <li class="text-dd-ink-200 flex items-center gap-[11px] text-[15px] font-medium">
+              <span class="text-primary shrink-0">
+                <Icon name="check" size={18} />
+              </span>
+              {point}
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+
+    <div data-reveal class="dd-window w-full overflow-hidden lg:flex-1">
+      <Image
+        src={appHistory}
+        alt="The dotden version history view for a zsh config, showing past commits and a diff of one selected version with a button to restore it."
+        format="webp"
+        quality={82}
+        widths={[587, 900, 1392]}
+        sizes="(min-width: 1024px) 696px, 100vw"
+        loading="lazy"
+        class="size-full object-cover object-top"
+      />
+    </div>
+  </div>
+</section>

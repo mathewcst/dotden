@@ -1,0 +1,19 @@
+# dotden
+
+> dotden is a free, open-source, cross-platform desktop app that keeps your dotfiles, configs, and preferences in sync across every computer you work on — stored in a Git repository you own, with no command line required. It is a friendly graphical wrapper around chezmoi.
+
+dotden manages your whole environment (your "Den") across machines. You connect a private Git repository you own, choose which dotfiles and folders to track, and dotden keeps them synced: every change is reviewed before it applies, committed to version control, and can be rolled back. It runs on macOS, Linux, and Windows.
+
+Key facts:
+- Free and open source (MIT).
+- Your files live in a Git repository you own — dotden never stores them on a server.
+- No command line needed; it is a desktop GUI over chezmoi.
+- Review, commit, roll back, and apply changes across environments from one app.
+
+## Pages
+- [Homepage](https://dotden.app/): Product overview, features, and how it works.
+
+## Resources
+- [Source code](https://github.com/mathewcst/dotden): GitHub repository.
+- [Documentation](https://github.com/mathewcst/dotden#readme): README and docs.
+- [Download](https://github.com/mathewcst/dotden/releases/latest): Latest desktop builds.

@@ -1,26 +1,272 @@
 @import 'tailwindcss';
 
-@theme {
-  --color-dwelling-night: oklch(0.13 0.018 265);
-  --color-dwelling-ink: oklch(0.22 0.025 260);
-  --color-dwelling-paper: oklch(0.97 0.018 88);
-  --color-dwelling-flame: oklch(0.76 0.16 64);
-  --color-dwelling-ember: oklch(0.58 0.14 42);
+/* dotden marketing tokens — mirrored from the app's design system
+   (apps/desktop/src/renderer/index.css, Figma "dotDen" s9ajnbYy4cb4scVvpo1dd8).
+   The site is dark-only and warm-toned, matching the product chrome 1:1 so the
+   embedded app screenshots sit flush against the page. Two layers:
+     1. dd/* brand PRIMITIVES — warm-dark / ember palette, oklch.
+     2. shadcn SEMANTIC aliases — bare names → primitives (bg-primary, border-border…). */
+
+:root {
+  color-scheme: dark;
+
+  /* ── Layer 1 · dd/* primitives ─────────────────────────────────────── */
+
+  /* ink — warm neutral ramp (the spine of the UI) */
+  --dd-ink-990: oklch(0.1894 0.0229 72.29); /* #1A1208 */
+  --dd-ink-950: oklch(0.165 0.007 78.1); /* #100E0B — page background */
+  --dd-ink-900: oklch(0.1888 0.0093 75.06); /* #16130F — footer */
+  --dd-ink-850: oklch(0.2123 0.01 67.25); /* #1C1814 — cards */
+  --dd-ink-800: oklch(0.2378 0.0111 73.39); /* #221E19 */
+  --dd-ink-750: oklch(0.2638 0.0132 72.25); /* #29241E */
+  --dd-ink-700: oklch(0.2973 0.0151 71.48); /* #322C25 — borders */
+  --dd-ink-600: oklch(0.3539 0.0188 70.45); /* #423A31 */
+  --dd-ink-500: oklch(0.438 0.0208 67.24); /* #5A5046 */
+  --dd-ink-400: oklch(0.5733 0.0233 67.33); /* #82766A — muted text */
+  --dd-ink-300: oklch(0.6997 0.0263 71.34); /* #A99C8D */
+  --dd-ink-200: oklch(0.7979 0.0248 73.55); /* #C7BBAC */
+  --dd-ink-100: oklch(0.9092 0.0166 79.35); /* #E7E0D5 — foreground */
+  --dd-ink-50: oklch(0.9598 0.0119 79.78); /* #F6F1E9 */
+
+  /* ember — brand */
+  --dd-ember-300: oklch(0.7785 0.1215 52.33); /* #F4A06B */
+  --dd-ember-400: oklch(0.7141 0.1525 47.19); /* #EE8146 */
+  --dd-ember-500: oklch(0.6676 0.1695 42.28); /* #E76A33 — primary */
+  --dd-ember-600: oklch(0.6041 0.1711 40.46); /* #D2541F — hover */
+  --dd-ember-700: oklch(0.5216 0.1491 40.42); /* #AD4316 — active */
+  --dd-ember-900: oklch(0.275 0.0449 43.45); /* #3A2015 */
+  --dd-ember-950: oklch(0.2285 0.0337 40.95); /* #2A1710 — tinted icon surface */
+
+  /* ── Layer 2 · semantic shadcn aliases → primitives ────────────────── */
+  --background: var(--dd-ink-950);
+  --foreground: var(--dd-ink-100);
+  --card: var(--dd-ink-850);
+  --primary: var(--dd-ember-500);
+  --primary-foreground: var(--dd-ink-990);
+  --muted-foreground: var(--dd-ink-400);
+  --border: var(--dd-ink-700);
+  --sidebar: var(--dd-ink-900);
+  --ring: var(--dd-ember-500);
 }
 
-html {
-  background: var(--color-dwelling-paper);
-  color: var(--color-dwelling-ink);
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+@theme inline {
+  /* primitives → utilities (bg-dd-ember-500, text-dd-ink-200…) */
+  --color-dd-ink-990: var(--dd-ink-990);
+  --color-dd-ink-950: var(--dd-ink-950);
+  --color-dd-ink-900: var(--dd-ink-900);
+  --color-dd-ink-850: var(--dd-ink-850);
+  --color-dd-ink-800: var(--dd-ink-800);
+  --color-dd-ink-700: var(--dd-ink-700);
+  --color-dd-ink-400: var(--dd-ink-400);
+  --color-dd-ink-300: var(--dd-ink-300);
+  --color-dd-ink-200: var(--dd-ink-200);
+  --color-dd-ink-100: var(--dd-ink-100);
+  --color-dd-ember-300: var(--dd-ember-300);
+  --color-dd-ember-400: var(--dd-ember-400);
+  --color-dd-ember-500: var(--dd-ember-500);
+  --color-dd-ember-600: var(--dd-ember-600);
+  --color-dd-ember-700: var(--dd-ember-700);
+  --color-dd-ember-950: var(--dd-ember-950);
+
+  /* semantic → utilities (bg-primary, text-muted-foreground, border-border…) */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-sidebar: var(--sidebar);
+  --color-ring: var(--ring);
+
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 14px;
+
+  /* type — Geist / Geist Mono (loaded via Google Fonts in BaseLayout) */
+  --font-sans:
+    'Geist', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+
+  /* effects — neutral depth only. No coloured glow: the product reads as a
+     framed window (.dd-window) lit by a hairline rim, sitting on a faintly
+     gridded page (.bg-grid). --shadow-ember is reserved for CTA hover. */
+  --shadow-app: 0 24px 55px -22px rgba(0, 0, 0, 0.75);
+  --shadow-panel: 0 20px 46px -20px rgba(0, 0, 0, 0.62);
+  --shadow-ember: 0 8px 24px -6px rgba(231, 106, 51, 0.45);
 }
 
-body {
-  margin: 0;
+@layer base {
+  * {
+    box-sizing: border-box;
+    border-color: var(--border);
+  }
+
+  html {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+  }
+}
+
+@layer components {
+  /* shared CTA feel — a 1px lift on hover, settles on press */
+  .dd-cta {
+    transition-property: transform, box-shadow, background-color, border-color;
+    transition-duration: 200ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .dd-cta:hover {
+      transform: translateY(-1px);
+    }
+    .dd-cta:active {
+      transform: translateY(0);
+    }
+  }
+
+  /* ── Atmosphere ──────────────────────────────────────────────────────
+     Borrowed from the t3.codes / linear.app playbook: a flat near-black page
+     gets its depth from a faint engineering grid, not coloured light. The page
+     stays cool and neutral; every bit of warmth comes from brand accents (the
+     primary CTA, the ember tiles). No radial "glow" pools — those read cheap on
+     a dark product page. */
+
+  /* faint grid texture behind the hero. Painted on a ::before pinned to z:-1;
+     `isolation: isolate` keeps that negative layer inside the wrapper (above the
+     page background, below the content) so we need no z-index on the content and
+     it never intercepts clicks. A radial mask fades the lines out toward the
+     edges so the grid dissolves rather than ending in a hard rectangle. */
+  .bg-grid {
+    position: relative;
+    isolation: isolate;
+  }
+  .bg-grid::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      linear-gradient(to right, rgba(231, 224, 213, 0.035) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(231, 224, 213, 0.035) 1px, transparent 1px);
+    background-size: 56px 56px;
+    -webkit-mask-image: radial-gradient(120% 90% at 50% 24%, #000 0%, transparent 72%);
+    mask-image: radial-gradient(120% 90% at 50% 24%, #000 0%, transparent 72%);
+  }
+
+  /* OS-aware download button. An inline script (BaseLayout) detects the visitor's
+     platform and sets `html[data-os="mac|windows|linux"]`; these rules then reveal
+     the matching label + brand glyph and hide the rest. With no JS — or an
+     unrecognised platform — `html` has no data-os, so the neutral "default" slot
+     shows. Pure CSS swap = no flash, works before paint. */
+  [data-os-slot] {
+    display: none;
+  }
+  html:not([data-os]) [data-os-slot='default'],
+  html[data-os='mac'] [data-os-slot='mac'],
+  html[data-os='windows'] [data-os-slot='windows'],
+  html[data-os='linux'] [data-os-slot='linux'] {
+    display: inline-flex;
+  }
+
+  /* section divider — a full-bleed hairline that fades out at both ends so
+     sections read as distinct bands without a hard rule slicing the page edge
+     to edge (the linear.app treatment). border-image paints the 1px top border
+     with a horizontal gradient. */
+  .dd-divide {
+    border-top: 1px solid transparent;
+    border-image: linear-gradient(
+        to right,
+        transparent,
+        var(--border) 16%,
+        var(--border) 84%,
+        transparent
+      )
+      1;
+  }
+
+  /* the product window — a crisp frame, not a halo. Hairline border + neutral
+     drop shadow lift it off the page; the inset top highlight is a 1px "rim
+     light" catching the page glow, the trick that makes linear/t3 screenshots
+     read as glass rather than a flat PNG. */
+  .dd-window {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow:
+      var(--shadow-app),
+      inset 0 1px 0 0 rgba(247, 241, 233, 0.07);
+  }
+
+  /* surface cards lift and warm their border on hover */
+  .dd-card {
+    transition:
+      transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 0.25s ease,
+      box-shadow 0.25s ease;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .dd-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--dd-ink-600);
+    }
+  }
+}
+
+/* ── Motion ────────────────────────────────────────────────────────────
+   Deliberately quiet: a single orchestrated page-load reveal, a slow ember
+   "breath" on accent dots, and scroll reveals as progressive enhancement.
+   Everything is gated behind prefers-reduced-motion so it never fights the
+   reader. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes dd-rise {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* slow ember glow — the accent "flares up" a touch, then settles */
+  @keyframes dd-breathe {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgba(231, 106, 51, 0);
+      opacity: 0.78;
+    }
+    50% {
+      box-shadow: 0 0 7px 1px rgba(231, 106, 51, 0.55);
+      opacity: 1;
+    }
+  }
+
+  /* on-load staggered reveal (hero); --rise-i sets each item's place in line */
+  [data-rise] {
+    animation: dd-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(var(--rise-i, 0) * 85ms);
+  }
+
+  [data-breathe] {
+    animation: dd-breathe 3.4s ease-in-out infinite;
+  }
+
+  /* scroll-driven reveal — pure CSS, only where supported; content stays
+     fully visible in browsers without scroll timelines (no FOUC, no JS) */
+  @supports (animation-timeline: view()) {
+    [data-reveal] {
+      animation: dd-rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+      animation-timeline: view();
+      animation-range: entry 4% cover 20%;
+    }
+  }
 }
