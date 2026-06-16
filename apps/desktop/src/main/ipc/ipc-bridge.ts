@@ -525,6 +525,21 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     await registry.registerWithSubscription(workspaceIds)
     return registry.list()
   })
+  // The Environments-tab lifecycle (issue 2-15): reassign/merge a mistaken duplicate, and
+  // retire a decommissioned machine. Unlike claim, neither changes THIS environment's local
+  // id, so there is NO re-arming — they are pure synced-registry mutations that Commit `.myenv/`
+  // (so the change travels) and return the refreshed list. The registry owns the self-protection
+  // guards (cannot retire/fold-away self) + the never-auto-merge rule; the bridge never re-checks.
+  registrar.handle('env:reassign', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    const { fromId, intoId } = payload as TracedPayload & { fromId: string; intoId: string }
+    return (await deps.environmentRegistry()).reassign(fromId, intoId)
+  })
+  registrar.handle('env:retire', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    const { envId } = payload as TracedPayload & { envId: string }
+    return (await deps.environmentRegistry()).retire(envId)
+  })
 
   // ── Automation channels (issue 1-12): the environment-local automation ladder ──
   // get-level is read-only; set-level MUTATES local settings and re-arms the automation

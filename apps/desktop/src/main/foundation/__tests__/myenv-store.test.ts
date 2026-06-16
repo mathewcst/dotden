@@ -514,3 +514,95 @@ describe('MyenvStore — appearance + Apply/notification preferences (2-10)', ()
     expect(ignore).toContain('.myenv/')
   })
 })
+
+/**
+ * Environment-registry lifecycle at the registry-write seam (issue 2-15, ADR 0024):
+ * retire/remove drops an entry, and reassign/merge folds a duplicate into the keeper
+ * (unioning subscriptions) — the pure registry mutations the EnvironmentRegistry guards
+ * sit on top of. "Who/when" is git-log-derived, so these never read or write attribution.
+ */
+describe('MyenvStore — environment lifecycle (2-15)', () => {
+  /** Seed a registry with three environments for the lifecycle tests. */
+  async function seedThree(store: MyenvStore): Promise<void> {
+    await store.seedDefault({ id: 'env-a', label: 'a', os: 'linux' })
+    await store.createWorkspace('Work') // a 2nd Workspace so the union has something to union
+    await store.registerEnvironment({
+      id: 'env-b',
+      label: 'b',
+      os: 'darwin',
+      subscribedWorkspaces: [DEFAULT_WORKSPACE_ID],
+    })
+    await store.registerEnvironment({
+      id: 'env-dup',
+      label: 'b-duplicate',
+      os: 'darwin',
+      // The duplicate subscribed to a Workspace the keeper had not — the union must inherit it.
+      subscribedWorkspaces: ['ws-extra'],
+    })
+  }
+
+  it('removeEnvironment drops exactly the named entry, leaving the rest intact', async () => {
+    const store = new MyenvStore(source)
+    await seedThree(store)
+
+    const remaining = await store.removeEnvironment('env-b')
+    expect(remaining.map((e) => e.id).sort()).toEqual(['env-a', 'env-dup'])
+
+    const { environments } = await store.readEnvironments()
+    expect(environments.map((e) => e.id).sort()).toEqual(['env-a', 'env-dup'])
+  })
+
+  it('removeEnvironment is an idempotent no-op for an absent id', async () => {
+    const store = new MyenvStore(source)
+    await seedThree(store)
+    const before = (await store.readEnvironments()).environments
+    const remaining = await store.removeEnvironment('env-does-not-exist')
+    expect(remaining.map((e) => e.id).sort()).toEqual(before.map((e) => e.id).sort())
+  })
+
+  it('reassignEnvironment folds the duplicate into the keeper, UNIONing subscriptions', async () => {
+    const store = new MyenvStore(source)
+    await seedThree(store)
+    // Give the keeper a real Workspace subscription so the union is observable.
+    const work = (await store.readWorkspaces()).workspaces.find((w) => w.label === 'Work')
+    await store.setSubscriptions({ id: 'env-b', label: 'b', os: 'darwin' }, [
+      DEFAULT_WORKSPACE_ID,
+      work!.id,
+    ])
+
+    const kept = await store.reassignEnvironment('env-dup', 'env-b')
+
+    // Keeper id/label/os preserved; subscriptions = union of both (no narrowing).
+    expect(kept.id).toBe('env-b')
+    expect(kept.label).toBe('b')
+    expect([...kept.subscribedWorkspaces].sort()).toEqual(
+      [DEFAULT_WORKSPACE_ID, work!.id, 'ws-extra'].sort(),
+    )
+
+    // The duplicate is gone; the keeper remains.
+    const { environments } = await store.readEnvironments()
+    expect(environments.map((e) => e.id).sort()).toEqual(['env-a', 'env-b'])
+  })
+
+  it('reassignEnvironment rejects a missing from/into id and a self-merge', async () => {
+    const store = new MyenvStore(source)
+    await seedThree(store)
+    await expect(store.reassignEnvironment('env-missing', 'env-b')).rejects.toThrow()
+    await expect(store.reassignEnvironment('env-dup', 'env-missing')).rejects.toThrow()
+    await expect(store.reassignEnvironment('env-b', 'env-b')).rejects.toThrow()
+  })
+
+  it('never writes attribution fields into the registry (git-log-derived only, ADR 0024)', async () => {
+    const store = new MyenvStore(source)
+    await seedThree(store)
+    await store.reassignEnvironment('env-dup', 'env-b')
+    await store.removeEnvironment('env-a')
+    const fileText = await readFile(join(source, '.myenv', 'environments.json'), 'utf8')
+    expect(fileText).not.toMatch(/lastAuthor|lastActivity|commitCount|lastSubject/)
+    // Each surviving entry still holds exactly the four registry keys.
+    const { environments } = await store.readEnvironments()
+    for (const entry of environments) {
+      expect(Object.keys(entry).sort()).toEqual(['id', 'label', 'os', 'subscribedWorkspaces'])
+    }
+  })
+})

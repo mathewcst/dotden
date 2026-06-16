@@ -209,6 +209,103 @@ describe('EnvironmentRegistry', () => {
     const list = await registryFor().workspaces()
     expect(list.map((w) => w.label).sort()).toEqual(['Personal', 'Work'])
   })
+
+  // ── Lifecycle: claim / reassign / retire (issue 2-15, ADR 0024) ──
+
+  it('retire drops a decommissioned environment and commits the change so it travels', async () => {
+    const registry = registryFor()
+    await registry.setupIdentity() // env-self-1 is THIS environment
+    const store = new MyenvStore(source)
+    await store.registerEnvironment({
+      id: 'env-old',
+      label: 'old-desktop',
+      os: 'linux',
+      subscribedWorkspaces: ['personal'],
+    })
+
+    const list = await registry.retire('env-old')
+    // The retired entry is gone; this environment remains in the returned (re-listed) data.
+    expect(list.map((e) => e.id).sort()).toEqual(['env-self-1'])
+
+    // The removal was Committed (a `.myenv/` diff) so it travels on the next Sync.
+    const log = await new GitTransport({ gitBin, repoDir: source }).log()
+    expect(log).toContain('Retire environment env-old')
+  })
+
+  it('retire refuses to drop THIS running environment (never orphan the local id)', async () => {
+    const registry = registryFor()
+    await registry.setupIdentity()
+    await expect(registry.retire('env-self-1')).rejects.toThrow()
+  })
+
+  it('retire rejects an unknown id rather than silently no-op-ing', async () => {
+    const registry = registryFor()
+    await registry.setupIdentity()
+    await expect(registry.retire('env-never-existed')).rejects.toThrow()
+  })
+
+  it('reassign folds a duplicate into the keeper (unioning subscriptions) and commits it', async () => {
+    const registry = registryFor()
+    await registry.setupIdentity()
+    const store = new MyenvStore(source)
+    const work = await store.createWorkspace('Work')
+    // The keeper (this env) subscribes to Personal; the duplicate subscribed to Work.
+    await store.setSubscriptions({ id: 'env-self-1', label: 'this-laptop', os: process.platform }, [
+      'personal',
+    ])
+    await store.registerEnvironment({
+      id: 'env-dup',
+      label: 'this-laptop-2',
+      os: process.platform,
+      subscribedWorkspaces: [work.id],
+    })
+
+    // Fold the duplicate INTO self (the common "registered twice" fix — allowed; only folding
+    // self AWAY is refused).
+    const list = await registry.reassign('env-dup', 'env-self-1')
+    expect(list.map((e) => e.id).sort()).toEqual(['env-self-1'])
+    const self = list.find((e) => e.isSelf)
+    expect([...(self?.subscribedWorkspaces ?? [])].sort()).toEqual(['personal', work.id].sort())
+
+    const log = await new GitTransport({ gitBin, repoDir: source }).log()
+    expect(log).toContain('Reassign environment env-dup into env-self-1')
+  })
+
+  it('reassign refuses to fold AWAY this running environment', async () => {
+    const registry = registryFor()
+    await registry.setupIdentity()
+    const store = new MyenvStore(source)
+    await store.registerEnvironment({
+      id: 'env-other',
+      label: 'other',
+      os: process.platform,
+      subscribedWorkspaces: ['personal'],
+    })
+    await expect(registry.reassign('env-self-1', 'env-other')).rejects.toThrow()
+  })
+
+  it('lifecycle ops never persist attribution into the registry (git-log-derived, ADR 0024)', async () => {
+    const registry = registryFor()
+    await registry.setupIdentity()
+    const store = new MyenvStore(source)
+    await store.registerEnvironment({
+      id: 'env-dup',
+      label: 'dup',
+      os: process.platform,
+      subscribedWorkspaces: ['personal'],
+    })
+    await store.registerEnvironment({
+      id: 'env-gone',
+      label: 'gone',
+      os: 'linux',
+      subscribedWorkspaces: ['personal'],
+    })
+    await registry.reassign('env-dup', 'env-self-1')
+    await registry.retire('env-gone')
+
+    const fileText = await readFile(join(source, '.myenv', 'environments.json'), 'utf8')
+    expect(fileText).not.toMatch(/lastAuthor|lastActivity|commitCount|lastSubject/)
+  })
 })
 
 /** Initialize a git source repo with a deterministic identity (host config-independent). */

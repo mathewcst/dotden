@@ -400,6 +400,21 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['environment']['claim']>
     },
+    // → IPC channel 'env:reassign' (Environments-tab lifecycle: fold a duplicate into the keeper)
+    reassign(fromId, intoId) {
+      return ipcRenderer.invoke('env:reassign', {
+        fromId,
+        intoId,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['environment']['reassign']>
+    },
+    // → IPC channel 'env:retire' (Environments-tab lifecycle: drop a decommissioned environment)
+    retire(envId) {
+      return ipcRenderer.invoke('env:retire', {
+        envId,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['environment']['retire']>
+    },
   },
   automation: {
     // → IPC channel 'automation:get-level' (environment-local automation rung, issue 1-12)

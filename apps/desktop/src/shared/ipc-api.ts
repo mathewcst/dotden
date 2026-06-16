@@ -523,6 +523,24 @@ export interface DotdenApi {
       envId: string,
       workspaceIds?: readonly string[],
     ): Promise<readonly EnvironmentWithAttribution[]>
+    /**
+     * **Reassign / merge** a mistaken duplicate registry entry into the correct one (issue 2-15,
+     * ADR 0024 lifecycle). Folds `fromId` (the duplicate) into `intoId` (the keeper): the keeper
+     * inherits the UNION of both Workspace subscriptions (a merge only ever widens access) and the
+     * duplicate is dropped. The keeper's stable id is preserved, so its git-log attribution stays
+     * continuous; dotden NEVER auto-merges — the user explicitly picks which entry folds into which.
+     * Commits the `.myenv/` change LOCALLY so it travels. Returns the refreshed list (with
+     * attribution) so the Environments tab re-renders in one round-trip.
+     */
+    reassign(fromId: string, intoId: string): Promise<readonly EnvironmentWithAttribution[]>
+    /**
+     * **Retire / remove** a decommissioned environment from the synced registry (issue 2-15,
+     * ADR 0024 lifecycle). Drops the entry keyed by `envId`; identity is the stable id, so this
+     * never removes the wrong machine. Refuses to retire THIS running environment. Attribution is
+     * never touched — the retired environment's past `git log` history stays readable. Commits the
+     * `.myenv/` change LOCALLY so it travels. Returns the refreshed list so the tab re-renders.
+     */
+    retire(envId: string): Promise<readonly EnvironmentWithAttribution[]>
   }
   /**
    * Automation-ladder operations (issue 1-12), forwarded to `automation:*` IPC channels.

@@ -32,6 +32,7 @@ import { CommitTab } from './CommitTab'
 import { AppearanceTab } from './AppearanceTab'
 import { AutomationTab } from './AutomationTab'
 import { PrivacyTab } from './PrivacyTab'
+import { EnvironmentsTab } from './EnvironmentsTab'
 import { AboutTab } from './AboutTab'
 
 /** A tab's lifecycle: `live` = built + selectable; `placeholder` = inert until its slice ships. */
@@ -81,8 +82,15 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   // Privacy (2-14): opt-in telemetry consent toggles (analytics · crash reports · diagnostic
   // logs), all OFF by default. Control surface only — persists consent; egress is PRD 3.
   { id: 'privacy', label: 'Privacy', icon: Shield, status: 'live', Content: PrivacyTab },
-  // Environments (2-15): the registry + claim/reassign/retire lifecycle. Inert for now.
-  { id: 'environments', label: 'Environments', icon: Monitor, status: 'placeholder' },
+  // Environments (2-15): the registry + claim/reassign/retire lifecycle — list every
+  // environment with label/OS/status + rename, and reassign/retire from each row's ⋯ menu.
+  {
+    id: 'environments',
+    label: 'Environments',
+    icon: Monitor,
+    status: 'live',
+    Content: EnvironmentsTab,
+  },
   // About (2-16): version + honest update-check affordance + chezmoi credit (faithful-wrapper
   // acknowledgement, ADR 0003). The real update engine is PRD 3 (issue 3-20); this surfaces only.
   { id: 'about', label: 'About', icon: Info, status: 'live', Content: AboutTab },

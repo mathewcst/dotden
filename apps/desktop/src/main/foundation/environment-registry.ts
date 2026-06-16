@@ -242,6 +242,9 @@ export class EnvironmentRegistry {
     }
     const updated: EnvironmentEntry = { ...entry, label: trimmed }
     await this.store.registerEnvironment(updated)
+    // Record the one-line `.myenv/` diff LOCALLY (ADR 0006) so the renamed label travels to
+    // every environment on the next Sync — the registry is synced user-authored data (ADR 0024).
+    await this.commitRegistry(`Rename environment to ${trimmed}`)
     return updated
   }
 
@@ -303,6 +306,75 @@ export class EnvironmentRegistry {
     }
     // Hostname match is the stronger signal, so rank those first; OS-only matches follow.
     return suggestions.sort((a, b) => score(b.reasons) - score(a.reasons))
+  }
+
+  /**
+   * **Retire** (remove) a decommissioned environment from the synced registry (issue 2-15,
+   * ADR 0024 lifecycle "Retire/remove drops a decommissioned environment").
+   *
+   * Drops the entry keyed by `envId`. Identity is the stable id, so this never removes the
+   * wrong machine even when two share a hostname. Refuses to retire THIS running environment
+   * (you cannot decommission the machine you are using — that would orphan the local id from
+   * the registry and break self-listing); a returning machine should instead claim, and a
+   * mistaken duplicate of *yourself* is folded with {@link reassign}. Attribution is never
+   * touched — the retired environment's past `git log` history stays readable (ADR 0024).
+   *
+   * @param envId The stable id of the environment to retire.
+   * @returns The full list (with attribution) AFTER removal, so the UI re-renders in one round-trip.
+   * @throws Error when `envId` is THIS running environment, or when no such entry exists.
+   */
+  async retire(envId: string): Promise<readonly EnvironmentWithAttribution[]> {
+    if (envId === this.options.identity.id) {
+      throw new Error('Cannot retire the environment you are currently using')
+    }
+    const { environments } = await this.store.readEnvironments()
+    if (!environments.some((e) => e.id === envId)) {
+      throw new Error(`Cannot retire: no environment with id ${envId}`)
+    }
+    await this.store.removeEnvironment(envId)
+    // The removal is a `.myenv/` diff — Commit LOCALLY so the retire travels (ADR 0006/0024).
+    await this.commitRegistry(`Retire environment ${envId}`)
+    return this.list()
+  }
+
+  /**
+   * **Reassign / merge** a mistaken duplicate environment entry into the correct one (issue 2-15,
+   * ADR 0024 lifecycle "Reassign/merge folds a duplicate entry into the correct one").
+   *
+   * Folds `fromId` (the duplicate) into `intoId` (the keeper) at the {@link MyenvStore} registry
+   * seam: the keeper inherits the UNION of both subscriptions (a merge only ever widens access)
+   * and the duplicate entry is dropped. The keeper's stable id is preserved, so its git-log
+   * attribution stays continuous; past commits authored under the duplicate's label stay readable
+   * in `git log` (attribution is never rewritten — ADR 0024). Refuses to FOLD AWAY this running
+   * environment (`fromId` must not be self — that would orphan the local id); folding a duplicate
+   * INTO self is allowed (the common "I accidentally registered twice" fix).
+   *
+   * @param fromId The duplicate entry to fold in and remove.
+   * @param intoId The correct entry to keep.
+   * @returns The full list (with attribution) AFTER the fold, so the UI re-renders in one round-trip.
+   * @throws Error when `fromId` is THIS running environment, when the ids are equal, or when
+   *   either id is absent (delegated to {@link MyenvStore.reassignEnvironment}).
+   */
+  async reassign(fromId: string, intoId: string): Promise<readonly EnvironmentWithAttribution[]> {
+    if (fromId === this.options.identity.id) {
+      throw new Error('Cannot reassign away the environment you are currently using')
+    }
+    // The store validates existence + the self-into-self no-op and unions the subscriptions.
+    await this.store.reassignEnvironment(fromId, intoId)
+    // The fold is a `.myenv/` diff — Commit LOCALLY so the merge travels (ADR 0006/0024).
+    await this.commitRegistry(`Reassign environment ${fromId} into ${intoId}`)
+    return this.list()
+  }
+
+  /**
+   * Commit a `.myenv/`-only registry edit LOCALLY (ADR 0006), so a lifecycle change (rename /
+   * reassign / retire) travels to every environment on the next Sync. Uses `commitIfChanged`
+   * (idempotent) so a no-op mutation — e.g. retiring an already-absent id — records nothing and
+   * never fails "nothing to commit". Mirrors {@link DenService}'s `commitMetadata` pattern; the
+   * registry is its own committer here so the lifecycle ops are self-contained and travel-correct.
+   */
+  private async commitRegistry(message: string): Promise<void> {
+    await this.git.commitIfChanged(['.myenv', '.chezmoiignore'], message)
   }
 
   /** Read + parse the source repo's git log once, for attribution joins. */

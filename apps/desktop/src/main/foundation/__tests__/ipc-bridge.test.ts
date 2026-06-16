@@ -721,6 +721,8 @@ describe('IpcBridge', () => {
       list: vi.fn(async () => [selfEntry]),
       renameLabel: vi.fn(async () => ({ id: 'env-self', label: 'renamed' })),
       suggestClaims: vi.fn(async () => []),
+      reassign: vi.fn(async () => [selfEntry]),
+      retire: vi.fn(async () => [selfEntry]),
     }
     const { registrar, handlers } = fakeRegistrar()
     registerIpcBridge(registrar, {
@@ -766,8 +768,30 @@ describe('IpcBridge', () => {
       handlers.get('env:suggest-claims')?.({}, { _trace: { traceId: 'e3' } } as never),
     ).resolves.toEqual([])
 
+    // Lifecycle (issue 2-15): reassign folds a duplicate into a keeper; retire drops an entry.
+    // Both forward their ids verbatim to the registry owner (which holds the guards) and return
+    // the refreshed list — the bridge never re-checks the never-auto-merge / self-protect rules.
+    await expect(
+      handlers.get('env:reassign')?.({}, {
+        fromId: 'env-dup',
+        intoId: 'env-self',
+        _trace: { traceId: 'e4' },
+      } as never),
+    ).resolves.toEqual([selfEntry])
+    expect(registry.reassign).toHaveBeenCalledWith('env-dup', 'env-self')
+    await expect(
+      handlers.get('env:retire')?.({}, { envId: 'env-old', _trace: { traceId: 'e5' } } as never),
+    ).resolves.toEqual([selfEntry])
+    expect(registry.retire).toHaveBeenCalledWith('env-old')
+
     // Every env:* channel still hard-fails without a _trace envelope.
     await expect(handlers.get('env:list')?.({}, {} as never)).rejects.toThrow(
+      'without a _trace envelope',
+    )
+    await expect(handlers.get('env:reassign')?.({}, {} as never)).rejects.toThrow(
+      'without a _trace envelope',
+    )
+    await expect(handlers.get('env:retire')?.({}, {} as never)).rejects.toThrow(
       'without a _trace envelope',
     )
   })

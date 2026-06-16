@@ -564,6 +564,75 @@ export class MyenvStore {
   }
 
   /**
+   * **Retire** (remove) an environment from the synced registry — the lifecycle op for a
+   * decommissioned machine (issue 2-15, ADR 0024 "Retire/remove drops a decommissioned
+   * environment").
+   *
+   * Drops exactly the entry keyed by `id`; every other entry is preserved byte-for-byte.
+   * Because identity is the stable id (never the hostname), this can never accidentally
+   * drop the wrong machine. The write is skipped when no entry matched, so retiring an
+   * already-absent id is an idempotent clean no-op (no git churn). NOTHING about attribution
+   * is touched — "who changed this" stays derived from git log, never stored here (ADR 0024),
+   * so the retired environment's PAST history in `git log` is untouched and remains readable;
+   * only its registry membership is removed.
+   *
+   * @param id The stable id of the environment to retire.
+   * @returns The remaining entries after removal (for the caller to surface the new list).
+   */
+  async removeEnvironment(id: string): Promise<readonly EnvironmentEntry[]> {
+    const doc = await this.readEnvironments()
+    const remaining = doc.environments.filter((e) => e.id !== id)
+    // Idempotent: nothing matched → leave the file untouched (no spurious git churn).
+    if (remaining.length === doc.environments.length) return doc.environments
+    await this.writeEnvironments({ environments: remaining })
+    return remaining
+  }
+
+  /**
+   * **Reassign / merge** a duplicate environment entry into the correct one — the lifecycle op
+   * for a mistaken duplicate (issue 2-15, ADR 0024 "Reassign/merge folds a duplicate entry into
+   * the correct one").
+   *
+   * Folds `fromId` (the duplicate) into `intoId` (the keeper): the keeper's Workspace
+   * subscriptions become the UNION of both (the duplicate may have subscribed to a Workspace
+   * the keeper had not), and the duplicate entry is then removed. The keeper's `id`, `label`,
+   * and `os` are preserved unchanged — folding only ever WIDENS access (union), never narrows
+   * it or relabels the keeper, so a merge can never silently strip a machine's subscriptions.
+   * Identity stays the keeper's stable id, so the keeper's git-log attribution is continuous.
+   *
+   * Attribution is NEVER touched (it is git-log-derived, ADR 0024); past commits authored under
+   * the duplicate's label stay in `git log` and remain attributable to that label — merging the
+   * registry entry does not rewrite history. This is intentionally a *registry* merge only.
+   *
+   * @param fromId The duplicate entry to fold in and remove.
+   * @param intoId The correct entry to keep (receives the unioned subscriptions).
+   * @returns The kept entry as stored after the fold.
+   * @throws Error when either id is absent, or when `fromId === intoId` (a no-op merge is a
+   *   programming error the caller should never request — surfaced, never silently swallowed).
+   */
+  async reassignEnvironment(fromId: string, intoId: string): Promise<EnvironmentEntry> {
+    if (fromId === intoId) {
+      throw new Error('Cannot reassign an environment into itself')
+    }
+    const doc = await this.readEnvironments()
+    const from = doc.environments.find((e) => e.id === fromId)
+    const into = doc.environments.find((e) => e.id === intoId)
+    if (!from) throw new Error(`Cannot reassign: no environment with id ${fromId}`)
+    if (!into) throw new Error(`Cannot reassign: no target environment with id ${intoId}`)
+    // Union the subscriptions (a merge only ever widens access — never strips the keeper's).
+    const merged: EnvironmentEntry = {
+      ...into,
+      subscribedWorkspaces: [
+        ...new Set([...into.subscribedWorkspaces, ...from.subscribedWorkspaces]),
+      ],
+    }
+    // Drop the duplicate AND upsert the widened keeper in one write (no transient bad state).
+    const others = doc.environments.filter((e) => e.id !== fromId && e.id !== intoId)
+    await this.writeEnvironments({ environments: [...others, merged] })
+    return merged
+  }
+
+  /**
    * Set an environment's **subscribed Workspaces** — the access boundary a second
    * environment picks during returning onboarding (issue 1-13, ADR 0005).
    *
