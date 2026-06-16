@@ -94,6 +94,46 @@ describe('IpcBridge', () => {
     expect(den.incomingDiff).toHaveBeenCalledWith('.zshrc')
   })
 
+  it('forwards the _trace id into the DenService on every conflict den:* channel (issue 1-11)', async () => {
+    const den = {
+      detectConflicts: vi.fn(async () => ({ conflicts: [], autoMerged: true })),
+      resolveConflictFile: vi.fn(async () => undefined),
+      completeConflictResolution: vi.fn(async () => undefined),
+      abortConflictResolution: vi.fn(async () => undefined),
+    }
+    const { registrar, handlers } = fakeRegistrar()
+    registerIpcBridge(registrar, {
+      remoteClient: async () => ({}) as never,
+      denService: async () => den as never,
+      discoveryScanner: async () => ({}) as never,
+      environmentRegistry: async () => ({}) as never,
+    })
+
+    await handlers.get('den:detect-conflicts')?.({}, { _trace: { traceId: 'c1' } } as never)
+    await handlers.get('den:resolve-conflict')?.({}, {
+      targetPath: 'dot_zshrc',
+      // The user's explicit Keep mine/Take theirs/Open both choice is forwarded verbatim.
+      choice: 'incoming',
+      _trace: { traceId: 'c2' },
+    } as never)
+    await handlers.get('den:complete-conflicts')?.({}, { _trace: { traceId: 'c3' } } as never)
+    await handlers.get('den:abort-conflicts')?.({}, { _trace: { traceId: 'c4' } } as never)
+
+    // detect is a sync Operation; resolve/complete/abort MUTATE the merge — all forward the id.
+    expect(den.detectConflicts).toHaveBeenCalledWith('c1')
+    expect(den.resolveConflictFile).toHaveBeenCalledWith('dot_zshrc', 'incoming', 'c2')
+    expect(den.completeConflictResolution).toHaveBeenCalledWith('c3')
+    expect(den.abortConflictResolution).toHaveBeenCalledWith('c4')
+
+    // …and each still hard-fails without a _trace envelope (never an uncorrelated mutation).
+    await expect(
+      handlers.get('den:resolve-conflict')?.({}, {
+        targetPath: 'dot_zshrc',
+        choice: 'current',
+      } as never),
+    ).rejects.toThrow('without a _trace envelope')
+  })
+
   it('forwards the _trace id into the DenService on every organize den:* channel (issue 1-14)', async () => {
     const den = {
       createWorkspace: vi.fn(async () => ({ id: 'ws-1', label: 'Work', groups: [] })),

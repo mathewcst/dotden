@@ -781,6 +781,190 @@ describe('DenService ApplyPlanner invariants end-to-end (issue 1-10, real chezmo
   })
 })
 
+// Conflict resolution (issue 1-11): the cross-environment axis. Two environments Commit
+// the same File so their source-state histories diverge; `git fetch` + `git merge` in the
+// source repo auto-merges NON-overlapping hunks (no prompt) and leaves `<<<<<<<` markers
+// only on OVERLAP. The conflict-sync-roundtrip spike the issue requires before build, and
+// the load-bearing proof that resolution writes ONLY the user's chosen bytes (ADR 0008 #1).
+describe('DenService conflict resolution (issue 1-11, real chezmoi/git)', () => {
+  it('auto-merges non-overlapping edits to the same File WITHOUT asking the user to resolve', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    // env A: Track + Commit + Sync a multi-line File.
+    const aHome = join(root, 'a-home')
+    const aSource = join(root, 'a-source')
+    await mkdir(aHome, { recursive: true })
+    await initSourceRepo(aSource, remote)
+    const envA = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: aHome,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+    // A File with enough unchanged context between the two edit sites that git can
+    // auto-merge them: env A edits near the TOP, env B near the BOTTOM, with many
+    // untouched lines in between so the hunks never overlap.
+    const base = ['top', '', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', '', 'bottom', ''].join('\n')
+    await writeFile(join(aHome, '.zshrc'), base)
+    await envA.trackFile('.zshrc', 'trace-track')
+    await envA.commitTracked(['.zshrc'], 'trace-commit')
+    await envA.syncPush('trace-push-1')
+
+    // env B: clone, then change the BOTTOM region and Commit + Sync.
+    const bHome = join(root, 'b-home')
+    const bSource = join(root, 'b-source')
+    await mkdir(bHome, { recursive: true })
+    await cloneRepo(gitBin, remote, bSource)
+    await configureIdentity(bSource)
+    const envB = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: bSource,
+      destinationDir: bHome,
+      environment: { id: 'env-b', label: 'work-laptop', os: process.platform },
+    })
+    await envB.applyIncoming(['.zshrc'], 'trace-apply')
+    await writeFile(join(bHome, '.zshrc'), base.replace('bottom', 'CHANGED-BY-B'))
+    await envB.commitTracked(['.zshrc'], 'trace-commit-b')
+    await envB.syncPush('trace-push-b')
+
+    // env A: change the TOP region (non-overlapping with B's bottom edit) and Commit.
+    await writeFile(join(aHome, '.zshrc'), base.replace('top', 'CHANGED-BY-A'))
+    await envA.commitTracked(['.zshrc'], 'trace-commit-a')
+
+    // env A detects: git auto-merges the two non-overlapping edits — NO Conflict to resolve.
+    const review = await envA.detectConflicts('trace-detect')
+    expect(review.autoMerged).toBe(true)
+    expect(review.conflicts).toEqual([])
+
+    // The merged source-state File carries BOTH non-overlapping edits.
+    const merged = await readFile(join(aSource, 'dot_zshrc'), 'utf8')
+    expect(merged).toContain('CHANGED-BY-A')
+    expect(merged).toContain('CHANGED-BY-B')
+    // No conflict markers were left anywhere.
+    expect(merged).not.toContain('<<<<<<<')
+  })
+
+  it('surfaces a true (overlapping) Conflict with three sides, and resolve writes ONLY the chosen bytes', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const aHome = join(root, 'a-home')
+    const aSource = join(root, 'a-source')
+    await mkdir(aHome, { recursive: true })
+    await initSourceRepo(aSource, remote)
+    const envA = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: aHome,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+    await writeFile(join(aHome, '.zshrc'), 'export EDITOR=base\n')
+    await envA.trackFile('.zshrc', 'trace-track')
+    await envA.commitTracked(['.zshrc'], 'trace-commit')
+    await envA.syncPush('trace-push-1')
+
+    // env B: clone, change the SAME line, Commit + Sync.
+    const bHome = join(root, 'b-home')
+    const bSource = join(root, 'b-source')
+    await mkdir(bHome, { recursive: true })
+    await cloneRepo(gitBin, remote, bSource)
+    await configureIdentity(bSource)
+    const envB = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: bSource,
+      destinationDir: bHome,
+      environment: { id: 'env-b', label: 'work-laptop', os: process.platform },
+    })
+    await envB.applyIncoming(['.zshrc'], 'trace-apply')
+    await writeFile(join(bHome, '.zshrc'), 'export EDITOR=theirs\n')
+    await envB.commitTracked(['.zshrc'], 'trace-commit-b')
+    await envB.syncPush('trace-push-b')
+
+    // env A: change the SAME line differently and Commit — now the histories overlap.
+    await writeFile(join(aHome, '.zshrc'), 'export EDITOR=mine\n')
+    await envA.commitTracked(['.zshrc'], 'trace-commit-a')
+
+    // Detect surfaces a TRUE Conflict with all three sides for the merge view.
+    const review = await envA.detectConflicts('trace-detect')
+    expect(review.autoMerged).toBe(false)
+    expect(review.conflicts).toHaveLength(1)
+    const conflict = review.conflicts[0]!
+    expect(conflict.targetPath).toBe('dot_zshrc')
+    // Keep mine = ours/HEAD; Take theirs = the Remote; Open both = the marker-bearing union.
+    expect(conflict.current).toContain('mine')
+    expect(conflict.incoming).toContain('theirs')
+    expect(conflict.both).toContain('<<<<<<<')
+    expect(conflict.both).toContain('mine')
+    expect(conflict.both).toContain('theirs')
+
+    // Resolve "Take theirs" — ONLY the chosen bytes are written, then the merge completes.
+    await envA.resolveConflictFile('dot_zshrc', 'incoming', 'trace-resolve')
+    await envA.completeConflictResolution('trace-complete')
+
+    // The resolved source-state File holds exactly theirs — no markers, no auto-blend.
+    const resolved = await readFile(join(aSource, 'dot_zshrc'), 'utf8')
+    expect(resolved).toBe('export EDITOR=theirs\n')
+    expect(resolved).not.toContain('<<<<<<<')
+    // The merge is committed (clean tree) and the histories are joined.
+    await expect(new GitTransport({ gitBin, repoDir: aSource }).status()).resolves.toBe('')
+  })
+
+  it('Abort discards the half-merged tree and resolves NOTHING', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const aHome = join(root, 'a-home')
+    const aSource = join(root, 'a-source')
+    await mkdir(aHome, { recursive: true })
+    await initSourceRepo(aSource, remote)
+    const envA = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: aHome,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+    await writeFile(join(aHome, '.zshrc'), 'export EDITOR=base\n')
+    await envA.trackFile('.zshrc', 'trace-track')
+    await envA.commitTracked(['.zshrc'], 'trace-commit')
+    await envA.syncPush('trace-push-1')
+
+    const bSource = join(root, 'b-source')
+    await cloneRepo(gitBin, remote, bSource)
+    await configureIdentity(bSource)
+    const envB = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: bSource,
+      destinationDir: join(root, 'b-home'),
+      environment: { id: 'env-b', label: 'work-laptop', os: process.platform },
+    })
+    await mkdir(join(root, 'b-home'), { recursive: true })
+    await envB.applyIncoming(['.zshrc'], 'trace-apply')
+    await writeFile(join(root, 'b-home', '.zshrc'), 'export EDITOR=theirs\n')
+    await envB.commitTracked(['.zshrc'], 'trace-commit-b')
+    await envB.syncPush('trace-push-b')
+
+    await writeFile(join(aHome, '.zshrc'), 'export EDITOR=mine\n')
+    await envA.commitTracked(['.zshrc'], 'trace-commit-a')
+
+    const review = await envA.detectConflicts('trace-detect')
+    expect(review.autoMerged).toBe(false)
+
+    // Abort: the merge is undone, the tree returns to env A's own Commit, nothing resolved.
+    await envA.abortConflictResolution('trace-abort')
+    await expect(new GitTransport({ gitBin, repoDir: aSource }).status()).resolves.toBe('')
+    const afterAbort = await readFile(join(aSource, 'dot_zshrc'), 'utf8')
+    expect(afterAbort).toBe('export EDITOR=mine\n') // env A's own bytes, untouched.
+    expect(afterAbort).not.toContain('<<<<<<<')
+  })
+})
+
 /** Read raw `chezmoi status` for a source/destination pair (test setup probe only). */
 async function readChezmoiStatus(sourceDir: string, destinationDir: string): Promise<string> {
   const { stdout } = await runCommand(chezmoiBin, [
@@ -811,6 +995,20 @@ async function initSourceRepo(sourceDir: string, remote: string): Promise<void> 
   // (which may target an interactive 1Password/SSH agent) can't hang/fail `git commit`.
   await runCommand(gitBin, ['config', 'commit.gpgsign', 'false'], { cwd: sourceDir })
   await git.addRemote('origin', remote)
+}
+
+/**
+ * Pin a deterministic commit identity (and disable signing) on an already-cloned repo.
+ *
+ * A `cloneRepo` working tree inherits NO per-repo git config, so a `git commit` /
+ * `git merge` there would fall back to the host's global identity (or fail/hang on a
+ * signing agent). The conflict tests commit + merge in the cloned env B repo, so they
+ * configure it the same hermetic way {@link initSourceRepo} does for env A.
+ */
+async function configureIdentity(repoDir: string): Promise<void> {
+  await runCommand(gitBin, ['config', 'user.name', 'dotden tests'], { cwd: repoDir })
+  await runCommand(gitBin, ['config', 'user.email', 'dotden@example.invalid'], { cwd: repoDir })
+  await runCommand(gitBin, ['config', 'commit.gpgsign', 'false'], { cwd: repoDir })
 }
 
 /** Resolve a tool binary: env override wins, else first PATH hit, else throw. */

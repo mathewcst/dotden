@@ -39,6 +39,7 @@ import {
 import type { OperationTracer } from './operation-tracer.js'
 import { SyncEngine, type IncomingFile } from './sync-engine.js'
 import type { ApplyChangeKind } from './apply-planner.js'
+import { ConflictModel, type ResolutionChoice } from './conflict-model.js'
 import { parseChezmoiStatus, parseIncomingDeletions, type FileGitStatus } from './chezmoi-status.js'
 
 /** Construction wiring for a {@link DenService}, bound to one environment's dirs. */
@@ -224,6 +225,47 @@ export interface AffectedEnvironment {
   readonly label: string
   /** Whether this is the environment the user is acting from. */
   readonly isSelf: boolean
+}
+
+/**
+ * One File in **Conflict** the user must resolve, with the three sides for the merge view
+ * (issue 1-11). The cross-environment axis: two environments Committed the same File so
+ * their source-state histories diverged in a way `git merge` could not auto-merge.
+ *
+ * The sides come straight from git (ours/theirs index stages + the marker-bearing working
+ * copy) and feed the renderer's `@pierre/diffs` current/incoming/both merge view. The
+ * renderer NEVER constructs resolved bytes from these — it sends the user's choice back
+ * through {@link DenService.resolveConflictFile}, which is the only path that mints the
+ * un-forgeable resolution (ADR 0008 invariant #1, owned by `ConflictModel`).
+ */
+export interface ConflictReviewItem {
+  /** Destination-relative File path in Conflict (e.g. `.zshrc`). */
+  readonly targetPath: string
+  /** Workspace the File belongs to, from the synced `.myenv/` placements. */
+  readonly workspaceId: string
+  /** **Keep mine** bytes — what this environment Committed (git ours/HEAD). */
+  readonly current: string
+  /** **Take theirs** bytes — what the Remote Committed (git theirs). */
+  readonly incoming: string
+  /** **Open both** bytes — the `<<<<<<<`-marked union, for conscious hand-editing. */
+  readonly both: string
+}
+
+/**
+ * The result of fetching + merging the Remote to surface Conflicts for resolution (issue
+ * 1-11). git **auto-merges non-overlapping hunks** during the merge, so {@link conflicts}
+ * is ONLY the set of true Conflicts — the user is never asked about non-conflicts.
+ * {@link autoMerged} reports whether the merge completed with nothing left to resolve.
+ */
+export interface ConflictReview {
+  /** The Files git could not auto-merge — each needing an explicit user resolution. */
+  readonly conflicts: readonly ConflictReviewItem[]
+  /**
+   * `true` when `git merge` completed with no overlapping conflicts (everything
+   * auto-merged, or nothing was incoming). When `true`, {@link conflicts} is empty and
+   * there is nothing for the user to resolve.
+   */
+  readonly autoMerged: boolean
 }
 
 /**
@@ -661,6 +703,158 @@ export class DenService {
       // a partial Apply honestly (the per-File detail lives in the returned result).
       span?.end(failed.length === 0 ? 'ok' : 'error')
       return { results, applied, failed }
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * **Conflict** — fetch + merge the Remote in the source-state repo, surfacing the true
+   * Conflicts for resolution (issue 1-11; ADR 0008 invariant #1).
+   *
+   * This is the **cross-environment axis** (CONTEXT.md): maps to `git fetch` + `git merge`
+   * in the source repo. git **auto-merges non-overlapping hunks for free**, so the user is
+   * never asked about changes that don't actually conflict; only overlapping edits leave
+   * `<<<<<<<` markers (a `UU` status). **Merge, not rebase** (rebase rewrites history and
+   * muddies env attribution, issue 1-05), and **pure git, not `chezmoi merge`** (that is
+   * the local-drift axis, owned by issue 1-10).
+   *
+   * For each conflicted File it reads the three sides (ours/theirs/marker-union) so the
+   * renderer's merge view can show current/incoming/both. It NEVER resolves anything here
+   * — resolution only happens through {@link resolveConflictFile} with an explicit user
+   * choice. When the merge auto-resolves cleanly, the merge is completed (committed) right
+   * away — there is no Conflict to leave pending — and {@link ConflictReview.autoMerged} is
+   * `true`.
+   *
+   * @param traceId Correlation id for the wide event.
+   * @returns The true Conflicts (empty when git auto-merged) + the auto-merged flag.
+   */
+  async detectConflicts(traceId: string): Promise<ConflictReview> {
+    const span = this.tracer?.startOperation('sync', traceId)
+    try {
+      await this.git.fetch()
+      const merge = await this.git.merge()
+      if (merge.merged) {
+        // git auto-merged every (non-overlapping) hunk — nothing for the user to resolve.
+        span?.setAttribute('fileCount', 0)
+        span?.end('ok')
+        return { conflicts: [], autoMerged: true }
+      }
+      // Build a review item per conflicted File with its three sides for the merge view.
+      const { placements } = await this.store.readWorkspaces()
+      const placementOf = new Map(placements.map((p) => [p.targetPath, p.workspaceId]))
+      const conflicts: ConflictReviewItem[] = []
+      for (const targetPath of merge.conflictedPaths) {
+        const sides = await this.git.conflictedFile(targetPath)
+        conflicts.push({
+          targetPath,
+          workspaceId: placementOf.get(targetPath) ?? '',
+          current: sides.current,
+          incoming: sides.incoming,
+          both: sides.both,
+        })
+      }
+      span?.setAttribute('fileCount', conflicts.length)
+      // A real Conflict is not a failure of this Operation — it is the expected outcome.
+      span?.end('ok')
+      return { conflicts, autoMerged: false }
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * **Resolve one Conflict** with the user's explicit Keep mine / Take theirs / Open both
+   * choice, and stage the result (issue 1-11; ADR 0008 invariant #1 — the load-bearing
+   * "never auto-resolve" guarantee).
+   *
+   * The choice is run through {@link ConflictModel} — the SOLE owner of invariant #1 —
+   * which mints the un-forgeable resolved bytes (no other code path can produce them). The
+   * resolution is routed through {@link SyncEngine.routeConflictResolution}, which writes
+   * ONLY values carrying `ConflictModel`'s brand, then the bytes are written to the
+   * working-tree File and `git add`-ed (marking the `UU` entry resolved). It does NOT
+   * complete the merge commit — the renderer completes the whole merge via
+   * {@link completeConflictResolution} once every File is resolved, so a half-resolved
+   * merge is never silently committed.
+   *
+   * The model is rebuilt from git's live sides here (not trusted from the renderer) so a
+   * stale or tampered client cannot smuggle in bytes the user did not actually choose.
+   *
+   * @param targetPath Destination-relative File path being resolved (a `UU` entry).
+   * @param choice The user's explicit resolution (Keep mine / Take theirs / Open both).
+   * @param traceId Correlation id for the wide event.
+   * @throws Error when the resolution did not carry `ConflictModel`'s brand (never auto-resolved).
+   */
+  async resolveConflictFile(
+    targetPath: string,
+    choice: ResolutionChoice,
+    traceId: string,
+  ): Promise<void> {
+    const span = this.tracer?.startOperation('sync', traceId)
+    try {
+      // Read the live three sides from git and let ConflictModel mint the resolved bytes —
+      // the ONLY place resolved bytes come into existence (invariant #1).
+      const sides = await this.git.conflictedFile(targetPath)
+      const model = new ConflictModel({ targetPath, ...sides })
+      const resolved = model.resolve(choice)
+      // Route through SyncEngine: it accepts ONLY branded (user-chosen) resolutions, so a
+      // value that did not come from ConflictModel could never be written.
+      const { environment, workspaces } = await this.loadSyncedModel()
+      const engine = new SyncEngine({ environment, workspaces, tracer: this.tracer })
+      const { writes, rejected } = engine.routeConflictResolution([resolved], traceId)
+      if (rejected.length > 0 || writes.length !== 1) {
+        // Unreachable in practice (we just minted it), but never write an unverified resolution.
+        throw new Error(`Refused to write an un-verified resolution for ${targetPath}`)
+      }
+      // Persist the user-chosen bytes and stage the File as resolved (`git add`).
+      await this.git.writeResolved(writes[0]!.targetPath, writes[0]!.bytes)
+      span?.setAttribute('fileCount', 1)
+      span?.end('ok')
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * **Complete the in-progress merge** once every Conflict has been resolved + staged
+   * (issue 1-11). Maps to `git commit` for the pending merge.
+   *
+   * git refuses to commit while unmerged (`UU`) entries remain, so this can only succeed
+   * after every conflicted File went through {@link resolveConflictFile} — the backstop
+   * that an unresolved Conflict is never committed. This is the **Apply resolution** step
+   * of the resolver (the merge becomes part of the Den's history).
+   *
+   * @param traceId Correlation id for the wide event.
+   */
+  async completeConflictResolution(traceId: string): Promise<void> {
+    const span = this.tracer?.startOperation('sync', traceId)
+    try {
+      await this.git.completeMerge('Resolve cross-environment conflicts')
+      span?.end('ok')
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * **Abort** the in-progress merge, discarding the half-merged tree (issue 1-11). Maps to
+   * `git merge --abort`.
+   *
+   * The **Abort** action in the resolver: a user who does not want to resolve right now
+   * returns to the pre-merge state and loses nothing — and crucially nothing is
+   * auto-resolved. Safe to call when no merge is in progress (it surfaces git's error).
+   *
+   * @param traceId Correlation id for the wide event.
+   */
+  async abortConflictResolution(traceId: string): Promise<void> {
+    const span = this.tracer?.startOperation('sync', traceId)
+    try {
+      await this.git.abortMerge()
+      span?.end('ok')
     } catch (error) {
       span?.end('error')
       throw error

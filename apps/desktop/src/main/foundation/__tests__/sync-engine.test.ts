@@ -17,6 +17,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { isAppliesHere } from '../applicability-resolver.js'
+import { ConflictModel, isResolvedConflict, type ResolvedConflict } from '../conflict-model.js'
 import type { EnvironmentEntry, WorkspacesDoc } from '../myenv-store.js'
 import { SyncEngine, type IncomingFile } from '../sync-engine.js'
 
@@ -196,6 +197,100 @@ describe('SyncEngine incoming-clean routing (ADR 0008 load-bearing)', () => {
     expect(cases).toBeGreaterThan(0)
     expect(deletionsSeen).toBeGreaterThan(0)
     expect(blockedSeen).toBeGreaterThan(0)
+  })
+})
+
+describe('SyncEngine conflict-resolved routing (ADR 0008 invariant #1, load-bearing)', () => {
+  const workspaces: WorkspacesDoc = {
+    workspaces: [{ id: 'personal', label: 'Personal', groups: [] }],
+    placements: [{ targetPath: '.zshrc', workspaceId: 'personal', groupId: null }],
+  }
+
+  /** Mint a genuine user resolution the only legitimate way: ConflictModel.resolve(choice). */
+  function userResolution(targetPath: string): ResolvedConflict {
+    return new ConflictModel({
+      targetPath,
+      current: 'mine\n',
+      incoming: 'theirs\n',
+      both: '<<<<<<<\nmine\n=======\ntheirs\n>>>>>>>\n',
+    }).resolve('current')
+  }
+
+  it('accepts a user-resolved Conflict (a real ConflictModel.resolve witness)', () => {
+    const engine = new SyncEngine({ environment: env(['personal']), workspaces })
+
+    const { writes, rejected } = engine.routeConflictResolution(
+      [userResolution('.zshrc')],
+      'trace-resolved',
+    )
+
+    // The branded, user-chosen resolution is accepted for writing…
+    expect(writes.map((w) => w.targetPath)).toEqual(['.zshrc'])
+    expect(writes.every((w) => isResolvedConflict(w))).toBe(true)
+    // …and nothing is rejected.
+    expect(rejected).toEqual([])
+  })
+
+  it('REFUSES an auto-resolution that did not go through ConflictModel (no brand)', () => {
+    const engine = new SyncEngine({ environment: env(['personal']), workspaces })
+
+    // A hand-rolled "resolution" with no brand — exactly what an auto-resolve path would
+    // try to smuggle in. SyncEngine must never write it.
+    const fakeAutoResolved = {
+      targetPath: '.zshrc',
+      choice: 'incoming' as const,
+      bytes: 'theirs\n',
+    } as unknown as ResolvedConflict
+
+    const { writes, rejected } = engine.routeConflictResolution([fakeAutoResolved], 'trace-auto')
+
+    expect(writes).toEqual([])
+    expect(rejected).toEqual([{ targetPath: '.zshrc', reason: 'not-user-resolved' }])
+  })
+
+  it('property: NO accepted write is ever an un-branded (auto-resolved) value', () => {
+    // Mix genuine user resolutions with forged ones across many seeds; assert every
+    // accepted write carries the un-forgeable brand and every forgery is rejected — the
+    // structural guarantee that no path auto-resolves a Conflict (ADR 0008 #1).
+    const engine = new SyncEngine({ environment: env(['personal']), workspaces })
+    let accepted = 0
+    let forged = 0
+
+    for (let seed = 0; seed < 200; seed++) {
+      const rng = mulberry32(seed)
+      const resolutions: ResolvedConflict[] = []
+      const expectForged = new Set<string>()
+      for (let i = 0; i < 4; i++) {
+        const path = `.file-${i}`
+        if (rng() < 0.5) {
+          resolutions.push(userResolution(path))
+        } else {
+          // A forged "resolution" with no brand (the unsafe value the invariant forbids).
+          resolutions.push({
+            targetPath: path,
+            choice: 'current',
+            bytes: 'mine\n',
+          } as unknown as ResolvedConflict)
+          expectForged.add(path)
+        }
+      }
+
+      const { writes, rejected } = engine.routeConflictResolution(resolutions, `t-${seed}`)
+      for (const w of writes) {
+        accepted++
+        // Invariant #1: an accepted write is ALWAYS a real, branded user choice.
+        expect(isResolvedConflict(w)).toBe(true)
+        expect(expectForged.has(w.targetPath)).toBe(false)
+      }
+      for (const r of rejected) {
+        forged++
+        expect(expectForged.has(r.targetPath)).toBe(true)
+      }
+    }
+
+    // Sanity: the run actually exercised both accept and reject paths (not vacuous).
+    expect(accepted).toBeGreaterThan(0)
+    expect(forged).toBeGreaterThan(0)
   })
 })
 

@@ -25,10 +25,12 @@ import type {
   AffectedEnvironment,
   ApplyResult,
   CommitResult,
+  ConflictReview,
   FileTreeView,
   IncomingReviewItem,
   IncomingSummary,
 } from '../main/foundation/den-service.js'
+import type { ResolutionChoice } from '../main/foundation/conflict-model.js'
 import type { Group, Workspace } from '../main/foundation/myenv-store.js'
 import type {
   ClaimSuggestion,
@@ -134,6 +136,37 @@ export interface DotdenApi {
       targetPaths: readonly string[],
       confirmedDeletions?: readonly string[],
     ): Promise<ApplyResult>
+    /**
+     * **Conflict** — fetch + merge the Remote in the source repo and surface the true
+     * Conflicts for resolution (issue 1-11). git auto-merges non-overlapping hunks, so
+     * the result lists ONLY overlapping Conflicts (the user is never asked about
+     * non-conflicts), each with its three sides (current/incoming/both) for the merge
+     * view. `autoMerged` is `true` when there was nothing to resolve. Maps to `git fetch`
+     * + `git merge` in the source-state repo — NOT `chezmoi merge` (that is local-drift).
+     */
+    detectConflicts(): Promise<ConflictReview>
+    /**
+     * **Resolve one Conflict** with the user's explicit Keep mine (`current`) / Take theirs
+     * (`incoming`) / Open both (`both`) choice (issue 1-11). The choice is the ONLY input
+     * that produces resolved bytes: it goes through `ConflictModel.resolve(choice)` in the
+     * main process (the sole owner of "never auto-resolve a Conflict", invariant #1), which
+     * mints the un-forgeable resolution the merge view consumes — the renderer never calls
+     * `@pierre/diffs`' own `resolveConflict()`. The resolved bytes are written + staged; the
+     * merge is completed separately by {@link DotdenApi.den.completeConflictResolution}.
+     */
+    resolveConflict(targetPath: string, choice: ResolutionChoice): Promise<void>
+    /**
+     * **Apply resolution** — complete the in-progress merge once every Conflict is resolved
+     * (issue 1-11). Maps to `git commit` for the pending merge; git refuses while any
+     * `UU` entry remains, so a half-resolved Conflict can never be committed.
+     */
+    completeConflictResolution(): Promise<void>
+    /**
+     * **Abort** the in-progress merge, discarding the half-merged tree (issue 1-11). Maps
+     * to `git merge --abort`: the user returns to the pre-merge state and NOTHING is
+     * resolved (the safe escape hatch from the resolver).
+     */
+    abortConflicts(): Promise<void>
     /**
      * The three-pane tree view (issue 1-07): every managed File joined with its
      * Workspace placement, local-axis git status (M/A/D/R/U), and out-of-OS-Scope

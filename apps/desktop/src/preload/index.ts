@@ -99,6 +99,32 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['apply']>
     },
+    // → IPC channel 'den:detect-conflicts' (fetch + merge; surface true Conflicts, 1-11)
+    detectConflicts() {
+      return ipcRenderer.invoke('den:detect-conflicts', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['detectConflicts']>
+    },
+    // → IPC channel 'den:resolve-conflict' (the user's explicit Keep mine/Take theirs/Open both)
+    resolveConflict(targetPath, choice) {
+      return ipcRenderer.invoke('den:resolve-conflict', {
+        targetPath,
+        choice,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['resolveConflict']>
+    },
+    // → IPC channel 'den:complete-conflicts' (Apply resolution: commit the pending merge)
+    completeConflictResolution() {
+      return ipcRenderer.invoke('den:complete-conflicts', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['completeConflictResolution']>
+    },
+    // → IPC channel 'den:abort-conflicts' (Abort: git merge --abort, resolves nothing)
+    abortConflicts() {
+      return ipcRenderer.invoke('den:abort-conflicts', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['abortConflicts']>
+    },
     // → IPC channel 'den:tree'
     tree() {
       return ipcRenderer.invoke('den:tree', {

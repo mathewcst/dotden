@@ -6,7 +6,8 @@
  * backing dotden's Sync primitives (push/fetch/status/diff). The wrapper
  * forwards to the bundled `git` binary; it does not invent behavior.
  */
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { CommandFailedError, runCommand } from './process.js'
 
 /**
@@ -31,6 +32,40 @@ function isNoCommitsYet(error: unknown): boolean {
   return /does not have any commits yet|bad default revision|unknown revision/i.test(
     error.result.stderr,
   )
+}
+
+/**
+ * The result of attempting a {@link GitTransport.merge} — git's own auto-merge verdict.
+ *
+ * This is the **cross-environment Conflict** mechanism (CONTEXT.md): `git merge`
+ * auto-merges non-overlapping hunks and only leaves `<<<<<<<` markers (a `UU` status)
+ * where edits actually overlap. The caller routes on {@link conflictedPaths}: an empty
+ * list means the whole merge auto-resolved (no user choice needed); a non-empty list is
+ * the set of true Conflicts that {@link ConflictModel} must own (invariant #1, ADR 0008).
+ */
+export interface MergeResult {
+  /** `true` when git completed the merge with no overlapping conflicts (auto-merged). */
+  readonly merged: boolean
+  /** The destination-relative paths git could NOT auto-merge (`UU`); empty when `merged`. */
+  readonly conflictedPaths: readonly string[]
+}
+
+/**
+ * The three sides of one conflicted File, read out of git's index + working tree.
+ *
+ * After `git merge` stops on a `UU` File, git keeps all three versions addressable: the
+ * `:2:` index stage is **ours/current** (what this environment Committed, HEAD), the
+ * `:3:` stage is **theirs/incoming** (what the Remote Committed), and the working-tree
+ * copy holds the `<<<<<<<`-marked union. These feed {@link ConflictModel}'s three sides
+ * (Keep mine / Take theirs / Open both) verbatim.
+ */
+export interface ConflictedFileSides {
+  /** **ours/current** bytes — git stage 2 (`git show :2:<path>`). */
+  readonly current: string
+  /** **theirs/incoming** bytes — git stage 3 (`git show :3:<path>`). */
+  readonly incoming: string
+  /** **the marker-bearing union** — the working-tree copy with `<<<<<<<`/`>>>>>>>`. */
+  readonly both: string
 }
 
 /**
@@ -137,6 +172,143 @@ export class GitTransport {
    */
   async fetch(remote = 'origin'): Promise<void> {
     await this.git(['fetch', remote])
+  }
+
+  /**
+   * Merge `<remote>/<branch>` into the current branch — the cross-environment Conflict
+   * mechanism (CONTEXT.md; ADR 0008 invariant #1).
+   *
+   * Maps to `git merge --no-edit <remote>/<branch>`. **Merge, not rebase** (the issue's
+   * decision): rebase rewrites history and muddies the per-environment git-log
+   * attribution (issue 1-05). git **auto-merges non-overlapping hunks for free** here —
+   * the user is never asked about changes that don't actually conflict — and only leaves
+   * `<<<<<<<` markers (a `UU` status) where edits overlap. A non-zero exit with `UU`
+   * paths present is therefore NOT an error: it is exactly the true-Conflict set the
+   * caller hands to {@link import('./conflict-model.js').ConflictModel}. Any other
+   * non-zero exit (e.g. network) is a real failure and is rethrown.
+   *
+   * `--no-edit` keeps an auto-merge non-interactive (it would otherwise open an editor
+   * for the merge-commit message); on conflict no commit is made at all, so the caller
+   * completes it via {@link completeMerge} after resolution.
+   *
+   * @param remote Remote whose branch to merge. Defaults to `origin`.
+   * @param branch Branch to merge. Defaults to `main`.
+   * @returns Whether git auto-merged cleanly, plus the conflicted paths if not.
+   * @throws CommandFailedError for a non-zero exit that is NOT a content conflict.
+   */
+  async merge(remote = 'origin', branch = 'main'): Promise<MergeResult> {
+    try {
+      await this.git(['merge', '--no-edit', `${remote}/${branch}`])
+      // Exit 0 → git auto-merged everything (including non-overlapping hunks). No Conflict.
+      return { merged: true, conflictedPaths: [] }
+    } catch (error) {
+      // A merge that stopped on overlapping hunks exits non-zero but leaves `UU` paths in
+      // `git status`. Distinguish that (a true Conflict to resolve) from a real failure.
+      const conflictedPaths = await this.conflictedPaths()
+      if (conflictedPaths.length > 0) {
+        return { merged: false, conflictedPaths }
+      }
+      // No conflict markers but git still failed → a genuine error (network, bad ref, …).
+      throw error
+    }
+  }
+
+  /**
+   * List the destination-relative paths git could not auto-merge — the true Conflicts.
+   *
+   * Maps to `git status --porcelain=v1` and keeps the `UU` ("both modified", an
+   * unmerged/overlapping conflict) entries. Non-overlapping merges never appear here
+   * because git already resolved them, so this is precisely the set the
+   * {@link import('./conflict-model.js').ConflictModel} owner must drive (invariant #1).
+   *
+   * @returns The conflicted paths (empty when the tree has no unmerged entries).
+   * @throws CommandFailedError if git exits non-zero.
+   */
+  async conflictedPaths(): Promise<string[]> {
+    const out: string[] = []
+    for (const line of (await this.status()).split('\n')) {
+      // Porcelain v1 unmerged conflicts are `UU <path>` (both sides modified the File).
+      if (line.startsWith('UU ')) out.push(line.slice(3).trim())
+    }
+    return out
+  }
+
+  /**
+   * Read the three sides of one conflicted File from git's index + working tree.
+   *
+   * Maps to `git show :2:<path>` (ours/current/HEAD), `git show :3:<path>`
+   * (theirs/incoming), and a read of the working-tree copy (the `<<<<<<<`-marked union).
+   * These are the exact bytes {@link import('./conflict-model.js').ConflictModel} exposes
+   * as its Keep mine / Take theirs / Open both sides — no reinterpretation.
+   *
+   * @param path Destination-relative File path that is in Conflict (a `UU` entry).
+   * @returns The current/incoming/both bytes for the File.
+   * @throws CommandFailedError if either index stage cannot be read.
+   */
+  async conflictedFile(path: string): Promise<ConflictedFileSides> {
+    // `git show :N:<path>` prints index stage N: 2 = ours (HEAD), 3 = theirs (MERGE_HEAD).
+    const current = (await this.git(['show', `:2:${path}`])).stdout
+    const incoming = (await this.git(['show', `:3:${path}`])).stdout
+    // The "both" side is the working-tree copy git wrote with `<<<<<<<` conflict markers —
+    // the union the user can open and hand-edit. Read it directly off disk (falling back to
+    // an empty string only if the File is absent, e.g. a delete/modify conflict).
+    const both = (await this.readWorkingTreeFile(path)) ?? ''
+    return { current, incoming, both }
+  }
+
+  /**
+   * Write resolved bytes for one File and stage it as resolved — the resolution write.
+   *
+   * Writes `bytes` to the working-tree File then maps to `git add -- <path>`, which marks
+   * the previously-`UU` entry as resolved. The bytes come ONLY from
+   * {@link import('./conflict-model.js').ResolvedConflict} (the user's explicit choice),
+   * so this method never invents a resolution — it just persists one (ADR 0008 #1).
+   *
+   * @param path Destination-relative File path being resolved.
+   * @param bytes The exact resolved bytes (from a user choice) to write + stage.
+   * @throws CommandFailedError if staging exits non-zero.
+   */
+  async writeResolved(path: string, bytes: string): Promise<void> {
+    await writeFile(resolve(this.options.repoDir, path), bytes, 'utf8')
+    await this.git(['add', '--', path])
+  }
+
+  /**
+   * Complete an in-progress merge once every conflicted File has been staged-as-resolved.
+   *
+   * Maps to `git commit --no-edit` (records the pending MERGE_HEAD as a merge commit). The
+   * caller must have resolved every `UU` path via {@link writeResolved} first; git refuses
+   * to commit while unmerged entries remain, which is the backstop that an unresolved
+   * Conflict can never be silently committed.
+   *
+   * @param message Optional merge-commit subject; defaults to git's generated message.
+   * @throws CommandFailedError if unmerged entries remain or git exits non-zero.
+   */
+  async completeMerge(message?: string): Promise<void> {
+    const args = message ? ['commit', '--message', message] : ['commit', '--no-edit']
+    await this.git(args)
+  }
+
+  /**
+   * Abort an in-progress merge, restoring the pre-merge state.
+   *
+   * Maps to `git merge --abort`. This is the **Abort** action in the resolver: it throws
+   * away the half-merged working tree and returns to HEAD, so a user who does not want to
+   * resolve right now loses nothing (and nothing is auto-resolved).
+   *
+   * @throws CommandFailedError if there is no merge to abort or git exits non-zero.
+   */
+  async abortMerge(): Promise<void> {
+    await this.git(['merge', '--abort'])
+  }
+
+  /** Read a working-tree File's bytes, or `null` when it is absent (e.g. a delete conflict). */
+  private async readWorkingTreeFile(path: string): Promise<string | null> {
+    try {
+      return await readFile(resolve(this.options.repoDir, path), 'utf8')
+    } catch {
+      return null
+    }
   }
 
   /**

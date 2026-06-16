@@ -7,11 +7,13 @@ import type {
 } from '@pierre/trees'
 import { PatchDiff } from '@pierre/diffs/react'
 import {
+  AlertTriangle,
   Bell,
   CircleDot,
   Download,
   FilePlus2,
   GitCommitVertical,
+  GitMerge,
   Loader2,
   Plus,
   RefreshCw,
@@ -27,6 +29,7 @@ import { WorkspaceSidebar } from '@/components/WorkspaceSidebar'
 import { FileRow } from '@/components/FileRow'
 import { IncomingBanner } from '@/components/IncomingBanner'
 import { ReviewApply } from '@/components/ReviewApply'
+import { ConflictResolver } from '@/components/ConflictResolver'
 import { remoteAxisDecoration } from '@/lib/remote-axis'
 import type {
   AffectedEnvironment,
@@ -89,6 +92,9 @@ export function Workspace({ role }: { role: Role }) {
   const [incomingFrom, setIncomingFrom] = useState<string>('another environment')
   // Whether the dedicated Review & Apply surface is open (the banner/card CTA opens it).
   const [reviewing, setReviewing] = useState(false)
+  // Whether the Conflict resolution surface is open (issue 1-11). Opened from the Remote
+  // axis when a File is in ⚠ Conflict — the cross-environment merge the user resolves.
+  const [resolving, setResolving] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const [diff, setDiff] = useState<string | null>(null)
   const [lastCommitMessage, setLastCommitMessage] = useState<string | null>(null)
@@ -468,6 +474,24 @@ export function Workspace({ role }: { role: Role }) {
   // top-level banner + inspector card. Only env A's everyday view shows the banner.
   const incomingCount = remoteAxis.size
 
+  // Whether any incoming File is in ⚠ Conflict (issue 1-11): if so, the user must resolve
+  // the cross-environment merge before those Files can be applied. Drives the resolve CTA.
+  const conflictCount = [...remoteAxis.values()].filter((m) => m === 'conflict').length
+
+  // The Conflict resolution surface (issue 1-11): the ⚠ CTA opens it. On close it
+  // re-checks the Remote + tree so the decorations reflect what was resolved.
+  if (resolving) {
+    return (
+      <ConflictResolver
+        onClose={() => {
+          setResolving(false)
+          void refreshIncoming()
+          void reloadTree()
+        }}
+      />
+    )
+  }
+
   // The dedicated Review & Apply surface (issue 1-09): the banner/card CTA opens it. On
   // close it re-checks the Remote so the tree decorations + banner reflect what is left.
   if (reviewing) {
@@ -724,6 +748,31 @@ export function Workspace({ role }: { role: Role }) {
             >
               {error}
             </div>
+          ) : null}
+
+          {/* Conflict callout (issue 1-11) — when the Remote axis shows ⚠ Conflicts, the
+              user must resolve the cross-environment merge. Shown on env A's everyday view;
+              its CTA opens the dedicated Conflict resolution surface. */}
+          {role === 'a' && conflictCount > 0 ? (
+            <section className="border-dd-red-900 bg-dd-red-950/40 rounded-md border p-3">
+              <h2 className="text-dd-red-400 mb-1 flex items-center gap-1.5 text-xs font-semibold tracking-wide">
+                <AlertTriangle className="size-3.5" /> {conflictCount}{' '}
+                {conflictCount === 1 ? 'CONFLICT' : 'CONFLICTS'}
+              </h2>
+              <p className="text-muted-foreground text-xs">
+                The same File changed here and on the Remote. Resolve the merge — dotden never picks
+                a side for you.
+              </p>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="mt-3 w-full"
+                disabled={busy !== null}
+                onClick={() => setResolving(true)}
+              >
+                <GitMerge className="size-4" /> Resolve conflicts
+              </Button>
+            </section>
           ) : null}
 
           {/* Incoming-changes callout — the Review & Apply seam (built out in issue 1-09). */}

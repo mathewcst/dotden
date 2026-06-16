@@ -15,6 +15,7 @@
  * `ipcMain`).
  */
 import type { DenService } from '../foundation/den-service.js'
+import type { ResolutionChoice } from '../foundation/conflict-model.js'
 import type { DiscoveryScanner } from '../foundation/discovery-scanner.js'
 import type { EnvironmentRegistry } from '../foundation/environment-registry.js'
 import type { RemoteClient } from '../foundation/remote-client.js'
@@ -141,6 +142,27 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
       traceId(payload),
       confirmedDeletions ?? [],
     )
+  })
+  // The Conflict path (issue 1-11): detect fetches+merges in the source repo (a sync
+  // Operation, _trace forwarded) and surfaces true Conflicts; resolve/complete/abort MUTATE
+  // the merge, so each forwards its _trace so the Operation emits a correlated wide event.
+  registrar.handle('den:detect-conflicts', async (_event, payload: TracedPayload) => {
+    return (await deps.denService()).detectConflicts(traceId(payload))
+  })
+  registrar.handle('den:resolve-conflict', async (_event, payload: TracedPayload) => {
+    const { targetPath, choice } = payload as TracedPayload & {
+      targetPath: string
+      choice: ResolutionChoice
+    }
+    // The user's explicit choice is the ONLY input that mints resolved bytes (invariant #1):
+    // DenService routes it through ConflictModel.resolve — the bridge never resolves itself.
+    return (await deps.denService()).resolveConflictFile(targetPath, choice, traceId(payload))
+  })
+  registrar.handle('den:complete-conflicts', async (_event, payload: TracedPayload) => {
+    return (await deps.denService()).completeConflictResolution(traceId(payload))
+  })
+  registrar.handle('den:abort-conflicts', async (_event, payload: TracedPayload) => {
+    return (await deps.denService()).abortConflictResolution(traceId(payload))
   })
   // The three-pane view queries (issue 1-07): managed File tree + per-File diff.
   // Read-only, so DenService emits no wide event for them, but each still asserts the

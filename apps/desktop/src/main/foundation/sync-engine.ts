@@ -27,6 +27,7 @@ import {
   type LocalEditState,
 } from './apply-planner.js'
 import { ApplicabilityResolver, isAppliesHere } from './applicability-resolver.js'
+import { isResolvedConflict, type ResolvedConflict } from './conflict-model.js'
 import type { EnvironmentEntry, WorkspacesDoc } from './myenv-store.js'
 import type { OperationTracer } from './operation-tracer.js'
 
@@ -172,4 +173,86 @@ export class SyncEngine {
 
     return { plan, deferred }
   }
+
+  /**
+   * Route the **conflict-resolved** event path: turn the user's explicit resolutions into
+   * the set of writes to apply, refusing any that did not go through {@link ConflictModel}.
+   *
+   * This is the second half of the Conflict story (the first half is `routeIncomingClean`
+   * deferring a `conflict`, never applying it). When the user has resolved Conflicts, the
+   * resolution writes arrive here as {@link ResolvedConflict} values — and SyncEngine does
+   * NOT re-derive the resolution or pick a side. It only checks the structural guarantee
+   * (ADR 0008 #1): every write MUST carry the un-forgeable brand that proves it came from
+   * an explicit `ConflictModel.resolve(choice)` call. A value missing the brand (a
+   * hand-rolled "auto-resolution") is dropped into `rejected`, never written. Because the
+   * brand is unconstructable outside `ConflictModel`, there is no automation level — not
+   * even YOLO — that can manufacture a resolution this router would accept; "auto-resolved
+   * a Conflict" is a state the types cannot express.
+   *
+   * @param resolutions The user's resolved Conflicts (each a `ConflictModel.resolve` result).
+   * @param traceId Correlation id for the wide event (the IPC `_trace.traceId`).
+   * @returns The accepted writes (branded, user-chosen) and any rejected non-witnesses.
+   */
+  routeConflictResolution(
+    resolutions: readonly CandidateResolution[],
+    traceId: string,
+  ): ConflictResolutionRouting {
+    const span = this.tracer?.startOperation('sync', traceId)
+    const writes: ResolvedConflict[] = []
+    const rejected: { targetPath: string; reason: 'not-user-resolved' }[] = []
+
+    for (const resolution of resolutions) {
+      // The ONLY gate: prove the bytes came from an explicit user choice. SyncEngine never
+      // inspects the choice or the bytes — it just refuses anything ConflictModel didn't mint.
+      if (isResolvedConflict(resolution)) {
+        writes.push(resolution)
+      } else {
+        // A candidate that did not pass the brand gate (a forged/auto "resolution"). Surface
+        // its path when it has one, else a neutral marker — never write it.
+        const targetPath =
+          typeof resolution.targetPath === 'string' ? resolution.targetPath : '(unknown)'
+        rejected.push({ targetPath, reason: 'not-user-resolved' })
+      }
+    }
+
+    if (span) {
+      span.setAttribute('fileCount', writes.length)
+      span.setAttribute('outcome', rejected.length === 0 ? 'ok' : 'error')
+      span.end(rejected.length === 0 ? 'ok' : 'error')
+    }
+
+    return { writes, rejected }
+  }
+}
+
+/**
+ * A *candidate* resolution handed to {@link SyncEngine.routeConflictResolution}.
+ *
+ * It is deliberately a loose shape — it carries (at most) a readable `targetPath` and is
+ * NOT assumed to be a real {@link ResolvedConflict}. That is the point: the router's job
+ * is to separate genuine, branded user choices from forgeries (an auto-resolve path's
+ * un-branded value), so it must accept the unsafe shape in order to reject it. The brand
+ * gate ({@link isResolvedConflict}) is the only thing that promotes a candidate to a write.
+ */
+export interface CandidateResolution {
+  /** The File the candidate claims to resolve, for the rejection record (may be absent). */
+  readonly targetPath?: string
+}
+
+/**
+ * The result of routing the conflict-resolved path through {@link SyncEngine}.
+ *
+ * Separates the resolution writes SyncEngine will let through (each proven to be a
+ * user choice) from any it refused, so the caller can see exactly what was accepted and
+ * never silently writes an unresolved/auto-resolved Conflict (ADR 0008 #1).
+ */
+export interface ConflictResolutionRouting {
+  /** The accepted resolution writes — each an un-forgeable, user-chosen {@link ResolvedConflict}. */
+  readonly writes: readonly ResolvedConflict[]
+  /**
+   * Resolutions refused because they did NOT carry `ConflictModel`'s brand — i.e. they
+   * were not produced by an explicit user choice. Never written; surfaced so the refusal
+   * is visible (never fail silently).
+   */
+  readonly rejected: readonly { targetPath: string; reason: 'not-user-resolved' }[]
 }

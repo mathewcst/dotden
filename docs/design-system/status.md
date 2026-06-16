@@ -45,3 +45,16 @@ components live in the **Onboarding** section of page `02 · Components`. Audits
 
 v1 ConnectURL work (Checking cancel, base enumerate/Details CredentialError); v2 "preserve foreign
 chezmoi read-only / managed via chezmoi CLI" adoption; any backend/auth logic.
+
+## v1 specced screens — implemented in code
+
+Built directly in the renderer (real chezmoi/git ↔ IPC ↔ UI), not regenerated in Figma:
+
+| Screen spec                                                | Status   | Component(s)                                                                                                                                                                                                       |
+| ---------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [conflict-resolver](./screens/conflict-resolver.md) (1-11) | ✅ built | `ConflictResolver.tsx` — ConflictFiles list · `@pierre/diffs` `UnresolvedFile` merge view (read-only) · Keep mine / Take theirs / Open both · `n/m` resolve progress · Apply resolution (ember when ready) · Abort |
+
+Functional-color discipline honored: amber = mine/Current, blue = theirs/Incoming, red = Conflict,
+green = resolved, ember = the primary **Apply resolution** action only. The merge view is **read-only**
+(`mergeConflictActionsType: 'none'`); every resolution routes through `ConflictModel.resolve(choice)`
+(ADR 0008 invariant #1), never `@pierre/diffs`' own `resolveConflict()`.
