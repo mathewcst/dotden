@@ -19,7 +19,13 @@
  * the Remote that have no local copy and no Conflict. That is the load-bearing
  * integration test point for ADR 0008 (per-event-path tests).
  */
-import { planIncomingClean, type ApplyPlan } from './apply-planner.js'
+import {
+  planIncoming,
+  type ApplyChangeKind,
+  type ApplyPlan,
+  type IncomingChange,
+  type LocalEditState,
+} from './apply-planner.js'
 import { ApplicabilityResolver, isAppliesHere } from './applicability-resolver.js'
 import type { EnvironmentEntry, WorkspacesDoc } from './myenv-store.js'
 import type { OperationTracer } from './operation-tracer.js'
@@ -29,17 +35,19 @@ import type { OperationTracer } from './operation-tracer.js'
  * relationship.
  *
  * `status` is what lets SyncEngine route safely WITHOUT re-deriving an invariant:
- * - `incoming-clean` — on the Remote, absent locally, no Conflict → the only status
- *   this slice applies;
+ * - `incoming-clean` — on the Remote, absent locally, no Conflict → applied as a `create`;
+ * - `incoming-delete` — the Remote removed a File that exists here; routed as a `delete`
+ *   plan item that {@link ApplyPlanner} marks `requiresConfirmation` (invariant #4:
+ *   confirm incoming deletions — never applied silently);
  * - `conflict` — the same File changed both here and on the Remote in a way git
  *   cannot auto-merge (CONTEXT.md "Conflict"). SyncEngine must NEVER treat this as
- *   clean; the incoming-clean router drops it untouched for the ConflictModel owner.
+ *   clean; the router drops it untouched for the ConflictModel owner (invariant #1).
  */
 export interface IncomingFile {
   /** Destination-relative File path arriving from the Remote (e.g. `.zshrc`). */
   readonly targetPath: string
   /** Remote-vs-local classification computed upstream (git status/diff). */
-  readonly status: 'incoming-clean' | 'conflict'
+  readonly status: 'incoming-clean' | 'incoming-delete' | 'conflict'
 }
 
 /**
@@ -71,6 +79,18 @@ export interface SyncEngineOptions {
 }
 
 /**
+ * Map an {@link IncomingFile.status} that the planner ACTS on onto its {@link ApplyChangeKind}.
+ *
+ * Only the two acted-on statuses appear here — `conflict` is filtered out *before* this
+ * lookup (it is never routed as a plan item; invariant #1). Keeping the mapping in one
+ * object means SyncEngine never invents a kind: it reads the classification it was given.
+ */
+const STATUS_TO_KIND: Record<'incoming-clean' | 'incoming-delete', ApplyChangeKind> = {
+  'incoming-clean': 'create',
+  'incoming-delete': 'delete',
+}
+
+/**
  * Routes Sync events to their handlers without re-checking owners' invariants.
  *
  * Holds the synced subscription model so it can ask {@link ApplicabilityResolver}
@@ -91,23 +111,34 @@ export class SyncEngine {
   }
 
   /**
-   * Route a Sync's incoming Files through the **incoming-clean** path only.
+   * Route a Sync's incoming Files into a witness-gated Apply plan.
    *
-   * For each File:
+   * Routes the three acted-on/deferred classifications, never re-checking an owner's
+   * invariant:
    * - a `conflict` is deferred untouched — SyncEngine never auto-resolves it
    *   (invariant #1 stays with `ConflictModel`); routing it as clean would be the
    *   exact regression ADR 0008 guards against;
-   * - an `incoming-clean` File is checked for applicability via the resolver; only a
-   *   minted {@link AppliesHere} witness lets it enter the Apply plan (invariant #3);
-   *   a non-applicable File is deferred with reason `not-applicable`.
+   * - an `incoming-clean` File becomes a `create`, an `incoming-delete` becomes a
+   *   `delete` — but ONLY after the resolver mints an {@link AppliesHere} witness for
+   *   it (invariant #3); a non-applicable File is deferred with reason `not-applicable`;
+   * - the witness-backed changes go to {@link planIncoming}, the sole owner of the
+   *   uncommitted-edit guard (invariant #2) and deletion-confirmation (invariant #4).
+   *   SyncEngine does NOT re-decide either — it hands `localEdits` to the planner and
+   *   consumes the plan items' `blockedReason`/`requiresConfirmation` verdicts.
    *
    * @param incoming The classified incoming Files from this Sync's fetch.
    * @param traceId Correlation id for the wide event (the IPC `_trace.traceId`).
+   * @param localEdits The local-drift facts (paths dirty on THIS environment) that the
+   *   planner needs for invariant #2; omitted ⇒ no local edits (e.g. a fresh env B).
    * @returns The witness-gated Apply plan plus the deferred Files and why.
    */
-  routeIncomingClean(incoming: readonly IncomingFile[], traceId: string): IncomingCleanRouting {
+  routeIncomingClean(
+    incoming: readonly IncomingFile[],
+    traceId: string,
+    localEdits?: LocalEditState,
+  ): IncomingCleanRouting {
     const span = this.tracer?.startOperation('sync', traceId)
-    const applicable: import('./applicability-resolver.js').AppliesHere[] = []
+    const changes: IncomingChange[] = []
     const deferred: { targetPath: string; reason: 'conflict' | 'not-applicable' }[] = []
 
     for (const file of incoming) {
@@ -120,15 +151,18 @@ export class SyncEngine {
       // Ask the sole owner of invariant #3 for proof; we cannot mint it ourselves.
       const result = this.resolver.resolve(file.targetPath)
       if (isAppliesHere(result)) {
-        applicable.push(result)
+        // Carry the classification's kind through to the planner (create vs delete);
+        // the planner — not SyncEngine — decides confirmation + blocking from it.
+        changes.push({ witness: result, kind: STATUS_TO_KIND[file.status] })
       } else {
         deferred.push({ targetPath: file.targetPath, reason: 'not-applicable' })
       }
     }
 
-    // Hand the witnesses (not raw paths) to the planner; it can only create plan
-    // items from witnesses, so the plan is scoped-by-construction.
-    const plan = planIncomingClean(applicable)
+    // Hand the witnesses (not raw paths) + the local-drift facts to the planner; it can
+    // only create plan items from witnesses, so the plan is scoped-by-construction, and
+    // it — not SyncEngine — owns the uncommitted-edit block + deletion confirmation.
+    const plan = planIncoming(changes, localEdits)
 
     if (span) {
       span.setAttribute('fileCount', plan.items.length)

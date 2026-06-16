@@ -117,14 +117,23 @@ export interface DotdenApi {
      */
     incomingDiff(targetPath: string): Promise<string>
     /**
-     * **Apply** reviewed incoming Files to disk (env B). Maps to a per-File
+     * **Apply** reviewed incoming Files to disk (env B). Maps to a per-File guarded
      * `chezmoi apply <file>` so each File applies independently (per-file atomicity,
      * issue 1-09): one File's failure never blocks the rest. The result reports every
      * File's outcome with a reason for failures, so the UI can retry just the failures.
      * "Apply one" passes a single path; "Apply all" passes every reviewed path; "Retry"
      * passes only the previously-failed paths.
+     *
+     * `ApplyPlanner` (issue 1-10) gates the write: a File with uncommitted local edits is
+     * refused `blocked-uncommitted-edit` (invariant #2, re-checked atomically at write
+     * time — never silently overwritten), and an incoming **deletion** is applied ONLY if
+     * its path is in `confirmedDeletions` (invariant #4) — otherwise it is refused
+     * `needs-confirmation`. Pass the paths the user explicitly confirmed for deletion.
      */
-    apply(targetPaths: readonly string[]): Promise<ApplyResult>
+    apply(
+      targetPaths: readonly string[],
+      confirmedDeletions?: readonly string[],
+    ): Promise<ApplyResult>
     /**
      * The three-pane tree view (issue 1-07): every managed File joined with its
      * Workspace placement, local-axis git status (M/A/D/R/U), and out-of-OS-Scope

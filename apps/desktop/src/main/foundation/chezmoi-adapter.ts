@@ -18,7 +18,26 @@
  */
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, relative, resolve } from 'node:path'
+import { parseChezmoiStatus } from './chezmoi-status.js'
 import { runCommand } from './process.js'
+
+/**
+ * Thrown by {@link ChezmoiAdapter.applyGuarded} when the File it is about to apply has
+ * an **uncommitted local edit** at apply-time — the atomic re-check of invariant #2
+ * (never lose data silently, ADR 0008). `ApplyPlanner` blocks this at plan-time, but the
+ * authoritative guarantee is THIS re-check, taken immediately before the write so there
+ * is no plan-time-snapshot → apply-time-write TOCTOU. The message states the fix so the
+ * caller can surface it (never fail silently).
+ */
+export class UncommittedLocalEditError extends Error {
+  constructor(readonly targetPath: string) {
+    super(
+      `Apply blocked: ${targetPath} has uncommitted local edits on this environment. ` +
+        `Commit or discard your local changes first, then Apply (so in-progress work is not overwritten).`,
+    )
+    this.name = 'UncommittedLocalEditError'
+  }
+}
 
 /**
  * Wiring for a {@link ChezmoiAdapter}: the chezmoi binary plus the two trees it
@@ -115,6 +134,56 @@ export class ChezmoiAdapter {
    */
   async apply(targetPaths: readonly string[] = []): Promise<void> {
     await this.chezmoi(['apply', ...targetPaths.map((path) => this.destinationPath(path))])
+  }
+
+  /**
+   * Apply ONE File with the **authoritative atomic uncommitted-edit guard** (invariant
+   * #2, ADR 0008) — the write path that owns "never lose data silently".
+   *
+   * The sequence is deliberately re-check-then-write **inside this method**, with no
+   * caller-visible gap: it runs `chezmoi status` and refuses (throws
+   * {@link UncommittedLocalEditError}) if the File shows a local edit in column X (the
+   * last-written-vs-actual column — the user's own hand-edit on THIS environment), and
+   * only then runs `chezmoi apply <file>`. Because the status probe and the apply are
+   * adjacent here — not split across a plan-time snapshot and a later apply-time write —
+   * there is no TOCTOU window: a File the user dirties *after* the plan was built is
+   * still caught at the last possible instant before chezmoi would overwrite it.
+   *
+   * `ApplyPlanner` blocks the same condition at plan-time so the user sees the warning in
+   * Review; this method is the load-bearing *guarantee* that the warning cannot be
+   * bypassed by a stale plan. Maps to `chezmoi status` (re-check) + `chezmoi apply <dest>`.
+   *
+   * @param targetPath Destination-relative File path to apply (e.g. `.zshrc`).
+   * @throws UncommittedLocalEditError if the File has an uncommitted local edit at this instant.
+   * @throws CommandFailedError if `chezmoi status` or `chezmoi apply` exits non-zero.
+   */
+  async applyGuarded(targetPath: string): Promise<void> {
+    // Atomic re-check: the local edit set RIGHT NOW, not from a plan-time snapshot.
+    if ((await this.localEdits()).has(targetPath)) {
+      // Refuse before writing — applying would silently overwrite in-progress local work.
+      throw new UncommittedLocalEditError(targetPath)
+    }
+    // Delegate the write to {@link apply} so there is ONE write choke point (the guard is
+    // the only thing this method adds on top of the per-path apply).
+    await this.apply([targetPath])
+  }
+
+  /**
+   * The set of destination-relative paths with an **uncommitted local edit** on this
+   * environment — the local-drift axis that drives invariant #2.
+   *
+   * Maps to `chezmoi status`, reading **column X only** (last-written-vs-actual = the
+   * user's hand-edit here) via {@link parseChezmoiStatus}; the incoming/apply-direction
+   * column Y is deliberately ignored (it is the Remote axis, issue 1-09). The returned
+   * set is what {@link ApplyPlanner} consumes for its plan-time block and what
+   * {@link applyGuarded} re-derives for its apply-time guarantee — one faithful source of
+   * "is this File dirty here?" so plan and apply agree.
+   *
+   * @returns Paths the user has locally modified/added/deleted but not committed.
+   * @throws CommandFailedError if `chezmoi status` exits non-zero.
+   */
+  async localEdits(): Promise<ReadonlySet<string>> {
+    return new Set(parseChezmoiStatus(await this.status()).map((entry) => entry.path))
   }
 
   /**

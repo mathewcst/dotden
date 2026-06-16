@@ -70,12 +70,73 @@ describe('SyncEngine incoming-clean routing (ADR 0008 load-bearing)', () => {
     expect(result.deferred).toEqual([{ targetPath: '.zshrc', reason: 'conflict' }])
   })
 
+  it('routes an incoming deletion as a first-class plan item that requires confirmation (invariant #4)', () => {
+    const workspaces: WorkspacesDoc = {
+      workspaces: [{ id: 'personal', label: 'Personal', groups: [] }],
+      placements: [{ targetPath: '.zshrc', workspaceId: 'personal', groupId: null }],
+    }
+    const engine = new SyncEngine({ environment: env(['personal']), workspaces })
+
+    const result = engine.routeIncomingClean(
+      [{ targetPath: '.zshrc', status: 'incoming-delete' }],
+      'trace-del',
+    )
+
+    // The deletion is NOT silently applied or dropped — it is a real `delete` plan item…
+    expect(result.plan.items).toHaveLength(1)
+    expect(result.plan.items[0]?.kind).toBe('delete')
+    // …and it requires explicit confirmation before it can be written (ApplyPlanner owns this).
+    expect(result.plan.items[0]?.requiresConfirmation).toBe(true)
+    expect(result.deferred).toEqual([])
+  })
+
+  it('blocks an incoming change to a File with an uncommitted local edit (invariant #2, no silent overwrite)', () => {
+    const workspaces: WorkspacesDoc = {
+      workspaces: [{ id: 'personal', label: 'Personal', groups: [] }],
+      placements: [{ targetPath: '.zshrc', workspaceId: 'personal', groupId: null }],
+    }
+    const engine = new SyncEngine({ environment: env(['personal']), workspaces })
+
+    const result = engine.routeIncomingClean(
+      [{ targetPath: '.zshrc', status: 'incoming-clean' }],
+      'trace-block',
+      // The user has an uncommitted local edit on `.zshrc` — applying would clobber it.
+      { uncommittedEdits: new Set(['.zshrc']) },
+    )
+
+    // The item is surfaced but BLOCKED — SyncEngine consumes the planner's verdict, never overwrites.
+    expect(result.plan.items).toHaveLength(1)
+    expect(result.plan.items[0]?.blockedReason).toBe('uncommitted-edit')
+  })
+
+  it('a non-applicable incoming deletion is deferred, never planned (invariant #3 still gates deletions)', () => {
+    const workspaces: WorkspacesDoc = {
+      workspaces: [
+        { id: 'personal', label: 'Personal', groups: [] },
+        { id: 'work', label: 'Work', groups: [] },
+      ],
+      placements: [{ targetPath: '.work-only', workspaceId: 'work', groupId: null }],
+    }
+    // Subscribed to 'personal' only — a deletion of a 'work' File must never be planned here.
+    const engine = new SyncEngine({ environment: env(['personal']), workspaces })
+
+    const result = engine.routeIncomingClean(
+      [{ targetPath: '.work-only', status: 'incoming-delete' }],
+      'trace-del-na',
+    )
+
+    expect(result.plan.items).toEqual([])
+    expect(result.deferred).toEqual([{ targetPath: '.work-only', reason: 'not-applicable' }])
+  })
+
   it('property: no planned item is ever for a non-applicable File or a Conflict', () => {
     // Exhaustively-ish drive randomized subscription/placement/status combinations
     // and assert the two invariants hold for EVERY planned item — this is the
     // composition guarantee a single example test cannot give.
     const workspaceIds = ['personal', 'work', 'home']
     let cases = 0
+    let deletionsSeen = 0
+    let blockedSeen = 0
 
     for (let seed = 0; seed < 400; seed++) {
       const rng = mulberry32(seed)
@@ -90,11 +151,21 @@ describe('SyncEngine incoming-clean routing (ADR 0008 load-bearing)', () => {
       }
       const engine = new SyncEngine({ environment: env(subscribed), workspaces })
 
-      const incoming: IncomingFile[] = workspaceIds.map((_id, index) => ({
-        targetPath: `.file-${index}`,
-        status: rng() < 0.3 ? 'conflict' : 'incoming-clean',
-      }))
-      const { plan } = engine.routeIncomingClean(incoming, `trace-prop-${seed}`)
+      // Drive all three acted-on/deferred statuses, and randomize local drift, so the
+      // property covers the create / delete / conflict paths AND the uncommitted-edit
+      // guard composing together at the SyncEngine seam — the real regression surface.
+      const dirty = new Set<string>()
+      const incoming: IncomingFile[] = workspaceIds.map((_id, index) => {
+        const path = `.file-${index}`
+        if (rng() < 0.3) dirty.add(path)
+        const roll = rng()
+        const status: IncomingFile['status'] =
+          roll < 0.25 ? 'conflict' : roll < 0.5 ? 'incoming-delete' : 'incoming-clean'
+        return { targetPath: path, status }
+      })
+      const { plan } = engine.routeIncomingClean(incoming, `trace-prop-${seed}`, {
+        uncommittedEdits: dirty,
+      })
 
       for (const item of plan.items) {
         cases++
@@ -106,12 +177,25 @@ describe('SyncEngine incoming-clean routing (ADR 0008 load-bearing)', () => {
         expect(subscribed).toContain(placement?.workspaceId)
         // Invariant #1: the File was NOT a conflict (conflicts are never planned).
         const status = incoming.find((f) => f.targetPath === item.witness.targetPath)?.status
-        expect(status).toBe('incoming-clean')
+        expect(status).not.toBe('conflict')
+        // Invariant #4: an incoming-delete is ALWAYS a confirm-required `delete` item.
+        if (status === 'incoming-delete') {
+          expect(item.kind).toBe('delete')
+          expect(item.requiresConfirmation).toBe(true)
+          deletionsSeen++
+        }
+        // Invariant #2: a File with a local edit is ALWAYS blocked, never silently applied.
+        if (dirty.has(item.witness.targetPath)) {
+          expect(item.blockedReason).toBe('uncommitted-edit')
+          blockedSeen++
+        }
       }
     }
 
-    // Sanity: the randomized run actually planned some Applies (the test is not vacuous).
+    // Sanity: the randomized run actually exercised every path (the test is not vacuous).
     expect(cases).toBeGreaterThan(0)
+    expect(deletionsSeen).toBeGreaterThan(0)
+    expect(blockedSeen).toBeGreaterThan(0)
   })
 })
 

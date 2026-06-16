@@ -20,7 +20,7 @@
  */
 import { access } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { ChezmoiAdapter } from './chezmoi-adapter.js'
+import { ChezmoiAdapter, UncommittedLocalEditError } from './chezmoi-adapter.js'
 import { GitTransport } from './git-transport.js'
 import {
   DEFAULT_COMMIT_TEMPLATE,
@@ -38,7 +38,8 @@ import {
 } from './myenv-store.js'
 import type { OperationTracer } from './operation-tracer.js'
 import { SyncEngine, type IncomingFile } from './sync-engine.js'
-import { parseChezmoiStatus, type FileGitStatus } from './chezmoi-status.js'
+import type { ApplyChangeKind } from './apply-planner.js'
+import { parseChezmoiStatus, parseIncomingDeletions, type FileGitStatus } from './chezmoi-status.js'
 
 /** Construction wiring for a {@link DenService}, bound to one environment's dirs. */
 export interface DenServiceOptions {
@@ -109,6 +110,19 @@ export interface IncomingReviewItem {
    * lane are ready for the ConflictModel slice (issue 1-11) without reshaping.
    */
   readonly marker: RemoteAxisMarker
+  /**
+   * What Apply will do to this File: `create`/`update` write it, `delete` removes it
+   * (issue 1-10). Carried so the Review surface can render an incoming **deletion** as
+   * its own first-class row (a removed-File treatment, not an addition).
+   */
+  readonly kind: ApplyChangeKind
+  /**
+   * `true` when applying this File needs **explicit confirmation** first (always true for
+   * a `delete` — invariant #4, confirm incoming deletions). The Review surface must
+   * collect the confirmation and pass the path in `apply`'s `confirmedDeletions`; the
+   * value is the `ApplyPlanner`'s verdict, not re-derived here (ADR 0008).
+   */
+  readonly requiresConfirmation: boolean
 }
 
 /**
@@ -129,28 +143,52 @@ export interface IncomingSummary {
 }
 
 /**
+ * Why an Apply did not write a File, beyond a raw chezmoi error — the
+ * `ApplyPlanner`-owned refusals surfaced so the Review surface shows the right warning
+ * and fix (never fail silently, ADR 0008 invariants #2 & #4).
+ *
+ * - `blocked-uncommitted-edit` — the File has uncommitted local edits here; applying
+ *   would silently overwrite in-progress work (invariant #2). The fix is to Commit or
+ *   discard the local edit first. This is also the apply-time atomic re-check verdict
+ *   from {@link import('./chezmoi-adapter.js').UncommittedLocalEditError}.
+ * - `needs-confirmation` — the File is an incoming **deletion** the user has not yet
+ *   confirmed (invariant #4); deletions are never applied without explicit confirmation.
+ * - `not-applicable` — the File turned non-applicable between review and apply (the
+ *   witness gate refused it; invariant #3).
+ */
+export type ApplyRefusal = 'blocked-uncommitted-edit' | 'needs-confirmation' | 'not-applicable'
+
+/**
  * The per-File outcome of an Apply, recording that each File **applied independently**
  * (per-file atomicity, issue 1-09): one File's failure never blocks the others.
  *
- * `ok` means `chezmoi apply <file>` wrote the File; `error` means it failed and carries
- * a human `reason` for the failure + a `retryable` flag so the Review surface can offer
- * a retry that re-runs ONLY the failures. A File the witness gate dropped (it turned
- * non-applicable between review and apply) is recorded as a `not-applicable` error so it
- * is surfaced, never silently skipped.
+ * `ok` means `chezmoi apply <file>` wrote the File; `error` means it was not written and
+ * carries a human `reason` + a `retryable` flag so the Review surface can offer a retry
+ * that re-runs ONLY the failures. A File refused by an `ApplyPlanner` invariant (a local
+ * edit block, an unconfirmed deletion, or a witness-gate refusal) carries a `refusal`
+ * tag so the surface can show the specific warning + fix, never silently skipping it.
  */
 export interface ApplyFileResult {
   /** The destination-relative File path this outcome is for. */
   readonly targetPath: string
-  /** Whether the File was written (`ok`) or its Apply failed (`error`). */
+  /** Whether the File was written (`ok`) or its Apply did not happen (`error`). */
   readonly outcome: 'ok' | 'error'
   /** Human-readable failure reason when `outcome` is `error`; absent on success. */
   readonly reason?: string
   /**
    * Whether a failed File can be retried (re-run just this File). A per-file chezmoi
    * failure is retryable (the user can fix and re-run); a File the witness gate refused
-   * is NOT retryable (it does not apply to this environment at all).
+   * is NOT retryable (it does not apply to this environment at all). A blocked local-edit
+   * or unconfirmed deletion is retryable once the user resolves the cause (commits the
+   * edit / confirms the deletion) and re-runs.
    */
   readonly retryable?: boolean
+  /**
+   * The `ApplyPlanner`-owned refusal that stopped this File, when one did — so the UI
+   * shows the right warning/fix (invariant #2/#4/#3). Absent for a success or a plain
+   * chezmoi error.
+   */
+  readonly refusal?: ApplyRefusal
 }
 
 /**
@@ -387,17 +425,20 @@ export class DenService {
   }
 
   /**
-   * **env B** — fetch the Remote and present incoming Files for a reviewed Apply,
-   * restricted to the **incoming-clean** path (ADR 0008).
+   * **env B** — fetch the Remote and present incoming Files for a reviewed Apply
+   * (incoming-clean creates + first-class incoming deletions), ADR 0008.
    *
-   * Maps to `git fetch` + read the synced `.myenv/` placements, then route through
-   * {@link SyncEngine}: only Files that are incoming-clean AND applicable to this
-   * environment (an {@link import('./applicability-resolver.js').AppliesHere} witness
-   * is minted for each) appear for review. Conflicting or non-subscribed Files are
-   * deferred, never silently applied.
+   * Maps to `git fetch` + `chezmoi status` + the synced `.myenv/` placements, then routes
+   * through {@link SyncEngine} → {@link ApplyPlanner}: only Files applicable to this
+   * environment (an {@link import('./applicability-resolver.js').AppliesHere} witness is
+   * minted for each) appear for review. Conflicting or non-subscribed Files are deferred,
+   * never silently applied. Each item carries the planner's `kind` (create/delete) and
+   * `requiresConfirmation` so the Review surface renders a deletion as its own row and
+   * knows it must be confirmed (invariant #4) — verdicts owned by the planner, not
+   * re-derived here.
    *
    * @param traceId Correlation id for the wide event.
-   * @returns The reviewable incoming Files (path + Workspace + Remote-axis marker).
+   * @returns The reviewable incoming Files (path + Workspace + marker + kind + confirm flag).
    */
   async listIncomingClean(traceId: string): Promise<readonly IncomingReviewItem[]> {
     const span = this.tracer?.startOperation('sync', traceId)
@@ -406,14 +447,21 @@ export class DenService {
       const incoming = await this.computeIncoming()
       const { environment, workspaces } = await this.loadSyncedModel()
       const engine = new SyncEngine({ environment, workspaces, tracer: this.tracer })
-      const { plan } = engine.routeIncomingClean(incoming, traceId)
+      // Hand the local-drift facts to the planner so a File blocked by an uncommitted edit
+      // (invariant #2) still surfaces in Review (the user sees the warning), not vanishes.
+      const uncommittedEdits = await this.chezmoi.localEdits()
+      const { plan } = engine.routeIncomingClean(incoming, traceId, { uncommittedEdits })
       const placementOf = new Map(workspaces.placements.map((p) => [p.targetPath, p.workspaceId]))
       const items: IncomingReviewItem[] = plan.items.map((item) => ({
         targetPath: item.witness.targetPath,
-        // The witness only exists for placed Files, so this lookup always resolves.
+        // A `create`/`update` resolves a placement; a `delete` may have lost its placement
+        // already (removed on the source env), so fall back to '' rather than failing.
         workspaceId: placementOf.get(item.witness.targetPath) ?? '',
-        // Incoming-clean Files are all the ↓ Remote axis here; ⚠ conflict is issue 1-11.
+        // Incoming Files are all the ↓ Remote axis here; ⚠ conflict is issue 1-11.
         marker: 'incoming',
+        kind: item.kind,
+        // Consume the planner's verdict directly (invariant #4 lives in ApplyPlanner).
+        requiresConfirmation: item.requiresConfirmation,
       }))
       span?.setAttribute('fileCount', items.length)
       span?.end('ok')
@@ -446,52 +494,94 @@ export class DenService {
 
   /**
    * **env B** — apply reviewed incoming Files to disk, **one File at a time**
-   * (per-file atomicity, issue 1-09).
+   * (per-file atomicity, issue 1-09), enforcing the two `ApplyPlanner`-owned invariants
+   * (issue 1-10).
    *
-   * Maps to a SEPARATE `chezmoi apply <file>` per File rather than one batched apply,
-   * because the Review & Apply contract is that each File **applies independently**:
+   * Maps to a SEPARATE guarded `chezmoi apply <file>` per File rather than one batched
+   * apply, because the Review & Apply contract is that each File **applies independently**:
    * one File failing must not block the others, and a failure must be reported with a
-   * reason + a retry that re-runs just the failures. (chezmoi is already per-path —
-   * each invocation is its own atomic write of that File — so this is the faithful
-   * mapping of "Apply one"/"Apply all" onto chezmoi's per-path model, ADR 0003.)
+   * reason + a retry that re-runs just the failures. (chezmoi is already per-path — each
+   * invocation is its own atomic write — so this is the faithful mapping of "Apply
+   * one"/"Apply all" onto chezmoi's per-path model, ADR 0003.)
    *
-   * The reviewed paths are still re-routed through {@link SyncEngine} so every write is
-   * witness-gated (a path that turned non-applicable between review and apply is refused,
-   * never written) — defense in depth for invariant #3. A refused path is recorded as a
-   * non-retryable `not-applicable` failure so it is surfaced, not silently dropped.
+   * The reviewed paths are routed through {@link SyncEngine} → {@link ApplyPlanner}, which
+   * owns the verdicts this method **consumes without re-deciding** (ADR 0008):
+   * - **invariant #3** — only witness-backed Files plan; a path that turned non-applicable
+   *   is surfaced as a non-retryable `not-applicable` refusal, never written;
+   * - **invariant #2** — a File the planner marks `blocked-uncommitted-edit` is surfaced,
+   *   not written, and the **authoritative atomic re-check** is taken in
+   *   {@link import('./chezmoi-adapter.js').ChezmoiAdapter.applyGuarded} (no plan→apply
+   *   TOCTOU): even a File dirtied AFTER the plan is refused at the last instant;
+   * - **invariant #4** — a `delete` is applied ONLY if the user explicitly confirmed it
+   *   (its path is in `confirmedDeletions`); an unconfirmed deletion is surfaced as a
+   *   `needs-confirmation` refusal, never silently applied.
    *
-   * This Operation is NEVER thrown out of: a per-File chezmoi failure is caught and
-   * recorded so the rest of the batch still applies (the whole point of per-file
-   * atomicity). The wide event's `outcome` reflects whether ALL Files applied.
+   * This Operation is NEVER thrown out of: a per-File failure is caught and recorded so
+   * the rest of the batch still applies. The wide event's `outcome` reflects whether ALL
+   * attempted Files applied.
    *
    * @param targetPaths The reviewed File paths to write ("Apply all" = every reviewed
    *   path; "Apply one" = a single path; "Retry" = just the previously-failed paths).
    * @param traceId Correlation id for the wide event.
+   * @param confirmedDeletions The deletion paths the user explicitly confirmed (invariant
+   *   #4). A path that is a REAL incoming deletion (per `chezmoi status`) but absent here
+   *   is refused `needs-confirmation`. Defaults to none, so an incoming deletion is never
+   *   applied unless its confirmation is passed in.
    * @returns Per-File outcomes, plus the applied/failed splits for convenience.
    */
-  async applyIncoming(targetPaths: readonly string[], traceId: string): Promise<ApplyResult> {
+  async applyIncoming(
+    targetPaths: readonly string[],
+    traceId: string,
+    confirmedDeletions: readonly string[] = [],
+  ): Promise<ApplyResult> {
     const span = this.tracer?.startOperation('apply', traceId)
     try {
       const { environment, workspaces } = await this.loadSyncedModel()
       const engine = new SyncEngine({ environment, workspaces })
-      // Re-route the reviewed paths as incoming-clean so only witness-backed Files are
-      // written: SyncEngine refuses to plan a non-applicable File (invariant #3).
+      // One `chezmoi status` read drives BOTH invariant facts so plan and apply agree on a
+      // single snapshot:
+      // - column X (local-drift, invariant #2): which reviewed paths are dirty on disk RIGHT
+      //   NOW. The planner blocks any incoming write to one of these; ChezmoiAdapter re-checks
+      //   atomically at write time so a path dirtied after this snapshot is still caught.
+      // - column Y=D (incoming deletions, invariant #4): which reviewed paths `chezmoi apply`
+      //   would DELETE here (the source removed them). Deletion-ness is the REAL incoming
+      //   status, NOT inferred from `confirmedDeletions` — otherwise an UNCONFIRMED incoming
+      //   deletion would misclassify as a create and silently delete the destination File.
+      const statusRaw = await this.chezmoi.status()
+      const uncommittedEdits = new Set(parseChezmoiStatus(statusRaw).map((entry) => entry.path))
+      const incomingDeletionSet = new Set(parseIncomingDeletions(statusRaw))
+      // Classify each reviewed path by its REAL incoming status: a path `chezmoi apply` would
+      // delete routes as `incoming-delete` (regardless of confirmation, so the planner marks it
+      // `kind: 'delete'` / `requiresConfirmation: true`), every other reviewed path as
+      // `incoming-clean`. SyncEngine re-mints witnesses (invariant #3) and hands the local-edit
+      // set to ApplyPlanner (invariant #2); the planner decides blocking + deletion-confirmation
+      // — this method never re-derives those. The confirmation gate below is the consumer of the
+      // planner's `kind: 'delete'` verdict, not a re-derivation of deletion-ness.
+      const confirmedDeletionSet = new Set(confirmedDeletions)
       const { plan, deferred } = engine.routeIncomingClean(
-        targetPaths.map((targetPath) => ({ targetPath, status: 'incoming-clean' as const })),
+        targetPaths.map((targetPath) => ({
+          targetPath,
+          status: incomingDeletionSet.has(targetPath)
+            ? ('incoming-delete' as const)
+            : ('incoming-clean' as const),
+        })),
         traceId,
+        { uncommittedEdits },
       )
-      const applicable = new Set(plan.items.map((item) => item.witness.targetPath))
+      // Index the planner's per-File verdicts so the apply loop consumes them by path.
+      const planItem = new Map(plan.items.map((item) => [item.witness.targetPath, item]))
 
       const results: ApplyFileResult[] = []
-      // Apply each witness-backed File in its OWN chezmoi invocation so a single File's
-      // failure is isolated — the loop continues and the remaining Files still apply.
+      // Apply each File in its OWN guarded chezmoi invocation so a single File's failure is
+      // isolated — the loop continues and the remaining Files still apply.
       for (const targetPath of targetPaths) {
-        if (!applicable.has(targetPath)) {
-          // The witness gate refused this path (it does not apply to this environment).
-          // Surface it as a non-retryable failure rather than a silent omission.
+        const item = planItem.get(targetPath)
+        if (!item) {
+          // The witness gate refused this path (invariant #3) — surface it, never silently drop.
           results.push({
             targetPath,
             outcome: 'error',
+            refusal: 'not-applicable',
             reason:
               deferred.find((d) => d.targetPath === targetPath)?.reason === 'conflict'
                 ? 'This File is in Conflict — resolve it before applying.'
@@ -500,12 +590,60 @@ export class DenService {
           })
           continue
         }
+        // Invariant #2 (plan-time block): a File with an uncommitted local edit is surfaced,
+        // not written. ChezmoiAdapter.applyGuarded is the authoritative re-check below.
+        if (item.blockedReason === 'uncommitted-edit') {
+          results.push({
+            targetPath,
+            outcome: 'error',
+            refusal: 'blocked-uncommitted-edit',
+            reason:
+              'This File has uncommitted local edits — Commit or discard them first, then Apply ' +
+              '(so your in-progress work is not overwritten).',
+            // Retryable once the user resolves the edit and re-runs JUST this File.
+            retryable: true,
+          })
+          continue
+        }
+        // Invariant #4: a deletion is applied ONLY when explicitly confirmed. This is the
+        // LIVE safety gate, not a defensive no-op: deletion-ness was classified from the REAL
+        // incoming status above (column Y=D), so a path the source removed routes here as a
+        // `delete` even when the user never confirmed it — and is refused, never reaching
+        // `applyGuarded` (which would run `chezmoi apply <path>` and delete the destination
+        // File). Only a `delete` whose path is in `confirmedDeletions` falls through to apply.
+        if (item.kind === 'delete' && !confirmedDeletionSet.has(targetPath)) {
+          results.push({
+            targetPath,
+            outcome: 'error',
+            refusal: 'needs-confirmation',
+            reason: 'This is an incoming deletion — confirm it before applying.',
+            retryable: true,
+          })
+          continue
+        }
         try {
-          await this.chezmoi.apply([targetPath])
+          // Guarded apply: the atomic uncommitted-edit re-check happens INSIDE this call,
+          // immediately before the write, so there is no plan→apply TOCTOU (invariant #2).
+          // A confirmed incoming deletion (`kind: 'delete'`) and a create/update both route
+          // here — `chezmoi apply <file>` is the faithful write for either: for a deletion
+          // it removes the destination File because the source no longer manages it (ADR 0003).
+          await this.chezmoi.applyGuarded(targetPath)
           results.push({ targetPath, outcome: 'ok' })
         } catch (caught) {
-          // A per-File chezmoi failure: record the reason and mark it retryable so the
-          // user can fix the cause and re-run JUST this File, without blocking the others.
+          // The apply-time atomic guard fired: a File dirtied after the plan was built. Surface
+          // it as a blocked local edit (the same refusal as the plan-time block), retryable.
+          if (caught instanceof UncommittedLocalEditError) {
+            results.push({
+              targetPath,
+              outcome: 'error',
+              refusal: 'blocked-uncommitted-edit',
+              reason: caught.message,
+              retryable: true,
+            })
+            continue
+          }
+          // A per-File chezmoi failure: record the reason, retryable so the user can fix the
+          // cause and re-run JUST this File without blocking the others.
           results.push({
             targetPath,
             outcome: 'error',
@@ -899,18 +1037,31 @@ export class DenService {
   }
 
   /**
-   * Classify incoming Files for the incoming-clean path.
+   * Classify incoming Files for the incoming-clean + incoming-deletion paths.
    *
-   * MVP slice: every placed File in `.myenv/` that is NOT yet present on this
-   * environment's disk is incoming-clean (no local copy → no Conflict). A File that
-   * already exists locally is dropped from "incoming" here (the fuller update/diff
-   * path is the Review & Apply slice, 1-09). Reading placements from the synced
-   * model is what lets env B discover Files it has never seen.
+   * Two signals are merged:
+   * - **incoming-clean creates** — every placed File in `.myenv/` that is NOT yet present
+   *   on this environment's disk (no local copy → no Conflict). Reading placements is what
+   *   lets env B discover Files it has never seen.
+   * - **incoming deletions** (issue 1-10) — Files `chezmoi status` reports as
+   *   apply-will-delete (column Y = `D`, via {@link parseIncomingDeletions}): the source
+   *   removed the File, so Apply would delete it here. These route as `incoming-delete`
+   *   and ApplyPlanner marks them confirm-required (invariant #4), never auto-applied.
+   *
+   * A File that already exists locally with NO incoming change is dropped here (the fuller
+   * incoming-update/diff path is the Review & Apply slice, 1-09).
    */
   private async computeIncoming(): Promise<readonly IncomingFile[]> {
     const { placements } = await this.store.readWorkspaces()
     const incoming: IncomingFile[] = []
+    // Incoming deletions: what `chezmoi apply` would remove on this environment (column Y=D).
+    const toDelete = new Set(parseIncomingDeletions(await this.chezmoi.status()))
     for (const placement of placements) {
+      if (toDelete.has(placement.targetPath)) {
+        // The source removed this File — an incoming deletion the user must confirm.
+        incoming.push({ targetPath: placement.targetPath, status: 'incoming-delete' })
+        continue
+      }
       const onDisk = await this.exists(placement.targetPath)
       if (!onDisk) incoming.push({ targetPath: placement.targetPath, status: 'incoming-clean' })
     }

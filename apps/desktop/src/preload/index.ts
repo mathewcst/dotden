@@ -91,9 +91,11 @@ const api: DotdenApi = {
       }) as ReturnType<DotdenApi['den']['incomingDiff']>
     },
     // → IPC channel 'den:apply'
-    apply(targetPaths) {
+    apply(targetPaths, confirmedDeletions) {
       return ipcRenderer.invoke('den:apply', {
         targetPaths,
+        // The deletions the user explicitly confirmed (invariant #4); omitted ⇒ none.
+        confirmedDeletions: confirmedDeletions ?? [],
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['apply']>
     },

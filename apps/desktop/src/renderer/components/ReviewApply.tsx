@@ -8,8 +8,10 @@ import {
   Download,
   Loader2,
   RefreshCw,
+  Trash2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { StatusTag } from '@/components/StatusTag'
 import type {
   ApplyFileResult,
@@ -52,6 +54,14 @@ export function ReviewApply({ onClose }: { onClose: () => void }) {
   // The per-File outcomes of the LAST Apply, keyed by path, so a failed row can show its
   // reason and offer a retry. Cleared for a path the moment it is re-applied.
   const [outcomes, setOutcomes] = useState<ReadonlyMap<string, ApplyFileResult>>(new Map())
+  // The paths an Apply is BLOCKED on pending the user's explicit deletion confirmation
+  // (invariant #4, ADR 0008). Non-null while the confirm dialog is open; it holds the full
+  // requested batch AND the subset that are incoming deletions, so confirming applies the
+  // whole batch with exactly those paths passed as `confirmedDeletions`. `null` = no dialog.
+  const [pendingDeletion, setPendingDeletion] = useState<{
+    readonly paths: readonly string[]
+    readonly deletions: readonly string[]
+  } | null>(null)
 
   // Memoized so the by-marker splits below have a stable dependency (the summary object
   // only changes when a fetch/apply replaces it).
@@ -111,25 +121,26 @@ export function ReviewApply({ onClose }: { onClose: () => void }) {
     }
   }, [selectFile])
 
-  // Apply a set of paths, then fold the per-File outcomes into state so each row shows
-  // its result and the applied Files drop out of the incoming list. Shared by Apply one,
-  // Apply all, and Retry (each just passes a different set of paths) — the per-file
-  // atomicity + retry contract lives entirely in the main process; the UI only chooses
-  // WHICH paths to (re)apply.
-  const applyPaths = useCallback(
-    async (paths: readonly string[]) => {
+  // Run the actual Apply for a set of paths (with the deletion paths the user has already
+  // confirmed), then fold the per-File outcomes into state so each row shows its result and
+  // the applied Files drop out of the incoming list. The per-file atomicity + retry +
+  // invariant enforcement all live in the main process; the UI only chooses WHICH paths to
+  // (re)apply and which deletions it has explicitly confirmed (invariant #4).
+  const runApply = useCallback(
+    async (paths: readonly string[], confirmedDeletions: readonly string[]) => {
       if (paths.length === 0) return
       setBusy('apply')
       setError(null)
       try {
-        const result = await window.dotden.den.apply(paths)
+        const result = await window.dotden.den.apply(paths, confirmedDeletions)
         // Record every File's outcome (ok or error-with-reason) so failed rows can retry.
         setOutcomes((prev) => {
           const next = new Map(prev)
           for (const r of result.results) next.set(r.targetPath, r)
           return next
         })
-        // Drop the successfully-applied Files from the incoming list — they are now on disk.
+        // Drop the successfully-applied Files from the incoming list — they are now applied
+        // (written, or removed for a confirmed deletion).
         const applied = new Set(result.applied)
         setSummary((prev) =>
           prev ? { ...prev, items: prev.items.filter((i) => !applied.has(i.targetPath)) } : prev,
@@ -152,15 +163,46 @@ export function ReviewApply({ onClose }: { onClose: () => void }) {
     [selected, summary, selectFile],
   )
 
+  // Request an Apply for a set of paths. If any path is an incoming **deletion**
+  // (`requiresConfirmation`, invariant #4), the Apply is GATED behind an explicit confirm
+  // dialog first — dotden never deletes a File without the user confirming it. A batch with
+  // no deletions applies straight through (no dialog). Shared by Apply one, Apply all, and
+  // Retry — each just passes a different set of paths.
+  const applyPaths = useCallback(
+    (paths: readonly string[]) => {
+      if (paths.length === 0) return
+      // Which requested paths are incoming deletions the planner says must be confirmed.
+      const deletions = paths.filter(
+        (path) => items.find((i) => i.targetPath === path)?.requiresConfirmation,
+      )
+      if (deletions.length > 0) {
+        // Hold the batch + its deletions and open the confirm; the apply runs on confirm.
+        setPendingDeletion({ paths, deletions })
+        return
+      }
+      void runApply(paths, [])
+    },
+    [items, runApply],
+  )
+
+  // The user CONFIRMED the pending incoming deletion(s): run the held batch, passing exactly
+  // the confirmed deletion paths so the main process applies them (invariant #4 satisfied).
+  const confirmPendingDeletion = useCallback(() => {
+    if (!pendingDeletion) return
+    const { paths, deletions } = pendingDeletion
+    setPendingDeletion(null)
+    void runApply(paths, deletions)
+  }, [pendingDeletion, runApply])
+
   // Apply all = every applies-cleanly File (Conflicts are never applied here).
-  const applyAll = () => void applyPaths(clean.map((i) => i.targetPath))
+  const applyAll = () => applyPaths(clean.map((i) => i.targetPath))
   // Apply one = the selected File (only when it is an applies-cleanly incoming File).
   const applyOne = () => {
-    if (selected) void applyPaths([selected])
+    if (selected) applyPaths([selected])
   }
   // Retry = re-run ONLY the Files that failed (and are retryable), never the whole batch.
   const retryable = [...outcomes.values()].filter((r) => r.outcome === 'error' && r.retryable)
-  const retryFailures = () => void applyPaths(retryable.map((r) => r.targetPath))
+  const retryFailures = () => applyPaths(retryable.map((r) => r.targetPath))
 
   const selectedItem = items.find((i) => i.targetPath === selected)
   const failures = [...outcomes.values()].filter((r) => r.outcome === 'error')
@@ -396,6 +438,41 @@ export function ReviewApply({ onClose }: { onClose: () => void }) {
           </section>
         ) : null}
       </aside>
+
+      {/* Incoming-deletion confirm (invariant #4, ADR 0008): an incoming change that
+          REMOVES a File is never applied until the user explicitly confirms it. Destructive
+          tone + the named paths so the user sees exactly what disappears (never fail
+          silently). Confirming applies the held batch with these paths as confirmedDeletions. */}
+      <ConfirmDialog
+        open={pendingDeletion !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeletion(null)
+        }}
+        tone="destructive"
+        title={
+          (pendingDeletion?.deletions.length ?? 0) === 1
+            ? 'Apply this incoming deletion?'
+            : `Apply ${pendingDeletion?.deletions.length ?? 0} incoming deletions?`
+        }
+        body={
+          <>
+            These Files were removed from the Den on {fromLabel}. Applying will{' '}
+            <strong>delete the real file</strong> on this environment:
+            <ul className="mt-2 flex flex-col gap-1">
+              {(pendingDeletion?.deletions ?? []).map((path) => (
+                <li key={path} className="text-dd-red-400 inline-flex items-center gap-1.5">
+                  <Trash2 className="size-3.5 shrink-0" /> <span className="font-mono">{path}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        }
+        confirmLabel={
+          (pendingDeletion?.deletions.length ?? 0) === 1 ? 'Delete file' : 'Delete files'
+        }
+        confirmDisabled={busy === 'apply'}
+        onConfirm={confirmPendingDeletion}
+      />
     </div>
   )
 }

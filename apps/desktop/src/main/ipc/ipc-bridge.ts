@@ -130,8 +130,17 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     return (await deps.denService()).incomingDiff(targetPath)
   })
   registrar.handle('den:apply', async (_event, payload: TracedPayload) => {
-    const { targetPaths } = payload as TracedPayload & { targetPaths: readonly string[] }
-    return (await deps.denService()).applyIncoming(targetPaths, traceId(payload))
+    const { targetPaths, confirmedDeletions } = payload as TracedPayload & {
+      targetPaths: readonly string[]
+      confirmedDeletions?: readonly string[]
+    }
+    // Forward the user-confirmed deletions so ApplyPlanner only applies a deletion the
+    // user explicitly OK'd (invariant #4); default to none if the renderer omitted it.
+    return (await deps.denService()).applyIncoming(
+      targetPaths,
+      traceId(payload),
+      confirmedDeletions ?? [],
+    )
   })
   // The three-pane view queries (issue 1-07): managed File tree + per-File diff.
   // Read-only, so DenService emits no wide event for them, but each still asserts the

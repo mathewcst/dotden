@@ -21,6 +21,7 @@ import { cloneRepo, GitTransport } from '../git-transport.js'
 import { DenService } from '../den-service.js'
 import { MyenvStore } from '../myenv-store.js'
 import { OperationTracer } from '../operation-tracer.js'
+import { parseIncomingDeletions } from '../chezmoi-status.js'
 import { runCommand } from '../process.js'
 
 let root: string
@@ -112,9 +113,16 @@ describe('DenService end-to-end thread (real chezmoi/git)', () => {
     // List incoming for a reviewed Apply — incoming-clean only (no local copy).
     expect(existsSync(join(bHome, '.zshrc'))).toBe(false)
     const incoming = await envB.listIncomingClean('trace-list')
-    // Each incoming File carries its Remote-axis marker (↓ incoming for the clean path, 1-09).
+    // Each incoming File carries its Remote-axis marker (↓ incoming for the clean path, 1-09)
+    // plus the planner's kind/confirm verdict (a clean create needs no confirmation, 1-10).
     expect(incoming).toEqual([
-      { targetPath: '.zshrc', workspaceId: 'personal', marker: 'incoming' },
+      {
+        targetPath: '.zshrc',
+        workspaceId: 'personal',
+        marker: 'incoming',
+        kind: 'create',
+        requiresConfirmation: false,
+      },
     ])
 
     // Apply writes the File to env B's disk with the exact source bytes.
@@ -544,9 +552,16 @@ describe('DenService Review & Apply surface (issue 1-09)', () => {
     // The summary names where the incoming change came FROM (the OTHER environment)…
     const summary = await envB.incomingSummary('trace-summary')
     expect(summary.fromEnvironmentLabel).toBe('this-mac')
-    // …and each incoming File carries its Remote-axis marker (↓ incoming for clean).
+    // …and each incoming File carries its Remote-axis marker (↓ incoming for clean) plus
+    // the planner's create/no-confirm verdict (1-10).
     expect(summary.items).toEqual([
-      { targetPath: '.zshrc', workspaceId: 'personal', marker: 'incoming' },
+      {
+        targetPath: '.zshrc',
+        workspaceId: 'personal',
+        marker: 'incoming',
+        kind: 'create',
+        requiresConfirmation: false,
+      },
     ])
 
     // The user can REVIEW the incoming change as a diff BEFORE applying anything.
@@ -585,6 +600,201 @@ describe('DenService Review & Apply surface (issue 1-09)', () => {
     expect(summary.fromEnvironmentLabel).toBe('another environment')
   })
 })
+
+describe('DenService ApplyPlanner invariants end-to-end (issue 1-10, real chezmoi/git)', () => {
+  it('invariant #2: an incoming Apply is BLOCKED when the File has an uncommitted local edit (never silently overwritten)', async () => {
+    // Two environments share a File. env B applies it, then HAND-EDITS the real File on
+    // disk (drift outside dotden) WITHOUT committing. Meanwhile env A changes the same
+    // File and syncs. env B's Apply of the incoming change must be refused, because writing
+    // it would silently throw away env B's in-progress local edit (invariant #2).
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const aHome = join(root, 'a-home')
+    const aSource = join(root, 'a-source')
+    await mkdir(aHome, { recursive: true })
+    await initSourceRepo(aSource, remote)
+    const envA = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: aHome,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+
+    // env A: Track + Commit + Sync a File.
+    await writeFile(join(aHome, '.zshrc'), 'export EDITOR=nvim\n')
+    await envA.trackFile('.zshrc', 'trace-track')
+    await envA.commitTracked(['.zshrc'], 'trace-commit')
+    await envA.syncPush('trace-push-1')
+
+    // env B: clone + apply the File so it exists on disk and is managed.
+    const bHome = join(root, 'b-home')
+    const bSource = join(root, 'b-source')
+    await mkdir(bHome, { recursive: true })
+    await cloneRepo(gitBin, remote, bSource)
+    const envB = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: bSource,
+      destinationDir: bHome,
+      environment: { id: 'env-b', label: 'work-laptop', os: process.platform },
+    })
+    await envB.applyIncoming(['.zshrc'], 'trace-apply-initial')
+    await expect(readFile(join(bHome, '.zshrc'), 'utf8')).resolves.toBe('export EDITOR=nvim\n')
+
+    // env B: the user HAND-EDITS .zshrc on disk (uncommitted local drift, outside dotden).
+    await writeFile(join(bHome, '.zshrc'), 'export EDITOR=nvim\n# my in-progress local tweak\n')
+
+    // env A: change the same File and Sync, so there is an incoming change for env B.
+    await writeFile(join(aHome, '.zshrc'), 'export EDITOR=vim\n')
+    await envA.commitTracked(['.zshrc'], 'trace-commit-2')
+    await envA.syncPush('trace-push-2')
+    await envB.listIncomingClean('trace-list') // fetch the incoming change into env B.
+
+    // env B Applies — the guard BLOCKS it: the local edit is never silently overwritten.
+    const result = await envB.applyIncoming(['.zshrc'], 'trace-apply-blocked')
+    expect(result.applied).toEqual([])
+    expect(result.failed).toHaveLength(1)
+    expect(result.failed[0]).toMatchObject({
+      targetPath: '.zshrc',
+      outcome: 'error',
+      refusal: 'blocked-uncommitted-edit',
+      retryable: true,
+    })
+    // The user's in-progress edit is INTACT on disk — nothing was overwritten.
+    await expect(readFile(join(bHome, '.zshrc'), 'utf8')).resolves.toBe(
+      'export EDITOR=nvim\n# my in-progress local tweak\n',
+    )
+  })
+
+  it('invariant #2 atomic re-check: a File dirtied AFTER review is still refused by the write-path guard (no TOCTOU)', async () => {
+    // Even if the plan was built when the File was clean, ChezmoiAdapter re-checks at the
+    // instant of the write. We drive that directly: apply a clean File, then dirty it, then
+    // applyGuarded must throw — proving the guarantee is the write-path re-check, not the plan.
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+    const home = join(root, 'home')
+    const source = join(root, 'source')
+    await mkdir(home, { recursive: true })
+    await initSourceRepo(source, remote)
+    const env = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: source,
+      destinationDir: home,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+    await writeFile(join(home, '.zshrc'), 'export EDITOR=nvim\n')
+    await env.trackFile('.zshrc', 'trace-track')
+    await env.commitTracked(['.zshrc'], 'trace-commit')
+
+    // Reach the adapter's write-path guard directly (the authoritative re-check).
+    const chezmoi = (env as unknown as { chezmoi: ChezmoiHandle }).chezmoi
+    // Clean now → guarded apply is allowed.
+    await chezmoi.applyGuarded('.zshrc')
+    // The user dirties the File AFTER any plan would have been built.
+    await writeFile(join(home, '.zshrc'), 'export EDITOR=nvim\n# drift\n')
+    // The atomic write-path re-check refuses — no plan→apply TOCTOU window.
+    await expect(chezmoi.applyGuarded('.zshrc')).rejects.toThrow(/uncommitted local edits/i)
+  })
+
+  it('invariant #4: a REAL incoming deletion is refused needs-confirmation (File NOT deleted); confirming it removes the File', async () => {
+    // A genuine incoming deletion travels: env A Tracks + Commits + Syncs a File, env B
+    // Applies it (so it is managed + on disk), then env A REMOVES the File from the Den
+    // (the source-state file is deleted AND a `.chezmoiremove` directive is added — the
+    // faithful "the source removed it, so Apply will delete it here" signal) and Syncs.
+    // After env B merges that incoming commit, `chezmoi status` reports ` D .zshrc`
+    // (column Y=D) — exactly what parseIncomingDeletions detects. An Apply WITHOUT
+    // confirmation must REFUSE (the destination File is never silently deleted); only
+    // WITH the path confirmed does the destination File get removed (invariant #4).
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const aHome = join(root, 'a-home')
+    const aSource = join(root, 'a-source')
+    await mkdir(aHome, { recursive: true })
+    await initSourceRepo(aSource, remote)
+    const envA = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: aHome,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+
+    // env A: Track + Commit + Sync a File.
+    await writeFile(join(aHome, '.zshrc'), 'export EDITOR=nvim\n')
+    await envA.trackFile('.zshrc', 'trace-track')
+    await envA.commitTracked(['.zshrc'], 'trace-commit')
+    await envA.syncPush('trace-push-1')
+
+    // env B: clone + Apply so the File is managed and present on disk.
+    const bHome = join(root, 'b-home')
+    const bSource = join(root, 'b-source')
+    await mkdir(bHome, { recursive: true })
+    await cloneRepo(gitBin, remote, bSource)
+    const envB = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: bSource,
+      destinationDir: bHome,
+      environment: { id: 'env-b', label: 'work-laptop', os: process.platform },
+    })
+    await envB.applyIncoming(['.zshrc'], 'trace-apply-initial')
+    expect(existsSync(join(bHome, '.zshrc'))).toBe(true)
+
+    // env A: remove the File from the Den — delete its source-state file and add a
+    // `.chezmoiremove` directive so Apply actively removes it on every environment — and Sync.
+    await runCommand(gitBin, ['rm', '-q', 'dot_zshrc'], { cwd: aSource })
+    await writeFile(join(aSource, '.chezmoiremove'), '.zshrc\n')
+    await runCommand(gitBin, ['add', '-A'], { cwd: aSource })
+    await runCommand(gitBin, ['commit', '-qm', 'Remove .zshrc from the Den'], { cwd: aSource })
+    await envA.syncPush('trace-push-2')
+
+    // env B: fetch + merge the incoming deletion into its source working tree (the apply-half
+    // of a Sync brings the removed source-state + the `.chezmoiremove` directive into place).
+    await new GitTransport({ gitBin, repoDir: bSource }).fetch()
+    await runCommand(gitBin, ['merge', '--ff-only', 'origin/main'], { cwd: bSource })
+
+    // `chezmoi status` now reports the incoming deletion (column Y=D) — the real signal.
+    expect(parseIncomingDeletions(await readChezmoiStatus(bSource, bHome))).toContain('.zshrc')
+
+    // UNCONFIRMED: the incoming deletion is REFUSED — the destination File survives untouched.
+    const unconfirmed = await envB.applyIncoming(['.zshrc'], 'trace-apply-unconfirmed')
+    expect(unconfirmed.applied).toEqual([])
+    expect(unconfirmed.failed).toHaveLength(1)
+    expect(unconfirmed.failed[0]).toMatchObject({
+      targetPath: '.zshrc',
+      outcome: 'error',
+      refusal: 'needs-confirmation',
+      retryable: true,
+    })
+    // The File is STILL on disk — an unconfirmed deletion never reached `chezmoi apply`.
+    expect(existsSync(join(bHome, '.zshrc'))).toBe(true)
+
+    // CONFIRMED: passing the path in confirmedDeletions applies the deletion — File removed.
+    const confirmed = await envB.applyIncoming(['.zshrc'], 'trace-apply-confirmed', ['.zshrc'])
+    expect(confirmed.applied).toEqual(['.zshrc'])
+    expect(confirmed.failed).toEqual([])
+    expect(existsSync(join(bHome, '.zshrc'))).toBe(false)
+  })
+})
+
+/** Read raw `chezmoi status` for a source/destination pair (test setup probe only). */
+async function readChezmoiStatus(sourceDir: string, destinationDir: string): Promise<string> {
+  const { stdout } = await runCommand(chezmoiBin, [
+    `--source=${sourceDir}`,
+    `--destination=${destinationDir}`,
+    'status',
+  ])
+  return stdout
+}
+
+/** Minimal structural view of the private ChezmoiAdapter the guard test reaches into. */
+interface ChezmoiHandle {
+  applyGuarded(targetPath: string): Promise<void>
+}
 
 /**
  * Initialize an env's source repo as a git working tree wired to the shared bare

@@ -124,3 +124,33 @@ export function parseChezmoiStatus(raw: string): FileGitStatus[] {
   }
   return out
 }
+
+/**
+ * Parse the destination-relative paths chezmoi will **delete** on the next Apply — the
+ * incoming-deletion axis (issue 1-10).
+ *
+ * Reads **column Y only** (column 2 — actual-vs-target = what `chezmoi apply` will do)
+ * and keeps lines where Y is `D` ("Entry will be deleted"): the source state removed the
+ * File, so applying would remove it from the destination. This is the faithful signal
+ * that surfaces an incoming deletion as a first-class, confirm-required plan item
+ * ({@link import('./apply-planner.js').planIncoming}, invariant #4) — never auto-applied.
+ *
+ * Column X (the LOCAL edit) is deliberately ignored here: a File the user locally deleted
+ * (X=D) is the local axis, not an incoming deletion. Only Y=D means "the Remote removed
+ * it and Apply would delete it here".
+ *
+ * @param raw The exact stdout from {@link import('./chezmoi-adapter.js').ChezmoiAdapter.status}.
+ * @returns The destination-relative paths an Apply would delete, in input order.
+ */
+export function parseIncomingDeletions(raw: string): string[] {
+  const out: string[] = []
+  for (const line of raw.split('\n')) {
+    if (line.length < 4) continue
+    // Column Y is the second status column (apply-direction); `D` = will-be-deleted.
+    const y = line[1] ?? ' '
+    const path = line.slice(3).trim()
+    if (path.length === 0) continue
+    if (y === 'D') out.push(path)
+  }
+  return out
+}

@@ -11,7 +11,7 @@
  * real shapes the bundled chezmoi v2 emits (captured against the binary).
  */
 import { describe, expect, it } from 'vitest'
-import { parseChezmoiStatus } from '../chezmoi-status.js'
+import { parseChezmoiStatus, parseIncomingDeletions } from '../chezmoi-status.js'
 
 describe('parseChezmoiStatus', () => {
   it('maps a locally modified File (MM) to modified', () => {
@@ -69,5 +69,32 @@ describe('parseChezmoiStatus', () => {
     // An unknown X column and a path → no local status to assign, so the row is
     // dropped (degrade to "no decoration" rather than throw).
     expect(parseChezmoiStatus('?? .junk\n')).toEqual([])
+  })
+})
+
+describe('parseIncomingDeletions (incoming-deletion axis, issue 1-10)', () => {
+  it('keeps a File chezmoi will delete on apply (column Y = D)', () => {
+    // ` D .zshrc`: X=blank (no local edit), Y=D (the source removed it → apply deletes it).
+    expect(parseIncomingDeletions(' D .zshrc\n')).toEqual(['.zshrc'])
+  })
+
+  it('ignores a LOCAL delete (X=D) — that is the local axis, not an incoming deletion', () => {
+    // `DA .gitconfig`: X=D (the USER deleted it locally), Y=A (apply would re-add). This is
+    // not an incoming deletion — reading column Y (A) correctly excludes it.
+    expect(parseIncomingDeletions('DA .gitconfig\n')).toEqual([])
+  })
+
+  it('ignores incoming creates/modifies (Y = A / M)', () => {
+    expect(parseIncomingDeletions(' A .vimrc\n M .zshrc\n')).toEqual([])
+  })
+
+  it('extracts only the will-be-deleted rows from mixed output, preserving order', () => {
+    const raw = ' D .zshrc\n A .vimrc\n D .config/foo\nMM .gitconfig\n'
+    expect(parseIncomingDeletions(raw)).toEqual(['.zshrc', '.config/foo'])
+  })
+
+  it('returns an empty list for empty or change-free output', () => {
+    expect(parseIncomingDeletions('')).toEqual([])
+    expect(parseIncomingDeletions('\n\n')).toEqual([])
   })
 })

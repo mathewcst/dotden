@@ -63,6 +63,8 @@ describe('IpcBridge', () => {
     await handlers.get('den:list-incoming')?.({}, { _trace: { traceId: 't4' } } as never)
     await handlers.get('den:apply')?.({}, {
       targetPaths: ['.zshrc'],
+      // The user-confirmed incoming deletions (invariant #4) must be forwarded too.
+      confirmedDeletions: ['.bye'],
       _trace: { traceId: 't5' },
     } as never)
     // The three-pane view queries (issue 1-07): read-only, still _trace-correlated.
@@ -83,7 +85,7 @@ describe('IpcBridge', () => {
     expect(den.commitTracked).toHaveBeenCalledWith(['.zshrc'], 't2')
     expect(den.syncPush).toHaveBeenCalledWith('t3')
     expect(den.listIncomingClean).toHaveBeenCalledWith('t4')
-    expect(den.applyIncoming).toHaveBeenCalledWith(['.zshrc'], 't5')
+    expect(den.applyIncoming).toHaveBeenCalledWith(['.zshrc'], 't5', ['.bye'])
     // tree/diff are read-only: the bridge asserts _trace but does not forward an id.
     expect(den.fileTree).toHaveBeenCalledTimes(1)
     expect(den.fileDiff).toHaveBeenCalledWith('.zshrc')
