@@ -200,6 +200,54 @@ describe('IpcBridge', () => {
     ).rejects.toThrow('without a _trace envelope')
   })
 
+  it('routes the appearance channels, forwards the settings + _trace (issue 2-10)', async () => {
+    const settings = {
+      theme: 'blue' as const,
+      defaultApply: 'apply-all' as const,
+      notifyOn: { incoming: false, conflict: true, applied: true },
+    }
+    const den = {
+      // get-appearance is a read Operation; set-appearance MUTATES `.myenv/` + Commits.
+      appearanceSettings: vi.fn(async () => settings),
+      setAppearanceSettings: vi.fn(async () => settings),
+    }
+    const { registrar, handlers } = fakeRegistrar()
+    registerIpcBridge(registrar, {
+      remoteClient: async () => ({}) as never,
+      denService: async () => den as never,
+      discoveryScanner: async () => ({}) as never,
+      environmentRegistry: async () => ({}) as never,
+      getAutomationLevel: async () => 'manual' as const,
+      setAutomationLevel: async () => undefined,
+      claimEnvironment: async () => undefined,
+      getUnsubscribeDisposition: async () => 'keep' as const,
+      setUnsubscribeDisposition: async () => undefined,
+      getSyncSettings: async () => ({
+        pollerEnabled: true,
+        cadence: 'fast' as const,
+        startOnLogin: false,
+      }),
+      setSyncSettings: async (s) => s,
+    })
+
+    // get forwards the read Operation's trace id.
+    await expect(
+      handlers.get('den:get-appearance')?.({}, { _trace: { traceId: 'ap1' } } as never),
+    ).resolves.toMatchObject({ theme: 'blue' })
+    expect(den.appearanceSettings).toHaveBeenCalledWith('ap1')
+    // set forwards the whole settings object + the trace id (it records a Commit).
+    await handlers.get('den:set-appearance')?.({}, {
+      settings,
+      _trace: { traceId: 'ap2' },
+    } as never)
+    expect(den.setAppearanceSettings).toHaveBeenCalledWith(settings, 'ap2')
+
+    // The mutating channel still hard-fails without a _trace envelope.
+    await expect(handlers.get('den:set-appearance')?.({}, { settings } as never)).rejects.toThrow(
+      'without a _trace envelope',
+    )
+  })
+
   it('forwards the _trace id into the DenService on every conflict den:* channel (issue 1-11)', async () => {
     const den = {
       detectConflicts: vi.fn(async () => ({ conflicts: [], autoMerged: true })),

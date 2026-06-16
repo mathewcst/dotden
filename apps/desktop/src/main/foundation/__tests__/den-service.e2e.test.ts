@@ -826,6 +826,60 @@ describe('DenService Review & Apply surface (issue 1-09)', () => {
   })
 })
 
+describe('DenService appearance + Apply/notification preferences (issue 2-10, real chezmoi/git)', () => {
+  it('defaults, persists, and travels to a 2nd env as a synced default', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    // ── env A authors + saves custom appearance settings ──
+    const aHome = join(root, 'a-home')
+    const aSource = join(root, 'a-source')
+    await mkdir(aHome, { recursive: true })
+    await initSourceRepo(aSource, remote)
+    const envA = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: aHome,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+
+    // Before any edit the tab shows the safe defaults (ember + review + incoming/conflict on).
+    const initial = await envA.appearanceSettings('trace-ap-read')
+    expect(initial).toEqual({
+      theme: 'ember',
+      defaultApply: 'review',
+      notifyOn: { incoming: true, conflict: true, applied: false },
+    })
+
+    // Save custom settings; the returned state reflects the new source of truth.
+    const next = {
+      theme: 'blue' as const,
+      defaultApply: 'apply-all' as const,
+      notifyOn: { incoming: false, conflict: true, applied: true },
+    }
+    const saved = await envA.setAppearanceSettings(next, 'trace-ap-set')
+    expect(saved).toEqual(next)
+    // It persisted to the synced `.myenv/` metadata…
+    expect(await new MyenvStore(aSource).readAppearanceSettings()).toEqual(next)
+
+    // Push the Commit that recorded the appearance change.
+    await envA.syncPush('trace-ap-push')
+
+    // ── env B clones the Den → the settings TRAVELLED (a synced default, ADR 0024) ──
+    const bSource = join(root, 'b-source')
+    await cloneRepo(gitBin, remote, bSource)
+    const envB = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: bSource,
+      destinationDir: join(root, 'b-home'),
+      environment: { id: 'env-b', label: 'work-laptop', os: process.platform },
+    })
+    expect(await envB.appearanceSettings('trace-ap-read-b')).toEqual(next)
+  })
+})
+
 describe('DenService ApplyPlanner invariants end-to-end (issue 1-10, real chezmoi/git)', () => {
   it('invariant #2: an incoming Apply is BLOCKED when the File has an uncommitted local edit (never silently overwritten)', async () => {
     // Two environments share a File. env B applies it, then HAND-EDITS the real File on

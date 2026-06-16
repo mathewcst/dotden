@@ -12,6 +12,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DEFAULT_WORKSPACE_ID, MyenvStore } from '../myenv-store.js'
 import { DEFAULT_COMMIT_MESSAGE_TEMPLATE } from '../../../shared/commit-template.js'
+import { DEFAULT_APPEARANCE_SETTINGS } from '../../../shared/appearance-settings.js'
 
 let source: string
 
@@ -466,5 +467,50 @@ describe('MyenvStore — commit-message template (2-09)', () => {
     // An empty string is meaningless as a commit message → default.
     await store.writeCommitTemplate('')
     expect(await store.readCommitTemplate()).toBe(DEFAULT_COMMIT_MESSAGE_TEMPLATE)
+  })
+})
+
+describe('MyenvStore — appearance + Apply/notification preferences (2-10)', () => {
+  it('returns the safe defaults before anything is written', async () => {
+    const store = new MyenvStore(source)
+    expect(await store.readAppearanceSettings()).toEqual(DEFAULT_APPEARANCE_SETTINGS)
+  })
+
+  it('round-trips written settings through the synced .myenv/ file', async () => {
+    const store = new MyenvStore(source)
+    const next = {
+      theme: 'blue' as const,
+      defaultApply: 'apply-all' as const,
+      notifyOn: { incoming: false, conflict: true, applied: true },
+    }
+    await store.writeAppearanceSettings(next)
+    expect(await store.readAppearanceSettings()).toEqual(next)
+    // It lives in the chezmoi-ignored synced metadata dir (so it travels with the Den).
+    const raw = await readFile(join(source, '.myenv', 'appearance-settings.json'), 'utf8')
+    expect(JSON.parse(raw)).toEqual(next)
+  })
+
+  it('normalizes a partial/forward-incompatible file to coherent settings on read', async () => {
+    const store = new MyenvStore(source)
+    // Create `.myenv/` first (via the store), then overwrite the file with a partial /
+    // older-or-newer-schema payload: only some fields, and a bad theme.
+    await store.writeAppearanceSettings(DEFAULT_APPEARANCE_SETTINGS)
+    await writeFile(
+      join(source, '.myenv', 'appearance-settings.json'),
+      JSON.stringify({ theme: 'rainbow', notifyOn: { applied: true } }),
+      'utf8',
+    )
+    expect(await store.readAppearanceSettings()).toEqual({
+      theme: 'ember', // bad theme → default
+      defaultApply: 'review', // absent → default
+      notifyOn: { incoming: true, conflict: true, applied: true }, // merged with defaults
+    })
+  })
+
+  it('ensures .myenv/ is chezmoi-ignored when it writes (so the file never applies to home)', async () => {
+    const store = new MyenvStore(source)
+    await store.writeAppearanceSettings(DEFAULT_APPEARANCE_SETTINGS)
+    const ignore = await readFile(join(source, '.chezmoiignore'), 'utf8')
+    expect(ignore).toContain('.myenv/')
   })
 })

@@ -25,6 +25,7 @@ import type { Scope } from '../foundation/os-scope.js'
 import type { UnsubscribeDisposition } from '../foundation/subscription-settings.js'
 import type { SecretFinding } from '../foundation/secret-scanner.js'
 import type { ConvertSecretRequest } from '../foundation/den-service.js'
+import type { AppearanceSettings } from '../../shared/appearance-settings.js'
 
 /**
  * The minimal trace envelope every IPC payload carries.
@@ -115,7 +116,8 @@ export interface IpcBridgeDeps {
  * Channels (all payloads carry `_trace`):
  * - `remote:preflight` / `remote:connect` / `remote:latest-sha` → {@link RemoteClient}
  * - `den:track` / `den:scan-commit` / `den:allowlist-secret` / `den:get-commit-template` /
- *   `den:set-commit-template` / `den:commit` / `den:sync-push` / `den:list-incoming` /
+ *   `den:set-commit-template` / `den:get-appearance` / `den:set-appearance` /
+ *   `den:commit` / `den:sync-push` / `den:list-incoming` /
  *   `den:incoming-summary` / `den:incoming-diff` / `den:apply` / `den:tree` / `den:diff` /
  *   `den:untrack` / `den:delete-everywhere` / `den:affected-environments` → {@link DenService}
  * - `discover:scan` / `discover:inspect-path` → {@link DiscoveryScanner} (issue 1-06)
@@ -181,6 +183,18 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   registrar.handle('den:set-commit-template', async (_event, payload: TracedPayload) => {
     const { template } = payload as TracedPayload & { template: string }
     return (await deps.denService()).setCommitTemplate(template, traceId(payload))
+  })
+  // Appearance + default Apply/notification preferences (issue 2-10): the Settings → Appearance
+  // tab. get-appearance reads the synced theme + default-Apply + notify flags; set-appearance
+  // persists them + Commits the `.myenv/` change LOCALLY (ADR 0006) so they travel on the next
+  // Sync. Authoring only — it sends nothing across environments by itself (issue 2-17 wires
+  // sync-as-default) and gates no invariant.
+  registrar.handle('den:get-appearance', async (_event, payload: TracedPayload) => {
+    return (await deps.denService()).appearanceSettings(traceId(payload))
+  })
+  registrar.handle('den:set-appearance', async (_event, payload: TracedPayload) => {
+    const { settings } = payload as TracedPayload & { settings: AppearanceSettings }
+    return (await deps.denService()).setAppearanceSettings(settings, traceId(payload))
   })
   // PM picker + convert (issue 2-05). Detect is read-only feature-detection (env-local, never
   // synced) so its `_trace` is forwarded but it MUTATES nothing. pm-preference reads the env-local

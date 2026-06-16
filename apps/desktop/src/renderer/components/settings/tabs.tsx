@@ -2,8 +2,9 @@
  * Settings tab registry — the ONE list every Settings tab registers in (issue 2-08).
  *
  * The SettingsShell renders its nav rail and its content area straight from this array, so a
- * later tab slice (Commit 2-09, Account 2-11, Automation 2-12, Privacy 2-14, Environments 2-15,
- * About 2-16) lands with **minimal churn**: add a `SettingsContent/*` file, append one
+ * later tab slice (Commit 2-09, Appearance 2-10, Account 2-11, Automation 2-12, Privacy 2-14,
+ * Environments 2-15, About 2-16) lands with **minimal churn**: add a `SettingsContent/*` file,
+ * append one
  * {@link SettingsTab} entry here, flip its `status` to `'live'`, and it appears — wired, routed,
  * and nav-listed — without touching the shell. That is the "clean extensible tab registry"
  * the issue asks for: the shell knows nothing tab-specific; this list is the single seam.
@@ -22,11 +23,13 @@ import {
   GitCommitHorizontal,
   Info,
   Monitor,
+  Palette,
   Shield,
   type LucideIcon,
 } from 'lucide-react'
 import { SyncTab } from './SyncTab'
 import { CommitTab } from './CommitTab'
+import { AppearanceTab } from './AppearanceTab'
 
 /** A tab's lifecycle: `live` = built + selectable; `placeholder` = inert until its slice ships. */
 export type SettingsTabStatus = 'live' | 'placeholder'
@@ -58,7 +61,10 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   { id: 'automation', label: 'Automation', icon: ArrowDownUp, status: 'placeholder' },
   // Commit (2-09): the commit-message template editor — edit + variables + live preview + reset.
   { id: 'commit', label: 'Commit', icon: GitCommitHorizontal, status: 'live', Content: CommitTab },
-  // Sync (THIS issue, 2-08): the first real tab — poller on/off + cadence, start-on-login.
+  // Appearance (2-10): theme + default Apply/notification preferences (story 54's two remaining
+  // synced settings). Extends Settings consistently with the design system (no dedicated Figma tab).
+  { id: 'appearance', label: 'Appearance', icon: Palette, status: 'live', Content: AppearanceTab },
+  // Sync (2-08): the first real tab — poller on/off + cadence, start-on-login.
   { id: 'sync', label: 'Sync', icon: Cloud, status: 'live', Content: SyncTab },
   // Account / Remote (2-11): connected Remote + git-credential + detected PM CLI. Inert for now.
   { id: 'account', label: 'Account', icon: GitBranch, status: 'placeholder' },

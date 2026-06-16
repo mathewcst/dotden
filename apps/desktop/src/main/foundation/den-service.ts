@@ -70,6 +70,7 @@ import {
   DEFAULT_COMMIT_MESSAGE_TEMPLATE,
   type CommitTemplateData,
 } from '../../shared/commit-template.js'
+import type { AppearanceSettings } from '../../shared/appearance-settings.js'
 
 /** Construction wiring for a {@link DenService}, bound to one environment's dirs. */
 export interface DenServiceOptions {
@@ -898,6 +899,64 @@ export class DenService {
       await this.commitMetadata('Update commit-message template')
       span?.end('ok')
       return this.commitTemplate(traceId)
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  // ── Appearance + default Apply/notification preferences (issue 2-10) ──
+  // The Settings → Appearance tab reads/writes the synced defaults that name the app theme + the
+  // user's preferred default Apply behaviour + which cross-environment events notify. These are
+  // synced presentation/preference (ADR 0024) — a value-authoring slice only: setting them sends
+  // nothing across environments by itself (the sync-as-default plumbing is issue 2-17) and gates
+  // no invariant (the AutomationPolicy/ApplyPlanner owners still own the real Apply, ADR 0008).
+
+  /**
+   * **Read the Appearance tab's settings** (issue 2-10) — the synced app theme + default Apply
+   * behaviour + notification-event flags. Pure read of the synced `.myenv/` file (normalized to
+   * safe defaults when absent/older).
+   *
+   * @param traceId Correlation id for the (read-only) Operation.
+   * @returns The current appearance settings.
+   */
+  async appearanceSettings(traceId: string): Promise<AppearanceSettings> {
+    const span = this.tracer?.startOperation('commit', traceId)
+    try {
+      const settings = await this.store.readAppearanceSettings()
+      span?.end('ok')
+      return settings
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * **Persist the Appearance tab's settings** (issue 2-10) — the theme picker + default-Apply +
+   * notification toggles.
+   *
+   * Writes `.myenv/appearance-settings.json` then commits the `.myenv/` change LOCALLY (ADR 0006)
+   * so it travels to every environment on the next Sync (a synced default, ADR 0024). Idempotent:
+   * re-saving the same settings records nothing (the metadata Commit is a no-op when unchanged).
+   * Setting these sends nothing across environments by itself (issue 2-17 wires sync-as-default).
+   *
+   * @param settings The complete next appearance settings.
+   * @param traceId Correlation id for the Operation.
+   * @returns The refreshed settings (so the tab re-renders from the source of truth).
+   */
+  async setAppearanceSettings(
+    settings: AppearanceSettings,
+    traceId: string,
+  ): Promise<AppearanceSettings> {
+    const span = this.tracer?.startOperation('commit', traceId)
+    try {
+      await this.store.writeAppearanceSettings(settings)
+      // `.myenv/`-only edit → commit just that (no-op when unchanged), like the other synced
+      // metadata writes; the next Sync carries the new defaults to other environments.
+      await this.commitMetadata('Update appearance + default Apply/notification preferences')
+      span?.end('ok')
+      return this.appearanceSettings(traceId)
     } catch (error) {
       span?.end('error')
       throw error

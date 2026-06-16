@@ -52,6 +52,7 @@ import type {
 import type { DiscoverySuggestion } from '../main/foundation/discovery-scanner.js'
 import type { AutomationLevel } from '../main/foundation/automation-policy.js'
 import type { SyncSettings } from '../main/foundation/sync-settings.js'
+import type { AppearanceSettings } from './appearance-settings.js'
 
 /**
  * Node's `process.platform` value set, declared locally so this shared contract
@@ -146,6 +147,22 @@ export interface DotdenApi {
      * Returns the refreshed state so the tab re-renders from the source of truth.
      */
     setCommitTemplate(template: string): Promise<CommitTemplateState>
+    /**
+     * **Read the Appearance tab's settings** (issue 2-10, story 54) — the synced app theme +
+     * preferred default Apply behaviour + which cross-environment events notify. These are synced
+     * DEFAULTS via `.myenv/` (ADR 0024); the renderer applies the theme class itself from the
+     * returned `theme`, so swapping themes is a single class toggle (no per-keystroke round-trip).
+     */
+    appearanceSettings(): Promise<AppearanceSettings>
+    /**
+     * **Save the Appearance tab's settings** (issue 2-10) — the theme picker + default-Apply +
+     * notification toggles. Persists `.myenv/appearance-settings.json` and Commits the change
+     * LOCALLY (ADR 0006) so it travels on the next Sync. Authoring only: it sends nothing across
+     * environments by itself (the sync-as-default wiring is issue 2-17) and gates no invariant
+     * (the AutomationPolicy/ApplyPlanner owners still own the real Apply, ADR 0008). Returns the
+     * refreshed settings so the tab re-renders from the source of truth.
+     */
+    setAppearanceSettings(settings: AppearanceSettings): Promise<AppearanceSettings>
     /**
      * **Detect installed password managers** for the convert picker (issue 2-05, step 2). Returns
      * the v1 catalog (1Password/Bitwarden/pass) annotated with whether each CLI (`op`/`bw`/`pass`)

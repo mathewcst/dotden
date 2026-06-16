@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowRight, MonitorSmartphone, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Workspace } from '@/components/Workspace'
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell'
 import { ReturningShell } from '@/components/returning/ReturningShell'
 import { SettingsShell } from '@/components/settings/SettingsShell'
+import { applyTheme } from '@/lib/apply-theme'
 
 /**
  * The top-level route: a landing chooser, the first-run onboarding, the second-environment
@@ -30,6 +31,20 @@ type Route = 'landing' | 'onboarding' | 'returning' | 'app' | 'settings'
 export function App() {
   const [route, setRoute] = useState<Route>('landing')
   const [role, setRole] = useState<'a' | 'b'>('a')
+
+  // Apply the user's synced theme (issue 2-10) on launch, so the app opens in their chosen accent
+  // rather than always the default ember. The read degrades to the default when there is no Den
+  // yet (a fresh first run), so this is safe before onboarding — and never fails silently.
+  // `applyTheme` only toggles a class (no React state), so no unmount guard is needed (App is the
+  // never-unmounting root anyway).
+  useEffect(() => {
+    window.dotden.den
+      .appearanceSettings()
+      .then((settings) => applyTheme(settings.theme))
+      .catch(() => {
+        // No Den / read failed — keep the default ember base (already applied via index.css).
+      })
+  }, [])
 
   if (route === 'landing') {
     return (

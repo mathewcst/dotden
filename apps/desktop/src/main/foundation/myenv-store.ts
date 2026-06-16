@@ -29,6 +29,10 @@ import {
 } from './secret-allowlist.js'
 import type { SecretFinding } from './secret-scanner.js'
 import { DEFAULT_COMMIT_MESSAGE_TEMPLATE } from '../../shared/commit-template.js'
+import {
+  type AppearanceSettings,
+  normalizeAppearanceSettings,
+} from '../../shared/appearance-settings.js'
 
 /**
  * The default Workspace id every Den is seeded with.
@@ -182,6 +186,13 @@ const SECRET_ALLOWLIST_FILE = join(MYENV_DIR, 'secret-allowlist.json')
  * override (PRD2#17) narrows it per machine. Maps to chezmoi's `git.commitMessageTemplate`.
  */
 const COMMIT_TEMPLATE_FILE = join(MYENV_DIR, 'commit-template.json')
+/**
+ * The synced appearance + default Apply/notification preferences (issue 2-10, ADR 0024). Like
+ * the commit template these are **user-authored** preference/presentation, so by ADR 0024 they
+ * sync through `.myenv/` as **defaults** every environment shares (until a later local override,
+ * issue 2-17). Shape/defaults/normalization live in `shared/appearance-settings.ts`.
+ */
+const APPEARANCE_FILE = join(MYENV_DIR, 'appearance-settings.json')
 
 /**
  * Reads/writes the synced `.myenv/` metadata inside a chezmoi source dir.
@@ -698,6 +709,40 @@ export class MyenvStore {
     // Guarantee `.myenv/` is chezmoi-ignored (creating `.chezmoiignore` if this is the first
     // `.myenv/` write on a never-seeded Den), so the metadata Commit can always stage it — and
     // so the template file is never applied to the user's home (it is dotden metadata, ADR 0024).
+    await this.ensureIgnored()
+  }
+
+  // ── Appearance + default Apply/notification preferences (issue 2-10) ──
+  // The synced defaults the user sets in Settings → Appearance: the app theme + the preferred
+  // default Apply behaviour + which cross-environment events notify. Stored as the whole
+  // settings object so the file is self-describing; normalized on read so an older/partial file
+  // still yields a coherent object (never fail silently).
+
+  /**
+   * Read the synced appearance + default Apply/notification preferences, normalizing every field
+   * to its safe default when absent or malformed (a fresh Den, or one synced by an older dotden
+   * that never wrote this file). Never throws — degrades to {@link DEFAULT_APPEARANCE_SETTINGS}
+   * per-field via {@link normalizeAppearanceSettings} (never fail silently into a surprising state).
+   *
+   * @returns The synced appearance settings (with safe defaults filled in for anything absent).
+   */
+  async readAppearanceSettings(): Promise<AppearanceSettings> {
+    const doc = await this.readJson<unknown>(APPEARANCE_FILE)
+    return normalizeAppearanceSettings(doc)
+  }
+
+  /**
+   * Persist the synced appearance + default Apply/notification preferences — the write half of
+   * the Appearance tab. Stores `.myenv/appearance-settings.json`; the Commit that stages `.myenv/`
+   * (DenService) carries it, so the choice travels to every environment on the next Sync. Writes
+   * the normalized object so the file is always coherent.
+   *
+   * @param settings The complete next appearance settings to store.
+   */
+  async writeAppearanceSettings(settings: AppearanceSettings): Promise<void> {
+    await this.writeJson(APPEARANCE_FILE, normalizeAppearanceSettings(settings))
+    // Guarantee `.myenv/` is chezmoi-ignored (mirrors writeCommitTemplate) so the metadata Commit
+    // can always stage it and the file is never applied to the user's home (it is dotden metadata).
     await this.ensureIgnored()
   }
 

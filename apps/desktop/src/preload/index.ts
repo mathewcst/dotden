@@ -85,6 +85,19 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['setCommitTemplate']>
     },
+    // → IPC channel 'den:get-appearance' (Settings → Appearance tab: synced theme + Apply/notify defaults, issue 2-10)
+    appearanceSettings() {
+      return ipcRenderer.invoke('den:get-appearance', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['appearanceSettings']>
+    },
+    // → IPC channel 'den:set-appearance' (persist synced appearance settings + Commit `.myenv/`, issue 2-10)
+    setAppearanceSettings(settings) {
+      return ipcRenderer.invoke('den:set-appearance', {
+        settings,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['setAppearanceSettings']>
+    },
     // → IPC channel 'den:detect-password-managers' (PM picker detection, issue 2-05; env-local)
     detectPasswordManagers() {
       return ipcRenderer.invoke('den:detect-password-managers', {
