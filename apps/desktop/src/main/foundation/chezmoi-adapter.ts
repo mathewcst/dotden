@@ -16,11 +16,12 @@
  * dotfile path like `.zshrc`); {@link ChezmoiAdapter.destinationPath} resolves it
  * against the destination dir before handing it to chezmoi.
  */
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname, relative, resolve } from 'node:path'
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { basename, dirname, relative, resolve } from 'node:path'
 import { parseChezmoiStatus } from './chezmoi-status.js'
 import { scopedOutPaths, type Os, type Scope } from './os-scope.js'
 import { renderSubscriptionIgnore } from './subscription-ignore.js'
+import { renderSecretReferenceTemplate, type SecretReferenceRequest } from './secret-reference.js'
 import { runCommand } from './process.js'
 
 /**
@@ -123,6 +124,60 @@ export class ChezmoiAdapter {
       targetPaths.map((targetPath) => this.sourcePath(targetPath)),
     )
     await git.commit(sourcePaths, message)
+  }
+
+  /**
+   * **Convert a managed File into a chezmoi `.tmpl` Secret reference** — the integration seam of
+   * the convert flow (issue 2-05). This is where the flagged value LEAVES the Den: after this, the
+   * File's source state contains only a password-manager *reference/template call*, never the raw
+   * secret, which stays in the user's vault and is re-fetched by chezmoi at Apply time.
+   *
+   * The File must already be managed (the user Tracked it before the warn step flagged it). chezmoi
+   * stores it as a plain source File (e.g. `dot_aws/credentials`); to make it a template we:
+   *
+   * 1. resolve its current source path ({@link sourcePath});
+   * 2. write the rendered template ({@link renderSecretReferenceTemplate}) to the `.tmpl` SIBLING
+   *    in the same source dir (chezmoi reads `<name>.tmpl` as a Go template);
+   * 3. remove the original non-template source File, so chezmoi has exactly ONE source entry for
+   *    the target (a target with both `dot_x` and `dot_x.tmpl` is ambiguous).
+   *
+   * The result is committed by the caller ({@link import('./den-service.js').DenService}); only the
+   * reference enters the Remote. The raw secret is never written here — the template string is the
+   * only thing this method produces, and the unit + integration tests scan the written bytes to
+   * prove the value is absent (the issue's acceptance criterion, verified at THIS seam).
+   *
+   * Note: a File the user has NOT modified since Tracking is the common case; if it still differs
+   * from the on-disk secret, that drift is the caller's concern — we only rewrite the source entry.
+   *
+   * @param targetPath Destination-relative File path being converted (e.g. `.aws/credentials`).
+   * @param request The user's password-manager choice + vault reference (NO raw secret).
+   * @returns The absolute path of the written `.tmpl` source File (for the caller to stage/commit).
+   * @throws CommandFailedError when the File is not managed (its source path can't be resolved).
+   */
+  async convertToSecretReference(
+    targetPath: string,
+    request: SecretReferenceRequest,
+  ): Promise<string> {
+    // Resolve the File's CURRENT source entry; non-managed paths throw here (chezmoi exits non-zero).
+    const currentSource = await this.sourcePath(targetPath)
+    // The template lives in the SAME source dir, with the basename suffixed `.tmpl` (idempotent so
+    // re-converting an already-`.tmpl` File doesn't produce `.tmpl.tmpl`).
+    const dir = dirname(currentSource)
+    const base = basename(currentSource)
+    const tmplName = base.endsWith('.tmpl') ? base : `${base}.tmpl`
+    const tmplSource = resolve(dir, tmplName)
+    // Render the reference/template call — the ONLY bytes that enter source state (never the value).
+    const rendered = renderSecretReferenceTemplate(request)
+    await mkdir(dir, { recursive: true })
+    // chezmoi templates are typically newline-terminated; match the convention so apply output is
+    // clean (the resolved secret is written with --no-newline by op, so the file's own newline is fine).
+    await writeFile(tmplSource, `${rendered}\n`, 'utf8')
+    // Remove the original non-template source File when it differs from the new `.tmpl` path, so
+    // chezmoi has a single unambiguous source entry for this target.
+    if (currentSource !== tmplSource) {
+      await rm(currentSource, { force: true })
+    }
+    return tmplSource
   }
 
   /**

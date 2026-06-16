@@ -24,6 +24,7 @@ import type { SyncSettings } from '../foundation/sync-settings.js'
 import type { Scope } from '../foundation/os-scope.js'
 import type { UnsubscribeDisposition } from '../foundation/subscription-settings.js'
 import type { SecretFinding } from '../foundation/secret-scanner.js'
+import type { ConvertSecretRequest } from '../foundation/den-service.js'
 
 /**
  * The minimal trace envelope every IPC payload carries.
@@ -168,6 +169,20 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   registrar.handle('den:allowlist-secret', async (_event, payload: TracedPayload) => {
     const { finding } = payload as TracedPayload & { finding: SecretFinding }
     return (await deps.denService()).allowlistSecret(finding, traceId(payload))
+  })
+  // PM picker + convert (issue 2-05). Detect is read-only feature-detection (env-local, never
+  // synced) so its `_trace` is forwarded but it MUTATES nothing. pm-preference reads the env-local
+  // "Remember my choice" default. convert WRITES the `.tmpl` reference into source state + Commits
+  // it (only the reference enters the Den, never the raw secret).
+  registrar.handle('den:detect-password-managers', async (_event, payload: TracedPayload) => {
+    return (await deps.denService()).detectPasswordManagers(traceId(payload))
+  })
+  registrar.handle('den:pm-preference', async () => {
+    return (await deps.denService()).pmPreference()
+  })
+  registrar.handle('den:convert-secret', async (_event, payload: TracedPayload) => {
+    const { request } = payload as TracedPayload & { request: ConvertSecretRequest }
+    return (await deps.denService()).convertSecret(request, traceId(payload))
   })
   registrar.handle('den:commit', async (_event, payload: TracedPayload) => {
     const { targetPaths } = payload as TracedPayload & { targetPaths: readonly string[] }

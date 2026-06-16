@@ -27,6 +27,8 @@ import type {
   CommitResult,
   ConflictReview,
   FileTreeView,
+  ConvertSecretRequest,
+  ConvertSecretResult,
   IncomingReviewItem,
   IncomingSummary,
   SubscriptionState,
@@ -35,6 +37,8 @@ import type {
 import type { UnsubscribeDisposition } from '../main/foundation/subscription-settings.js'
 import type { SecretFinding } from '../main/foundation/secret-scanner.js'
 import type { SecretAllowlist } from '../main/foundation/secret-allowlist.js'
+import type { DetectedPasswordManager } from '../main/foundation/pm-detect.js'
+import type { PmPreference } from '../main/foundation/pm-preference.js'
 import type { FileVersion } from '../main/foundation/file-history.js'
 import type { ResolutionChoice } from '../main/foundation/conflict-model.js'
 import type { Group, Workspace } from '../main/foundation/myenv-store.js'
@@ -125,6 +129,28 @@ export interface DotdenApi {
      * is staged into the SAME Commit (which stages `.myenv/`) and travels with the next Sync.
      */
     allowlistSecret(finding: SecretFinding): Promise<SecretAllowlist>
+    /**
+     * **Detect installed password managers** for the convert picker (issue 2-05, step 2). Returns
+     * the v1 catalog (1Password/Bitwarden/pass) annotated with whether each CLI (`op`/`bw`/`pass`)
+     * is present on THIS environment — an option is selectable only when available, and an absent
+     * one keeps its install hint (never fail silently). Detected-CLI presence is environment-local,
+     * never synced (ADR 0024). Read-only feature-detection — it never unlocks a vault.
+     */
+    detectPasswordManagers(): Promise<readonly DetectedPasswordManager[]>
+    /**
+     * **Read this environment's remembered password-manager preference** (the "Remember my choice"
+     * default, issue 2-05). `null` when none is set. The picker pre-selects it so a remembered
+     * conversion goes straight to the preferred manager. Environment-local, never synced.
+     */
+    pmPreference(): Promise<PmPreference | null>
+    /**
+     * **Convert a flagged value into a Secret reference** (issue 2-05) — write the chezmoi `.tmpl`
+     * target + the password-manager template call into source state, then Commit it so ONLY the
+     * reference enters the Den. The raw secret is NEVER written — it stays in the user's vault and
+     * chezmoi re-fetches it at Apply time. Optionally remembers the chosen manager (env-local). The
+     * single narrow, guided slice of chezmoi templating v1 exposes (scope-v1 "Secrets").
+     */
+    convertSecret(request: ConvertSecretRequest): Promise<ConvertSecretResult>
     /**
      * **Commit** Tracked Files into the Den with a templated message — LOCAL only
      * (a Commit is local until pushed, ADR 0006). The result carries the resolved

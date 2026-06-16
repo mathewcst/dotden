@@ -141,6 +141,9 @@ async function buildDenService(): Promise<DenService> {
     environment: { id: identity.id, label: identity.label, os: identity.os },
     tracer,
     automationLevel,
+    // Environment-local "Remember my choice" PM preference (issue 2-05) lives under userData,
+    // never synced (ADR 0024) — same store dir as the automation level + identity.
+    userDataDir: app.getPath('userData'),
   })
 }
 

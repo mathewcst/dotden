@@ -53,6 +53,19 @@ import type { UnsubscribeDisposition } from './subscription-settings.js'
 import { scanForSecrets, type SecretFinding } from './secret-scanner.js'
 import { partitionFindings, type SecretAllowlist } from './secret-allowlist.js'
 import { parseFileHistory, type FileVersion } from './file-history.js'
+import {
+  detectPasswordManagers,
+  type DetectedPasswordManager,
+  type DetectPasswordManagersOptions,
+} from './pm-detect.js'
+import {
+  isSecretReferenceResolutionFailure,
+  renderSecretReferenceTemplate,
+  sourceTemplateName,
+  type SecretReferenceRequest,
+} from './secret-reference.js'
+import { readPmPreference, writePmPreference, type PmPreference } from './pm-preference.js'
+import { CommandFailedError } from './process.js'
 
 /** Construction wiring for a {@link DenService}, bound to one environment's dirs. */
 export interface DenServiceOptions {
@@ -94,6 +107,15 @@ export interface DenServiceOptions {
    * for the lifetime of the service via an in-process fallback path.
    */
   readonly pushOutboxPath?: string
+  /**
+   * The Electron `userData` dir this environment stores its **environment-local** password-manager
+   * preference under (issue 2-05). The "Remember my choice" toggle persists the preferred manager
+   * here via {@link import('./pm-preference.js')} — it is a property of THIS computer's installed
+   * tools, never synced (ADR 0024). `index.ts` passes `app.getPath('userData')`; omitted in tests
+   * that don't exercise the remembered preference (in which case {@link DenService.pmPreference}
+   * reports "no preference").
+   */
+  readonly userDataDir?: string
 }
 
 /**
@@ -154,6 +176,37 @@ export interface SyncPushResult {
   readonly pushed: boolean
   /** `true` when the push could not go out (offline) and was queued for retry. */
   readonly queued: boolean
+}
+
+/**
+ * A request to convert a flagged value into a Secret reference (issue 2-05) — the user's picker
+ * choice plus the target File. Notably it carries NO raw secret value (the value stays in the
+ * vault); the {@link SecretReferenceRequest} fields name the manager + vault coordinates only.
+ */
+export interface ConvertSecretRequest extends SecretReferenceRequest {
+  /** Destination-relative File path being converted (e.g. `.aws/credentials`). */
+  readonly targetPath: string
+  /**
+   * Whether to remember this manager (+ account) as this environment's default for future
+   * conversions (the "Remember my choice" toggle, acceptance criterion 5). Environment-local.
+   */
+  readonly remember?: boolean
+}
+
+/**
+ * Result of {@link DenService.convertSecret} — the written `.tmpl` source path + the template that
+ * now lives in the Den, so the UI can confirm the conversion (and a test can scan the bytes). The
+ * `template` is the reference/template call, NEVER the raw secret.
+ */
+export interface ConvertSecretResult {
+  /** The chezmoi source File the reference was written to (e.g. `…/dot_aws/credentials.tmpl`). */
+  readonly sourceTemplatePath: string
+  /** The expected source-relative template name ({@link sourceTemplateName}) for the UI/log. */
+  readonly sourceTemplateName: string
+  /** The rendered chezmoi template call now in source state (a reference, never the value). */
+  readonly template: string
+  /** The Commit result that recorded the reference into the Den (LOCAL until pushed, ADR 0006). */
+  readonly commit: CommitResult
 }
 
 /**
@@ -226,8 +279,18 @@ export interface IncomingSummary {
  *   confirmed (invariant #4); deletions are never applied without explicit confirmation.
  * - `not-applicable` — the File turned non-applicable between review and apply (the
  *   witness gate refused it; invariant #3).
+ * - `secret-reference-unresolved` — the File contains a {@link import('./secret-reference.js')}
+ *   Secret reference whose password-manager CLI is locked/signed-out, or whose referenced
+ *   item/field is missing (issue 2-05, acceptance criterion 9). NOT an invariant refusal — it is a
+ *   provider-agnostic vault failure surfaced cleanly so the user unlocks/signs in or fixes the
+ *   reference, then re-applies (retryable). Distinct so the apply-error surface can point at the
+ *   vault rather than blame chezmoi.
  */
-export type ApplyRefusal = 'blocked-uncommitted-edit' | 'needs-confirmation' | 'not-applicable'
+export type ApplyRefusal =
+  | 'blocked-uncommitted-edit'
+  | 'needs-confirmation'
+  | 'not-applicable'
+  | 'secret-reference-unresolved'
 
 /**
  * The per-File outcome of an Apply, recording that each File **applied independently**
@@ -740,6 +803,103 @@ export class DenService {
   }
 
   /**
+   * **Detect which password managers are installed on this environment** (issue 2-05, step 2 of the
+   * secret flow). The picker offers a manager only when its CLI (`op`/`bw`/`pass`) is present here
+   * (acceptance criteria 2–4): dotden bundles chezmoi but not the password manager, so it detects +
+   * guides. 1Password is offered as a ready (default-selected) option automatically when `op` is
+   * detected (acceptance criterion 3). Detected-CLI presence is **environment-local, never synced**
+   * (acceptance criterion 10) — it is computed live each time and never written to `.myenv/`.
+   *
+   * Read-only feature-detection (a `which`/`where` lookup per CLI, no shell, no vault unlock): it
+   * never executes the manager itself, so it can't trigger a credential prompt. The probe is
+   * injectable for tests via `options`.
+   *
+   * @param traceId Correlation id for the wide event (a read-only detection Operation).
+   * @param options Optional injected probe (tests); defaults to the real PATH lookup.
+   * @returns The v1 catalog (op/bw/pass) annotated with availability, in display order.
+   */
+  async detectPasswordManagers(
+    traceId: string,
+    options?: DetectPasswordManagersOptions,
+  ): Promise<readonly DetectedPasswordManager[]> {
+    const span = this.tracer?.startOperation('commit', traceId)
+    try {
+      const managers = await detectPasswordManagers(options)
+      span?.end('ok')
+      return managers
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * **Read this environment's remembered password-manager preference** (the "Remember my choice"
+   * default, issue 2-05). Environment-local: returns `null` when none is set or no `userDataDir`
+   * was wired (tests). The picker pre-selects this manager when present so a remembered conversion
+   * goes straight to it (acceptance criterion 5).
+   *
+   * @returns The remembered preference, or `null` when none/unavailable.
+   */
+  async pmPreference(): Promise<PmPreference | null> {
+    if (!this.options.userDataDir) return null
+    return readPmPreference(this.options.userDataDir)
+  }
+
+  /**
+   * **Convert a flagged value into a chezmoi `.tmpl` Secret reference** (issue 2-05) — the heart of
+   * the convert flow, and the seam where the secret LEAVES the Den.
+   *
+   * Steps: (1) write the password-manager reference/template call into the File's `.tmpl` source
+   * entry ({@link ChezmoiAdapter.convertToSecretReference}) — the raw secret is never written, only
+   * the reference; (2) optionally remember the chosen manager as this environment's default
+   * (environment-local, never synced); (3) Commit the converted File so ONLY the reference enters
+   * the Den ({@link commitTracked} stages exactly the File's source path + `.myenv/`). The committed
+   * source therefore contains the template call, never the value — verified at the ChezmoiAdapter
+   * seam by scanning the written bytes (the issue's acceptance criterion). At Apply time chezmoi
+   * re-fetches the value from the user's vault so configs still work (issue 2-06).
+   *
+   * This is the single, narrow, guided slice of chezmoi templating v1 exposes (scope-v1 "Secrets").
+   *
+   * @param request The manager choice + vault reference + target File (+ remember toggle).
+   * @param traceId Correlation id for the wide event.
+   * @returns The written `.tmpl` path, the rendered template, and the Commit result.
+   */
+  async convertSecret(
+    request: ConvertSecretRequest,
+    traceId: string,
+  ): Promise<ConvertSecretResult> {
+    const span = this.tracer?.startOperation('commit', traceId)
+    try {
+      const { targetPath, remember, ...reference } = request
+      // Write the `.tmpl` source File: the reference/template call, NEVER the raw secret.
+      const sourceTemplatePath = await this.chezmoi.convertToSecretReference(targetPath, reference)
+      const template = renderSecretReferenceTemplate(reference)
+      // Remember the chosen manager as this environment's default, if asked (env-local, never synced).
+      if (remember && this.options.userDataDir) {
+        await writePmPreference(this.options.userDataDir, {
+          manager: reference.manager,
+          account: reference.account,
+        })
+      }
+      span?.setAttribute('fileCount', 1)
+      span?.end('ok')
+      // Commit the converted File so only the reference enters the Den (LOCAL until pushed). This
+      // runs its own Commit span; the convert span above covers the source rewrite + remember.
+      const commit = await this.commitTracked([targetPath], traceId)
+      return {
+        sourceTemplatePath,
+        sourceTemplateName: sourceTemplateName(targetPath),
+        template,
+        commit,
+      }
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
    * **Sync now (push half)**: send already-Committed changes to the Remote, flushing any
    * push queued while offline (issue 1-16).
    *
@@ -958,7 +1118,37 @@ export class DenService {
       //   would DELETE here (the source removed them). Deletion-ness is the REAL incoming
       //   status, NOT inferred from `confirmedDeletions` — otherwise an UNCONFIRMED incoming
       //   deletion would misclassify as a create and silently delete the destination File.
-      const statusRaw = await this.chezmoi.status()
+      // `chezmoi status` RENDERS every managed template to compute target state — so a Secret
+      // reference whose password-manager CLI is locked/signed-out (or whose item/field is missing)
+      // fails HERE, before any per-File apply, taking down the whole status read (issue 2-05,
+      // acceptance criterion 9). Map that into a clean, provider-agnostic per-File error for the
+      // reviewed Files (rather than leaking chezmoi's template error or failing the Operation
+      // opaquely): the user unlocks/signs in or fixes the reference, then retries.
+      let statusRaw: string
+      try {
+        statusRaw = await this.chezmoi.status()
+      } catch (statusError) {
+        const failureText =
+          statusError instanceof CommandFailedError
+            ? `${statusError.message}\n${statusError.result.stderr}`
+            : statusError instanceof Error
+              ? statusError.message
+              : ''
+        if (isSecretReferenceResolutionFailure(failureText)) {
+          const results: ApplyFileResult[] = targetPaths.map((targetPath) => ({
+            targetPath,
+            outcome: 'error' as const,
+            refusal: 'secret-reference-unresolved' as const,
+            reason:
+              "Couldn't resolve a Secret reference from your password manager. Unlock or sign " +
+              'in to the CLI, or check that the referenced item and field exist, then Apply again.',
+            retryable: true,
+          }))
+          span?.end('error')
+          return { results, applied: [], failed: results }
+        }
+        throw statusError
+      }
       const uncommittedEdits = new Set(parseChezmoiStatus(statusRaw).map((entry) => entry.path))
       const incomingDeletionSet = new Set(parseIncomingDeletions(statusRaw))
       // Classify each reviewed path by its REAL incoming status: a path `chezmoi apply` would
@@ -1049,6 +1239,29 @@ export class DenService {
               outcome: 'error',
               refusal: 'blocked-uncommitted-edit',
               reason: caught.message,
+              retryable: true,
+            })
+            continue
+          }
+          // A password-manager reference that couldn't resolve (issue 2-05, acceptance criterion 9):
+          // a locked/signed-out CLI or a missing item/field. Map the raw provider stderr — which
+          // chezmoi surfaces in the failure (CommandFailedError carries it) — into a clean,
+          // provider-AGNOSTIC message that points the user at unlock/sign in or fixing the reference,
+          // rather than leaking chezmoi's internal template error. Retryable: re-run once unlocked.
+          const failureText =
+            caught instanceof CommandFailedError
+              ? `${caught.message}\n${caught.result.stderr}`
+              : caught instanceof Error
+                ? caught.message
+                : ''
+          if (isSecretReferenceResolutionFailure(failureText)) {
+            results.push({
+              targetPath,
+              outcome: 'error',
+              refusal: 'secret-reference-unresolved',
+              reason:
+                "Couldn't resolve a Secret reference from your password manager. Unlock or sign " +
+                'in to the CLI, or check that the referenced item and field exist, then Apply again.',
               retryable: true,
             })
             continue

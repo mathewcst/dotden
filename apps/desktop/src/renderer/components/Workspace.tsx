@@ -33,11 +33,15 @@ import { OfflineBanner } from '@/components/OfflineBanner'
 import { ReviewApply } from '@/components/ReviewApply'
 import { ConflictResolver } from '@/components/ConflictResolver'
 import { SecretWarning } from '@/components/SecretWarning'
+import { SecretPicker } from '@/components/SecretPicker'
 import { FileHistory } from '@/components/FileHistory'
 import { remoteAxisDecoration } from '@/lib/remote-axis'
 import type { SecretFinding } from '../../main/foundation/secret-scanner'
+import type { DetectedPasswordManager } from '../../main/foundation/pm-detect'
+import type { PmPreference } from '../../main/foundation/pm-preference'
 import type {
   AffectedEnvironment,
+  ConvertSecretRequest,
   FileTreeEntry,
   IncomingReviewItem,
   RemoteAxisMarker,
@@ -134,6 +138,7 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
     | 'untrack'
     | 'delete'
     | 'organize'
+    | 'convert'
   >(null)
   const [error, setError] = useState<string | null>(null)
   const [newPath, setNewPath] = useState('')
@@ -156,6 +161,16 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
   const [secretWarn, setSecretWarn] = useState<{
     findings: readonly SecretFinding[]
     paths: readonly string[]
+  } | null>(null)
+
+  // The pending step-2 password-manager picker (issue 2-05): the detected managers + remembered
+  // preference for THIS environment, plus the File being converted. null while the picker is
+  // closed. Opened from the warn step's Convert; converting writes the chezmoi `.tmpl` Secret
+  // reference (only the reference enters the Den, never the raw secret) then Commits it.
+  const [secretPicker, setSecretPicker] = useState<{
+    managers: readonly DetectedPasswordManager[]
+    preference: PmPreference | null
+    targetPath: string
   } | null>(null)
 
   // The paths the tree renders: real managed Files on A, incoming Files on B.
@@ -476,6 +491,41 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
         await recordCommit(paths)
       }),
     [run, recordCommit],
+  )
+
+  // Open step 2 (the password-manager picker, issue 2-05) for a flagged File. Detect the installed
+  // managers + read this environment's remembered preference (both env-local), then surface the
+  // picker. Convert is per-File: we target the FIRST flagged File (the common single-secret case),
+  // which the warn step always has at least one of. Detection is read-only feature-detection.
+  const openConvertPicker = useCallback(
+    (findings: readonly SecretFinding[]) =>
+      run('convert', async () => {
+        const targetPath = findings[0]?.file
+        if (!targetPath) return
+        const [managers, preference] = await Promise.all([
+          window.dotden.den.detectPasswordManagers(),
+          window.dotden.den.pmPreference(),
+        ])
+        setSecretPicker({ managers, preference, targetPath })
+      }),
+    [run],
+  )
+
+  // Convert the flagged value into a chezmoi `.tmpl` Secret reference (issue 2-05). Writes the
+  // reference/template call into source state + Commits it — ONLY the reference enters the Den, the
+  // raw secret stays in the vault and chezmoi re-fetches it at Apply time. Refreshes the tree so the
+  // now-converted File reflects its committed state.
+  const convertSecret = useCallback(
+    (request: ConvertSecretRequest) =>
+      run('convert', async () => {
+        const result = await window.dotden.den.convertSecret(request)
+        setLastCommitMessage(result.commit.message)
+        setLastCommitPushed(result.commit.pushed)
+        setPushQueued(result.commit.queued)
+        await reloadTree()
+        if (result.commit.pushed) await refreshIncoming()
+      }),
+    [run, reloadTree, refreshIncoming],
   )
 
   const commit = () => {
@@ -1246,11 +1296,42 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
           }}
           findings={secretWarn.findings}
           continueDisabled={busy !== null}
+          onConvert={() => {
+            // Convert → step 2, the password-manager picker (issue 2-05). Detect installed
+            // managers + the remembered preference, then open the picker for the flagged File.
+            // The warn step closes; nothing is Committed until the user converts.
+            void openConvertPicker(secretWarn.findings)
+          }}
           onCommitAnyway={(dontWarnAgain) => {
             // Commit anyway (issue 2-04): when the user ticked "Don't warn me about this File
             // again", allowlist the shown findings FIRST (synced, per File+match) so they stop
             // warning on future Commits — then record the Commit either way (warn-not-block).
             void commitAnyway(secretWarn.findings, secretWarn.paths, dontWarnAgain)
+          }}
+        />
+      ) : null}
+
+      {/* Secret flow step 2 (issue 2-05): the password-manager picker. Opened from the warn step's
+          Convert; converting writes the chezmoi `.tmpl` Secret reference into source state + Commits
+          it — only the reference enters the Den, the raw secret stays in the user's vault. */}
+      {secretPicker ? (
+        <SecretPicker
+          // Re-mount per convert session so selection/input state starts fresh (react-patterns).
+          key={secretPicker.targetPath}
+          open
+          onOpenChange={(next) => {
+            if (!next) setSecretPicker(null)
+          }}
+          managers={secretPicker.managers}
+          preference={secretPicker.preference}
+          targetPath={secretPicker.targetPath}
+          convertDisabled={busy !== null}
+          onBack={() => {
+            // Back → return to step 1 (the warn step is still stashed in secretWarn).
+            setSecretPicker(null)
+          }}
+          onConvert={(request) => {
+            void convertSecret(request)
           }}
         />
       ) : null}

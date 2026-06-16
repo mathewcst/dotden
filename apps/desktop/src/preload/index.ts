@@ -72,6 +72,25 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['allowlistSecret']>
     },
+    // → IPC channel 'den:detect-password-managers' (PM picker detection, issue 2-05; env-local)
+    detectPasswordManagers() {
+      return ipcRenderer.invoke('den:detect-password-managers', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['detectPasswordManagers']>
+    },
+    // → IPC channel 'den:pm-preference' (env-local "Remember my choice" default, issue 2-05)
+    pmPreference() {
+      return ipcRenderer.invoke('den:pm-preference', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['pmPreference']>
+    },
+    // → IPC channel 'den:convert-secret' (write the `.tmpl` reference + Commit it, issue 2-05)
+    convertSecret(request) {
+      return ipcRenderer.invoke('den:convert-secret', {
+        request,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['convertSecret']>
+    },
     // → IPC channel 'den:commit'
     commit(targetPaths) {
       return ipcRenderer.invoke('den:commit', {
