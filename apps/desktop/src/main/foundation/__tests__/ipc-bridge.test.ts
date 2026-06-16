@@ -29,6 +29,7 @@ describe('IpcBridge', () => {
   it('forwards the _trace id into the DenService on every den:* channel', async () => {
     const den = {
       trackFile: vi.fn(async () => undefined),
+      scanCommit: vi.fn(async () => []),
       commitTracked: vi.fn(async () => ({
         message: 'm',
         templateId: 'default',
@@ -69,6 +70,11 @@ describe('IpcBridge', () => {
       targetPath: '.zshrc',
       _trace: { traceId: 't1' },
     } as never)
+    // Commit-time secret scan (issue 2-03): a read-but-Operation channel, _trace forwarded.
+    await handlers.get('den:scan-commit')?.({}, {
+      targetPaths: ['.zshrc'],
+      _trace: { traceId: 't12' },
+    } as never)
     await handlers.get('den:commit')?.({}, {
       targetPaths: ['.zshrc'],
       _trace: { traceId: 't2' },
@@ -100,6 +106,7 @@ describe('IpcBridge', () => {
     } as never)
 
     expect(den.trackFile).toHaveBeenCalledWith('.zshrc', 't1')
+    expect(den.scanCommit).toHaveBeenCalledWith(['.zshrc'], 't12')
     expect(den.commitTracked).toHaveBeenCalledWith(['.zshrc'], 't2')
     expect(den.syncPush).toHaveBeenCalledWith('t3')
     // flush-push-queue forwards the id (it pushes); push-pending is read-only (no id forwarded).

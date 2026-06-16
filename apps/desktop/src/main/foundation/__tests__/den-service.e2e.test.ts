@@ -1092,6 +1092,80 @@ describe('DenService OS Scope + inheritance (issue 1-15, real chezmoi/git)', () 
   })
 })
 
+describe('DenService commit-time secret scan + warn (issue 2-03)', () => {
+  it('scans the about-to-be-Committed Files, flags a real secret, and NEVER blocks the Commit', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const home = join(root, 'home')
+    const source = join(root, 'source')
+    await mkdir(home, { recursive: true })
+    await initSourceRepo(source, remote)
+    const tracer = new OperationTracer()
+    const env = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: source,
+      destinationDir: home,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+      tracer,
+    })
+
+    // A user is about to Commit a clean dotfile AND a credentials file with a real secret.
+    await writeFile(join(home, '.zshrc'), 'export EDITOR=nvim\n')
+    await mkdir(join(home, '.aws'), { recursive: true })
+    await writeFile(
+      join(home, '.aws/credentials'),
+      '[default]\naws_access_key_id = AKIAJQ4R7TZP2WBN5KCD\n',
+    )
+    await env.trackFile('.zshrc', 'trace-track-1')
+    await env.trackFile('.aws/credentials', 'trace-track-2')
+
+    // The scan runs over the about-to-be-Committed set: it reads the on-disk bytes and finds
+    // exactly the AWS key, on the right File + line, masked (the full value never returned).
+    const findings = await env.scanCommit(['.zshrc', '.aws/credentials'], 'trace-scan')
+    expect(findings).toHaveLength(1)
+    expect(findings[0]).toMatchObject({
+      file: '.aws/credentials',
+      kind: 'AWS Access Key ID',
+      line: 2,
+    })
+    expect(findings[0]?.maskedValue).not.toContain('AKIAJQ4R7TZP2WBN5KCD')
+    expect(findings[0]?.maskedValue).toContain('•')
+
+    // The scan WARNS, never blocks: the Commit proceeds normally afterward (ADR 0001).
+    const commit = await env.commitTracked(['.zshrc', '.aws/credentials'], 'trace-commit')
+    expect(commit.committedFiles).toEqual(['.zshrc', '.aws/credentials'])
+    expect(commit.pushed).toBe(false)
+
+    // The scan emitted a wide event carrying ONLY the allowlisted finding COUNT — never the
+    // secret value or path (the privacy posture: the count is a number, nothing more).
+    const scanEvent = tracer.events().find((e) => e.attributes.secretFindingCount !== undefined)
+    expect(scanEvent?.attributes.secretFindingCount).toBe(1)
+  })
+
+  it('returns no findings for a clean set (the warn step never opens)', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const home = join(root, 'home')
+    const source = join(root, 'source')
+    await mkdir(home, { recursive: true })
+    await initSourceRepo(source, remote)
+    const env = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: source,
+      destinationDir: home,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+
+    await writeFile(join(home, '.zshrc'), 'export EDITOR=nvim\nalias g=git\n')
+    await env.trackFile('.zshrc', 'trace-track')
+    expect(await env.scanCommit(['.zshrc'], 'trace-scan')).toEqual([])
+  })
+})
+
 /** Read raw `chezmoi status` for a source/destination pair (test setup probe only). */
 async function readChezmoiStatus(sourceDir: string, destinationDir: string): Promise<string> {
   const { stdout } = await runCommand(chezmoiBin, [

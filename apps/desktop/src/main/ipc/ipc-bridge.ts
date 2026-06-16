@@ -112,9 +112,9 @@ export interface IpcBridgeDeps {
  *
  * Channels (all payloads carry `_trace`):
  * - `remote:preflight` / `remote:connect` / `remote:latest-sha` → {@link RemoteClient}
- * - `den:track` / `den:commit` / `den:sync-push` / `den:list-incoming` /
- *   `den:incoming-summary` / `den:incoming-diff` / `den:apply` / `den:tree` /
- *   `den:diff` / `den:untrack` / `den:delete-everywhere` /
+ * - `den:track` / `den:scan-commit` / `den:commit` / `den:sync-push` /
+ *   `den:list-incoming` / `den:incoming-summary` / `den:incoming-diff` / `den:apply` /
+ *   `den:tree` / `den:diff` / `den:untrack` / `den:delete-everywhere` /
  *   `den:affected-environments` → {@link DenService}
  * - `discover:scan` / `discover:inspect-path` → {@link DiscoveryScanner} (issue 1-06)
  * - `automation:get-level` / `automation:set-level` → environment-local automation
@@ -152,6 +152,14 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   registrar.handle('den:track', async (_event, payload: TracedPayload) => {
     const { targetPath } = payload as TracedPayload & { targetPath: string }
     return (await deps.denService()).trackFile(targetPath, traceId(payload))
+  })
+  // Commit-time secret scan (issue 2-03): the renderer calls scan-commit BEFORE commit so it
+  // can show the amber warn step on findings. It MUTATES nothing (a read-only advisory scan)
+  // but it IS an Operation (it reads the about-to-be-committed bytes), so its `_trace` is
+  // forwarded. Crucially, the scan NEVER blocks the Commit — it returns findings as data.
+  registrar.handle('den:scan-commit', async (_event, payload: TracedPayload) => {
+    const { targetPaths } = payload as TracedPayload & { targetPaths: readonly string[] }
+    return (await deps.denService()).scanCommit(targetPaths, traceId(payload))
   })
   registrar.handle('den:commit', async (_event, payload: TracedPayload) => {
     const { targetPaths } = payload as TracedPayload & { targetPaths: readonly string[] }

@@ -32,7 +32,9 @@ import { IncomingBanner } from '@/components/IncomingBanner'
 import { OfflineBanner } from '@/components/OfflineBanner'
 import { ReviewApply } from '@/components/ReviewApply'
 import { ConflictResolver } from '@/components/ConflictResolver'
+import { SecretWarning } from '@/components/SecretWarning'
 import { remoteAxisDecoration } from '@/lib/remote-axis'
+import type { SecretFinding } from '../../main/foundation/secret-scanner'
 import type {
   AffectedEnvironment,
   FileTreeEntry,
@@ -140,6 +142,15 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
     verb: 'untrack' | 'delete-everywhere' | 'apply-deletion'
     path: string
     affected: readonly AffectedEnvironment[]
+  } | null>(null)
+
+  // The pending commit-time secret warn step (issue 2-03): the scan findings to caution about
+  // plus the exact paths the user was Committing, so "Commit anyway" can proceed with them.
+  // null while no warning is open. The scan runs BEFORE the Commit; a non-empty result opens
+  // this amber warn step instead of Committing straight away (warn-never-block, ADR 0001).
+  const [secretWarn, setSecretWarn] = useState<{
+    findings: readonly SecretFinding[]
+    paths: readonly string[]
   } | null>(null)
 
   // The paths the tree renders: real managed Files on A, incoming Files on B.
@@ -392,24 +403,53 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
       await selectFile(targetPath)
     })
 
-  const commit = () =>
-    run('commit', async () => {
-      // Commit every managed File that has a pending local change (the modified/added set).
-      const changed = files.filter((f) => !f.muted && f.status !== null).map((f) => f.targetPath)
-      if (changed.length === 0) return
-      const result = await window.dotden.den.commit(changed)
-      setLastCommitMessage(result.message)
-      // Under Auto-sync the main process auto-pushed this Commit (result.pushed === true);
-      // under Manual it stays local until Sync now. Reflect that so the callout copy is honest.
-      setLastCommitPushed(result.pushed)
-      // Offline queue (issue 1-16): an Auto-sync push that couldn't go out because we are
-      // offline is QUEUED (result.queued) — show the offline banner; the Commit is safe locally.
-      setPushQueued(result.queued)
-      await reloadTree()
-      // An auto-pushed Commit also fetched incoming as part of the round-trip — refresh the
-      // Remote axis + banner so they stay live without the user pressing Sync now.
-      if (result.pushed) await refreshIncoming()
-    })
+  // The ACTUAL Commit, once the secret warn step (if any) has been cleared. Extracted so the
+  // scan-then-warn path and the "Commit anyway" button both record the Commit identically.
+  const performCommit = useCallback(
+    (paths: readonly string[]) =>
+      run('commit', async () => {
+        if (paths.length === 0) return
+        const result = await window.dotden.den.commit(paths)
+        setLastCommitMessage(result.message)
+        // Under Auto-sync the main process auto-pushed this Commit (result.pushed === true);
+        // under Manual it stays local until Sync now. Reflect that so the callout copy is honest.
+        setLastCommitPushed(result.pushed)
+        // Offline queue (issue 1-16): an Auto-sync push that couldn't go out because we are
+        // offline is QUEUED (result.queued) — show the offline banner; the Commit is safe.
+        setPushQueued(result.queued)
+        await reloadTree()
+        // An auto-pushed Commit also fetched incoming as part of the round-trip — refresh the
+        // Remote axis + banner so they stay live without the user pressing Sync now.
+        if (result.pushed) await refreshIncoming()
+      }),
+    [run, reloadTree, refreshIncoming],
+  )
+
+  // Commit-time secret scan + warn (issue 2-03): scan the about-to-be-Committed set FIRST.
+  // On findings, open the amber warn step instead of Committing straight away — a caution,
+  // never a block (ADR 0001), so the user can still proceed via "Commit anyway". On no
+  // findings, Commit immediately. Extracted so both the toolbar Commit and the row-verb
+  // Commit share one scan-then-warn entry point.
+  const commitWithScan = useCallback(
+    (paths: readonly string[]) =>
+      run('commit', async () => {
+        if (paths.length === 0) return
+        const findings = await window.dotden.den.scanCommit(paths)
+        if (findings.length > 0) {
+          // Stash the findings + the exact paths so "Commit anyway" can proceed with them.
+          setSecretWarn({ findings, paths })
+          return
+        }
+        await performCommit(paths)
+      }),
+    [run, performCommit],
+  )
+
+  const commit = () => {
+    // Commit every managed File that has a pending local change (the modified/added set).
+    const changed = files.filter((f) => !f.muted && f.status !== null).map((f) => f.targetPath)
+    void commitWithScan(changed)
+  }
 
   const push = () =>
     run('push', async () => {
@@ -443,11 +483,9 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
   const onRowVerb = useCallback(
     (path: string, verb: RowVerb) => {
       if (verb === 'commit') {
-        void run('commit', async () => {
-          const result = await window.dotden.den.commit([path])
-          setLastCommitMessage(result.message)
-          await reloadTree()
-        })
+        // Scan-then-warn before recording this one File's Commit (issue 2-03), same as the
+        // toolbar Commit: a flagged secret opens the amber warn step, never silently commits.
+        void commitWithScan([path])
         return
       }
       if (verb === 'apply') {
@@ -477,7 +515,7 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
         setConfirm({ verb: 'delete-everywhere', path, affected })
       })
     },
-    [run, reloadTree, incoming],
+    [run, reloadTree, incoming, commitWithScan],
   )
 
   // Carry out the verb the user CONFIRMED in the dialog. Each maps faithfully onto a
@@ -1124,6 +1162,24 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
               </>
             )
           }
+        />
+      ) : null}
+
+      {/* Commit-time secret warn step (issue 2-03): when the pre-Commit scan flagged a
+          possible secret, show the amber warn caution BEFORE the Commit completes. It never
+          blocks (ADR 0001) — "Commit anyway" proceeds with the exact stashed paths; Cancel
+          closes without Committing so the user can go convert/edit the value. */}
+      {secretWarn ? (
+        <SecretWarning
+          open
+          onOpenChange={(next) => {
+            if (!next) setSecretWarn(null)
+          }}
+          findings={secretWarn.findings}
+          continueDisabled={busy !== null}
+          onContinue={() => {
+            void performCommit(secretWarn.paths)
+          }}
         />
       ) : null}
     </div>

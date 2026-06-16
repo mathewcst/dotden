@@ -58,6 +58,13 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['track']>
     },
+    // → IPC channel 'den:scan-commit' (commit-time secret scan + warn step, issue 2-03)
+    scanCommit(targetPaths) {
+      return ipcRenderer.invoke('den:scan-commit', {
+        targetPaths,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['scanCommit']>
+    },
     // → IPC channel 'den:commit'
     commit(targetPaths) {
       return ipcRenderer.invoke('den:commit', {

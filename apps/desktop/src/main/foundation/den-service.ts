@@ -18,7 +18,7 @@
  * It never re-checks an invariant an owner guarantees (ADR 0008): applicability is
  * proven by an `AppliesHere` witness from {@link SyncEngine}, never re-derived here.
  */
-import { access, rm } from 'node:fs/promises'
+import { access, readFile, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { ChezmoiAdapter, UncommittedLocalEditError } from './chezmoi-adapter.js'
 import { GitTransport } from './git-transport.js'
@@ -50,6 +50,7 @@ import type { Os, Scope } from './os-scope.js'
 import { PushQueue } from './push-queue.js'
 import { isOfflineError } from './offline.js'
 import type { UnsubscribeDisposition } from './subscription-settings.js'
+import { scanForSecrets, type SecretFinding } from './secret-scanner.js'
 
 /** Construction wiring for a {@link DenService}, bound to one environment's dirs. */
 export interface DenServiceOptions {
@@ -624,6 +625,64 @@ export class DenService {
         pushed,
         queued,
       }
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * **Scan the about-to-be-Committed set for secrets** (issue 2-03) — the commit-time
+   * detection that feeds the amber warn step.
+   *
+   * The renderer calls this BEFORE {@link commitTracked}: it reads each chosen File's bytes
+   * from disk (exactly what `chezmoi re-add` would import into the Den) and runs the PURE
+   * {@link scanForSecrets} detector over them. Findings are returned as data — this method
+   * NEVER prevents a Commit (warn-not-block, ADR 0001). An empty result means "nothing to
+   * warn about", and the renderer proceeds straight to {@link commitTracked}; a non-empty
+   * result is the caution the warn step renders (one card per finding: File, kind, line,
+   * masked preview), after which the user still chooses to Commit (the Convert-to-a-Secret-
+   * reference path lands in issues 2-04/2-05).
+   *
+   * Reading the **destination** bytes (not chezmoi's source state) is deliberate: the user
+   * is about to record exactly these bytes into the Den, where they would sync RAW to every
+   * environment unless converted — catching them here is catching the secret "at the door"
+   * (secret-and-errors screen spec). A File that can't be read (gone/binary/permission) is
+   * skipped rather than failing the scan: the scan is advisory, and a missing File simply
+   * has nothing to warn about (the Commit itself will surface a real add/re-add error).
+   *
+   * Pure detection, no shell: the only I/O here is reading the File bytes; the detector
+   * itself runs no subprocess and makes no network call, so scanning can never leak a secret.
+   *
+   * @param targetPaths The Files about to be Committed (the renderer's changed set).
+   * @param traceId Correlation id for the wide event (a read-only scan Operation).
+   * @returns Every secret finding across the set, in File-then-line order (empty = clean).
+   */
+  async scanCommit(
+    targetPaths: readonly string[],
+    traceId: string,
+  ): Promise<readonly SecretFinding[]> {
+    const span = this.tracer?.startOperation('commit', traceId)
+    try {
+      // Read each File's about-to-be-committed bytes. A File we can't read (removed, binary,
+      // permission) is skipped — the scan is advisory and never fails the Commit over it.
+      const inputs = await Promise.all(
+        targetPaths.map(async (file) => {
+          try {
+            return { file, content: await readFile(this.destinationPath(file), 'utf8') }
+          } catch {
+            // Unreadable here = nothing this scan can warn about; the Commit path surfaces
+            // any genuine read failure when it re-adds the File (never fail silently there).
+            return { file, content: '' }
+          }
+        }),
+      )
+      const findings = scanForSecrets(inputs)
+      // Allowlisted count only — never the secret values themselves (the privacy posture).
+      span?.setAttribute('fileCount', targetPaths.length)
+      span?.setAttribute('secretFindingCount', findings.length)
+      span?.end('ok')
+      return findings
     } catch (error) {
       span?.end('error')
       throw error

@@ -33,6 +33,7 @@ import type {
   SyncPushResult,
 } from '../main/foundation/den-service.js'
 import type { UnsubscribeDisposition } from '../main/foundation/subscription-settings.js'
+import type { SecretFinding } from '../main/foundation/secret-scanner.js'
 import type { ResolutionChoice } from '../main/foundation/conflict-model.js'
 import type { Group, Workspace } from '../main/foundation/myenv-store.js'
 import type { Scope } from '../main/foundation/os-scope.js'
@@ -98,6 +99,16 @@ export interface DotdenApi {
      * Maps to `chezmoi add` + a synced `.myenv/` placement.
      */
     track(targetPath: string): Promise<void>
+    /**
+     * **Scan the about-to-be-Committed set for secrets** (issue 2-03) — the commit-time
+     * detection that drives the amber warn step. The renderer calls this BEFORE
+     * {@link commit}; on a non-empty result it shows the warn step (one card per finding:
+     * File, kind, line, masked preview) and lets the user Commit anyway (warn, never block —
+     * ADR 0001). An empty result means "nothing flagged", so the renderer proceeds straight
+     * to {@link commit}. Pure detection (regex + entropy, no shell): the masked preview
+     * never exposes the full secret, and the values never leave the main process.
+     */
+    scanCommit(targetPaths: readonly string[]): Promise<readonly SecretFinding[]>
     /**
      * **Commit** Tracked Files into the Den with a templated message — LOCAL only
      * (a Commit is local until pushed, ADR 0006). The result carries the resolved

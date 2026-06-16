@@ -36,6 +36,10 @@ export type AllowlistedAttributeKey =
   | 'durationMs'
   | 'automationLevel'
   | 'queued'
+  // The COUNT of commit-time secret findings (issue 2-03) — a number only. The findings'
+  // file/kind/line/value are NEVER attributes (no such key exists), so the wide event can
+  // record "the scan flagged N things" without ever carrying a secret or a path.
+  | 'secretFindingCount'
 
 /**
  * The value an allowlisted attribute may hold: a count, an enum string, or a flag.
