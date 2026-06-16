@@ -31,6 +31,7 @@ import { SyncTab } from './SyncTab'
 import { CommitTab } from './CommitTab'
 import { AppearanceTab } from './AppearanceTab'
 import { PrivacyTab } from './PrivacyTab'
+import { AboutTab } from './AboutTab'
 
 /** A tab's lifecycle: `live` = built + selectable; `placeholder` = inert until its slice ships. */
 export type SettingsTabStatus = 'live' | 'placeholder'
@@ -54,8 +55,8 @@ export interface SettingsTab {
 
 /**
  * The seven v1 Settings tabs, in nav order (design: settings.md). Sync (2-08), Commit (2-09),
- * Appearance (2-10), and Privacy (2-14) are `live`; every remaining tab is a `placeholder` whose
- * slice flips it to `live` later. Icons match the spec's per-tab nav glyphs exactly.
+ * Appearance (2-10), Privacy (2-14), and About (2-16) are `live`; every remaining tab is a
+ * `placeholder` whose slice flips it to `live` later. Icons match the spec's per-tab nav glyphs.
  */
 export const SETTINGS_TABS: readonly SettingsTab[] = [
   // Automation (2-12): the risk-graded ladder. Inert until that slice ships.
@@ -74,8 +75,9 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   { id: 'privacy', label: 'Privacy', icon: Shield, status: 'live', Content: PrivacyTab },
   // Environments (2-15): the registry + claim/reassign/retire lifecycle. Inert for now.
   { id: 'environments', label: 'Environments', icon: Monitor, status: 'placeholder' },
-  // About (2-16): version + update check + chezmoi/git attribution. Inert until that slice ships.
-  { id: 'about', label: 'About', icon: Info, status: 'placeholder' },
+  // About (2-16): version + honest update-check affordance + chezmoi credit (faithful-wrapper
+  // acknowledgement, ADR 0003). The real update engine is PRD 3 (issue 3-20); this surfaces only.
+  { id: 'about', label: 'About', icon: Info, status: 'live', Content: AboutTab },
 ]
 
 /**

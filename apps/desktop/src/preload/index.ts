@@ -433,6 +433,20 @@ const api: DotdenApi = {
       }) as ReturnType<DotdenApi['privacy']['setSettings']>
     },
   },
+  app: {
+    // → IPC channel 'app:get-info' (running build version + platform for the About tab, issue 2-16)
+    getInfo() {
+      return ipcRenderer.invoke('app:get-info', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['app']['getInfo']>
+    },
+    // → IPC channel 'app:check-updates' (honest update-check affordance; real feed is issue 3-20)
+    checkForUpdates() {
+      return ipcRenderer.invoke('app:check-updates', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['app']['checkForUpdates']>
+    },
+  },
   trayPoller: {
     // ← main→renderer push: the TrayPoller fires 'tray-poller:incoming' when the Remote
     // moved (issue 1-12). We wrap the raw IPC listener so the renderer callback never sees

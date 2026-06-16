@@ -80,6 +80,13 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
+      checkForUpdates: async () => ({
+        status: 'unavailable' as const,
+        currentVersion: '1.2.0',
+        latestVersion: null,
+        detail: 'No update feed is configured for this build yet.',
+      }),
     })
 
     await handlers.get('den:track')?.({}, {
@@ -193,6 +200,13 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
+      checkForUpdates: async () => ({
+        status: 'unavailable' as const,
+        currentVersion: '1.2.0',
+        latestVersion: null,
+        detail: 'No update feed is configured for this build yet.',
+      }),
     })
 
     // get forwards the read Operation's trace id.
@@ -247,6 +261,13 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (s) => s,
+      getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
+      checkForUpdates: async () => ({
+        status: 'unavailable' as const,
+        currentVersion: '1.2.0',
+        latestVersion: null,
+        detail: 'No update feed is configured for this build yet.',
+      }),
     })
 
     // get forwards the read Operation's trace id.
@@ -297,6 +318,13 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
+      checkForUpdates: async () => ({
+        status: 'unavailable' as const,
+        currentVersion: '1.2.0',
+        latestVersion: null,
+        detail: 'No update feed is configured for this build yet.',
+      }),
     })
 
     await handlers.get('den:detect-conflicts')?.({}, { _trace: { traceId: 'c1' } } as never)
@@ -361,6 +389,13 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
+      checkForUpdates: async () => ({
+        status: 'unavailable' as const,
+        currentVersion: '1.2.0',
+        latestVersion: null,
+        detail: 'No update feed is configured for this build yet.',
+      }),
     })
 
     await handlers.get('den:create-workspace')?.({}, {
@@ -463,6 +498,13 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
+      checkForUpdates: async () => ({
+        status: 'unavailable' as const,
+        currentVersion: '1.2.0',
+        latestVersion: null,
+        detail: 'No update feed is configured for this build yet.',
+      }),
     })
 
     await handlers.get('den:subscription-state')?.({}, { _trace: { traceId: 's1' } } as never)
@@ -536,6 +578,13 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
+      checkForUpdates: async () => ({
+        status: 'unavailable' as const,
+        currentVersion: '1.2.0',
+        latestVersion: null,
+        detail: 'No update feed is configured for this build yet.',
+      }),
     })
 
     await handlers.get('remote:preflight')?.({}, {
@@ -572,6 +621,13 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
+      checkForUpdates: async () => ({
+        status: 'unavailable' as const,
+        currentVersion: '1.2.0',
+        latestVersion: null,
+        detail: 'No update feed is configured for this build yet.',
+      }),
     })
 
     await expect(handlers.get('den:sync-push')?.({}, {} as never)).rejects.toThrow(
@@ -607,6 +663,13 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
+      checkForUpdates: async () => ({
+        status: 'unavailable' as const,
+        currentVersion: '1.2.0',
+        latestVersion: null,
+        detail: 'No update feed is configured for this build yet.',
+      }),
     })
 
     await expect(
@@ -665,6 +728,13 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
+      checkForUpdates: async () => ({
+        status: 'unavailable' as const,
+        currentVersion: '1.2.0',
+        latestVersion: null,
+        detail: 'No update feed is configured for this build yet.',
+      }),
     })
 
     await expect(
@@ -711,6 +781,13 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
+      checkForUpdates: async () => ({
+        status: 'unavailable' as const,
+        currentVersion: '1.2.0',
+        latestVersion: null,
+        detail: 'No update feed is configured for this build yet.',
+      }),
     })
 
     // get-level forwards the environment-local rung.
@@ -757,6 +834,13 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
+      checkForUpdates: async () => ({
+        status: 'unavailable' as const,
+        currentVersion: '1.2.0',
+        latestVersion: null,
+        detail: 'No update feed is configured for this build yet.',
+      }),
     })
 
     // get-settings forwards the environment-local Sync settings.
@@ -804,6 +888,13 @@ describe('IpcBridge', () => {
       setSyncSettings: async (settings) => settings,
       getPrivacySettings,
       setPrivacySettings,
+      getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
+      checkForUpdates: async () => ({
+        status: 'unavailable' as const,
+        currentVersion: '1.2.0',
+        latestVersion: null,
+        detail: 'No update feed is configured for this build yet.',
+      }),
     })
 
     // get-settings forwards this environment's telemetry consent — all off out of the box.
@@ -828,6 +919,62 @@ describe('IpcBridge', () => {
 
     // Both channels still hard-fail without a _trace envelope (uniform correlation).
     await expect(handlers.get('privacy:set-settings')?.({}, {} as never)).rejects.toThrow(
+      'without a _trace envelope',
+    )
+  })
+
+  it('routes the app:* info + update-check channels and asserts _trace (issue 2-16)', async () => {
+    const getAppInfo = vi.fn(async () => ({ version: '1.2.0', platform: 'linux' }))
+    // The placeholder update check: honestly unavailable until the real feed lands (issue 3-20).
+    const checkForUpdates = vi.fn(async () => ({
+      status: 'unavailable' as const,
+      currentVersion: '1.2.0',
+      latestVersion: null,
+      detail: 'No update feed is configured for this build yet.',
+    }))
+    const { registrar, handlers } = fakeRegistrar()
+    registerIpcBridge(registrar, {
+      remoteClient: async () => ({}) as never,
+      denService: async () => ({}) as never,
+      discoveryScanner: async () => ({}) as never,
+      environmentRegistry: async () => ({}) as never,
+      getAutomationLevel: async () => 'manual' as const,
+      setAutomationLevel: async () => undefined,
+      claimEnvironment: async () => undefined,
+      getUnsubscribeDisposition: async () => 'keep' as const,
+      setUnsubscribeDisposition: async () => undefined,
+      getSyncSettings: async () => ({
+        pollerEnabled: true,
+        cadence: 'fast' as const,
+        startOnLogin: false,
+      }),
+      setSyncSettings: async (settings) => settings,
+      getPrivacySettings: async () => ({
+        analyticsEnabled: false,
+        crashReportsEnabled: false,
+        diagnosticLogsEnabled: false,
+      }),
+      setPrivacySettings: async (settings) => settings,
+      getAppInfo,
+      checkForUpdates,
+    })
+
+    // get-info forwards the running build's version + platform for the About tab.
+    await expect(
+      handlers.get('app:get-info')?.({}, { _trace: { traceId: 'i1' } } as never),
+    ).resolves.toEqual({ version: '1.2.0', platform: 'linux' })
+    expect(getAppInfo).toHaveBeenCalledTimes(1)
+    // check-updates returns the honest result (unavailable until issue 3-20 wires a real feed).
+    await expect(
+      handlers.get('app:check-updates')?.({}, { _trace: { traceId: 'i2' } } as never),
+    ).resolves.toMatchObject({ status: 'unavailable', detail: expect.any(String) })
+    expect(checkForUpdates).toHaveBeenCalledTimes(1)
+
+    // Both channels still hard-fail without a _trace envelope (uniform correlation).
+    await expect(handlers.get('app:get-info')?.({}, {} as never)).rejects.toThrow(
+      'without a _trace envelope',
+    )
+    await expect(handlers.get('app:check-updates')?.({}, {} as never)).rejects.toThrow(
       'without a _trace envelope',
     )
   })

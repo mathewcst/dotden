@@ -54,6 +54,7 @@ import type { AutomationLevel } from '../main/foundation/automation-policy.js'
 import type { SyncSettings } from '../main/foundation/sync-settings.js'
 import type { PrivacySettings } from '../main/foundation/privacy-settings.js'
 import type { AppearanceSettings } from './appearance-settings.js'
+import type { AppInfo, UpdateCheckResult } from './app-info.js'
 
 /**
  * Node's `process.platform` value set, declared locally so this shared contract
@@ -557,6 +558,27 @@ export interface DotdenApi {
      * boolean and nothing else (the consent gate's consumers are PRD 3).
      */
     setSettings(settings: PrivacySettings): Promise<PrivacySettings>
+  }
+  /**
+   * App info + update check (issue 2-16, stories 52–53), forwarded to `app:*` IPC channels —
+   * the data seam behind the Settings → About tab.
+   *
+   * `getInfo` reports the running build's version (the canonical `app.getVersion()`); the tab
+   * shows it so the user always knows what they are on. `checkForUpdates` runs the update-check
+   * affordance: until issue 3-20 wires the real electron-updater feed it honestly resolves to
+   * `'unavailable'` (with a reason) rather than a fake "you're current" (never fail silently). No
+   * packaging/auto-update mechanics live here — only the version read + the check affordance (the
+   * chezmoi credit the tab also shows is static copy, {@link CHEZMOI_CREDIT}, needing no IPC).
+   */
+  readonly app: {
+    /** Read the running app's version + platform for the About tab's "you're on …" line. */
+    getInfo(): Promise<AppInfo>
+    /**
+     * Run an update check. Resolves to an honest {@link UpdateCheckResult}: `unavailable` (with a
+     * reason) until issue 3-20 publishes a real feed, or `up-to-date`/`update-available` once it
+     * does. Never throws for "no feed" — a missing feed is a surfaced state, not an error.
+     */
+    checkForUpdates(): Promise<UpdateCheckResult>
   }
   /**
    * The TrayPoller's detect-only incoming notifications (issue 1-12), pushed FROM the

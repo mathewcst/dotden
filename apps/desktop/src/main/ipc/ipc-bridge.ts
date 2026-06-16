@@ -27,6 +27,7 @@ import type { UnsubscribeDisposition } from '../foundation/subscription-settings
 import type { SecretFinding } from '../foundation/secret-scanner.js'
 import type { ConvertSecretRequest } from '../foundation/den-service.js'
 import type { AppearanceSettings } from '../../shared/appearance-settings.js'
+import type { AppInfo, UpdateCheckResult } from '../../shared/app-info.js'
 
 /**
  * The minimal trace envelope every IPC payload carries.
@@ -120,6 +121,18 @@ export interface IpcBridgeDeps {
    * settings so the Privacy tab re-renders from the source of truth.
    */
   readonly setPrivacySettings: (settings: PrivacySettings) => Promise<PrivacySettings>
+  /**
+   * Read the running app's info — version + platform (issue 2-16). index.ts supplies the
+   * canonical `app.getVersion()`; the bridge just forwards it for the About tab's version line.
+   */
+  readonly getAppInfo: () => Promise<AppInfo>
+  /**
+   * Run the About tab's update check (issue 2-16). index.ts wires the current version + the
+   * placeholder feed (the real electron-updater feed is issue 3-20), so the bridge only routes the
+   * request and returns the honest {@link UpdateCheckResult} — `unavailable` until a feed exists,
+   * never a fake "you're current". NO download/install path is wired here (those are PRD 3).
+   */
+  readonly checkForUpdates: () => Promise<UpdateCheckResult>
 }
 
 /**
@@ -548,6 +561,21 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     // tab re-renders from the source of truth. No egress happens here — flipping a toggle stores
     // a boolean and nothing more (issue 2-14 is control-surface-only).
     return deps.setPrivacySettings(settings)
+  })
+
+  // ── App info + update-check channels (issue 2-16): the Settings → About tab ──
+  // get-info reads the running build's version + platform; check-updates runs the update-check
+  // affordance, returning an honest result (`unavailable` until the real feed lands in issue
+  // 3-20 — never a fake "you're current"). Both are read-only (no Operation/mutation) but still
+  // assert the `_trace` envelope so EVERY IPC call crosses the boundary uniformly correlated.
+  // NO packaging/auto-update mechanics are wired here — only the version read + the check.
+  registrar.handle('app:get-info', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    return deps.getAppInfo()
+  })
+  registrar.handle('app:check-updates', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    return deps.checkForUpdates()
   })
 }
 

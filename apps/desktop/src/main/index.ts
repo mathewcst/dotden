@@ -36,6 +36,8 @@ import { readSyncSettings, writeSyncSettings } from './foundation/sync-settings.
 import type { PollCadenceProfile, SyncSettings } from './foundation/sync-settings.js'
 import { readPrivacySettings, writePrivacySettings } from './foundation/privacy-settings.js'
 import type { PrivacySettings } from './foundation/privacy-settings.js'
+import { checkForUpdates as runUpdateCheck, noFeed } from './foundation/update-check.js'
+import type { AppInfo, UpdateCheckResult } from '../shared/app-info.js'
 
 /**
  * Process-wide observability core (ADR 0007): one wide event per Operation lands in
@@ -318,6 +320,29 @@ async function setPrivacySettings(settings: PrivacySettings): Promise<PrivacySet
   return settings
 }
 
+// ── App info + update check: the Settings → About tab (issue 2-16, stories 52–53) ──
+
+/**
+ * Read the running app's info for the About tab. `app.getVersion()` is the canonical version —
+ * the packaged build version in production, the `package.json` version in dev — so the tab always
+ * shows what the user is actually on. `process.platform` is surfaced purely as a diagnostic hint.
+ */
+function getAppInfo(): Promise<AppInfo> {
+  return Promise.resolve({ version: app.getVersion(), platform: process.platform })
+}
+
+/**
+ * Run the About tab's update check (issue 2-16). Today it uses the {@link noFeed} placeholder, so
+ * it honestly resolves to `'unavailable'` with a reason — mirroring the inert
+ * `autoUpdater.checkForUpdatesAndNotify()` below (no published feed exists in the scaffold). Issue
+ * 3-20 swaps `noFeed` for a real electron-updater-backed feed; the IPC + UI contract is unchanged,
+ * so that is a one-line wiring change here, not a rewrite. NO download/install path is wired in
+ * this slice — only the honest "are there updates?" answer (never a fake "you're current").
+ */
+function checkForUpdates(): Promise<UpdateCheckResult> {
+  return runUpdateCheck(app.getVersion(), noFeed)
+}
+
 /**
  * Apply the OS "open dotden at login" preference (issue 2-08). Electron's
  * `setLoginItemSettings` registers/unregisters the login item on macOS + Windows; it is a
@@ -552,6 +577,8 @@ app.whenReady().then(() => {
     setSyncSettings,
     getPrivacySettings,
     setPrivacySettings,
+    getAppInfo,
+    checkForUpdates,
   })
   createWindow()
 
