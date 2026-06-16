@@ -1,0 +1,6 @@
+# Code owners for dotden — auto-requested as reviewers on matching PRs.
+# https://docs.github.com/articles/about-code-owners
+# Last matching pattern wins. Keep more-specific paths below the catch-all.
+
+# Default owner for everything in the repo.
+*       @mathewcst
