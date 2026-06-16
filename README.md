@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/design-system/assets/banner.svg" alt="dotden — your environment, anywhere." width="100%">
+  <img src="docs/design-system/assets/banner.png" alt="dotden — your environment, anywhere." width="100%">
 </p>
 
 **dotden** keeps your environment yours.
