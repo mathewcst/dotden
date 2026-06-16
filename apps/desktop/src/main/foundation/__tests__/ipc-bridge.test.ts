@@ -46,6 +46,9 @@ describe('IpcBridge', () => {
       applyIncoming: vi.fn(async () => ({ results: [], applied: [], failed: [] })),
       fileTree: vi.fn(async () => ({ files: [], workspaces: [] })),
       fileDiff: vi.fn(async () => ''),
+      // The History tab (issue 2-01): per-File version list + read-only version preview.
+      fileHistory: vi.fn(async () => []),
+      fileVersionDiff: vi.fn(async () => ''),
     }
     const { registrar, handlers } = fakeRegistrar()
     registerIpcBridge(registrar, {
@@ -97,6 +100,16 @@ describe('IpcBridge', () => {
       targetPath: '.zshrc',
       _trace: { traceId: 't7' },
     } as never)
+    // The History tab queries (issue 2-01): read-only, still _trace-correlated.
+    await handlers.get('den:file-history')?.({}, {
+      targetPath: '.zshrc',
+      _trace: { traceId: 't13' },
+    } as never)
+    await handlers.get('den:file-version-diff')?.({}, {
+      targetPath: '.zshrc',
+      sha: 'abc1234',
+      _trace: { traceId: 't14' },
+    } as never)
     // The Review & Apply surface (issue 1-09): incoming-summary fetches (forwards the
     // trace id); incoming-diff is read-only (asserts _trace, forwards no id).
     await handlers.get('den:incoming-summary')?.({}, { _trace: { traceId: 't8' } } as never)
@@ -117,6 +130,9 @@ describe('IpcBridge', () => {
     // tree/diff are read-only: the bridge asserts _trace but does not forward an id.
     expect(den.fileTree).toHaveBeenCalledTimes(1)
     expect(den.fileDiff).toHaveBeenCalledWith('.zshrc')
+    // file-history / file-version-diff are read-only (assert _trace, forward no id).
+    expect(den.fileHistory).toHaveBeenCalledWith('.zshrc')
+    expect(den.fileVersionDiff).toHaveBeenCalledWith('.zshrc', 'abc1234')
     // incoming-summary is a sync Operation (id forwarded); incoming-diff is read-only.
     expect(den.incomingSummary).toHaveBeenCalledWith('t8')
     expect(den.incomingDiff).toHaveBeenCalledWith('.zshrc')

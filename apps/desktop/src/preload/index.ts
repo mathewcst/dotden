@@ -157,6 +157,21 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['diff']>
     },
+    // → IPC channel 'den:file-history' (per-File version list from git log, issue 2-01)
+    fileHistory(targetPath) {
+      return ipcRenderer.invoke('den:file-history', {
+        targetPath,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['fileHistory']>
+    },
+    // → IPC channel 'den:file-version-diff' (read-only preview of one version, issue 2-01)
+    fileVersionDiff(targetPath, sha) {
+      return ipcRenderer.invoke('den:file-version-diff', {
+        targetPath,
+        sha,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['fileVersionDiff']>
+    },
     // → IPC channel 'den:untrack' (the Untrack verb → chezmoi forget)
     untrack(targetPath) {
       return ipcRenderer.invoke('den:untrack', {

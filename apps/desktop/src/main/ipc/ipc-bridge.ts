@@ -240,6 +240,20 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     const { targetPath } = payload as TracedPayload & { targetPath: string }
     return (await deps.denService()).fileDiff(targetPath)
   })
+  // The History tab (issue 2-01): the per-File version list (derived purely from `git log`,
+  // no separate store) + the read-only preview of one version (`git show <sha> -- <path>`).
+  // Both are read-only, so DenService emits no wide event; each still asserts the `_trace`
+  // envelope so EVERY IPC call crosses the boundary correlated.
+  registrar.handle('den:file-history', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    const { targetPath } = payload as TracedPayload & { targetPath: string }
+    return (await deps.denService()).fileHistory(targetPath)
+  })
+  registrar.handle('den:file-version-diff', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    const { targetPath, sha } = payload as TracedPayload & { targetPath: string; sha: string }
+    return (await deps.denService()).fileVersionDiff(targetPath, sha)
+  })
   // The destructive/lifecycle verbs (issue 1-08): Untrack (`forget`) and Delete
   // everywhere (`destroy`) MUTATE the Den, so their `_trace` id IS forwarded so each
   // emits a correlated wide event. affected-environments is the read-only blast-radius

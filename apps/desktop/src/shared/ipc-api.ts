@@ -34,6 +34,7 @@ import type {
 } from '../main/foundation/den-service.js'
 import type { UnsubscribeDisposition } from '../main/foundation/subscription-settings.js'
 import type { SecretFinding } from '../main/foundation/secret-scanner.js'
+import type { FileVersion } from '../main/foundation/file-history.js'
 import type { ResolutionChoice } from '../main/foundation/conflict-model.js'
 import type { Group, Workspace } from '../main/foundation/myenv-store.js'
 import type { Scope } from '../main/foundation/os-scope.js'
@@ -217,6 +218,24 @@ export interface DotdenApi {
      * straight into `@pierre/diffs` `PatchDiff`.
      */
     diff(targetPath: string): Promise<string>
+    /**
+     * The selected File's **version history** for the History tab (issue 2-01) — every Commit
+     * the user ever made for that File, newest first, each carrying its message, short SHA, and
+     * a readable timestamp, with the newest flagged `current` (the version matching the Den
+     * state). Derived PURELY from `git log` scoped to the File (no separate history store, the
+     * issue's load-bearing rule). Read-only; an empty array means the File has no committed
+     * history yet (the tab shows an honest empty state). History is strictly per-File.
+     */
+    fileHistory(targetPath: string): Promise<readonly FileVersion[]>
+    /**
+     * Read-only **preview of one version** of a File in the History tab (issue 2-01). Maps to
+     * `git show <sha> -- <file>`: the patch that version's Commit applied to the File, fed into
+     * the same read-only `@pierre/diffs` `PatchDiff` role as {@link DotdenApi.den.diff} — NO
+     * resolve/edit affordances, NO checkout. Selecting a version row calls this to fill the
+     * preview panel. An empty string means the version did not change this File (or it is
+     * unresolvable), shown honestly rather than as a fake patch.
+     */
+    fileVersionDiff(targetPath: string, sha: string): Promise<string>
     /**
      * **Untrack** a File (issue 1-08) — stop managing it while the real path **stays
      * on disk on every environment**. Maps to chezmoi `forget` + drop the synced

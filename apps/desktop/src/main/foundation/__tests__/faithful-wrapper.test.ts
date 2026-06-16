@@ -166,6 +166,32 @@ describe('GitTransport Sync primitives', () => {
     expect(date).toMatch(/^\d{4}-\d{2}-\d{2}T/)
     expect(subject).toBe('first commit')
   })
+
+  it('showFile() returns the read-only patch one commit applied to a path (History preview, 2-01)', async () => {
+    // First commit introduces the File; a second commit changes it.
+    await writeFile(join(repo.home, '.zshrc'), 'export EDITOR=nvim\n')
+    await repo.chezmoi.commit(['.zshrc'], 'add zshrc', repo.git)
+    await writeFile(join(repo.home, '.zshrc'), 'export EDITOR=nvim\nexport PAGER=less\n')
+    await repo.chezmoi.commit(['.zshrc'], 'add pager', repo.git)
+
+    // The two versions' SHAs, newest first (git log default).
+    const [newestSha, firstSha] = (await repo.git.log({ path: 'dot_zshrc' }))
+      .split('\n')
+      .map((line) => line.split('\x1f')[0] ?? '')
+
+    // `git show <sha> -- dot_zshrc` previews exactly what THAT version changed for the File.
+    const newest = await repo.git.showFile(newestSha!, 'dot_zshrc')
+    expect(newest).toContain('PAGER=less')
+    expect(newest).toContain('add pager') // the commit header travels in `git show` output
+    const first = await repo.git.showFile(firstSha!, 'dot_zshrc')
+    expect(first).toContain('EDITOR=nvim')
+
+    // A commit that did not touch the path yields an empty patch (no hunks), not an error.
+    await writeFile(join(repo.home, '.gitconfig'), 'name = a\n')
+    await repo.chezmoi.commit(['.gitconfig'], 'unrelated', repo.git)
+    const unrelatedSha = (await repo.git.log({ path: 'dot_gitconfig' })).split('\x1f')[0] ?? ''
+    await expect(repo.git.showFile(unrelatedSha, 'dot_zshrc')).resolves.toBe('')
+  })
 })
 
 // The pure TOML transform that mirrors the env id into chezmoi's local [data] table.

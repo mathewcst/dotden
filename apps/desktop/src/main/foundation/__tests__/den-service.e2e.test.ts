@@ -181,6 +181,73 @@ describe('DenService end-to-end thread (real chezmoi/git)', () => {
     await expect(env.fileDiff('.gitconfig')).resolves.toBe('')
   })
 
+  it('fileHistory() lists every committed version newest-first with the newest Current, and fileVersionDiff() previews one version read-only (issue 2-01)', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const home = join(root, 'home')
+    const source = join(root, 'source')
+    await mkdir(home, { recursive: true })
+    await initSourceRepo(source, remote)
+    const env = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: source,
+      destinationDir: home,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+
+    // A File the user never committed has no history — an honest empty list, not a throw.
+    await expect(env.fileHistory('.zshrc')).resolves.toEqual([])
+
+    // Commit THREE versions of the same File so the history has a real, ordered timeline.
+    await writeFile(join(home, '.zshrc'), 'export EDITOR=nvim\n')
+    await env.trackFile('.zshrc', 'trace-track')
+    await env.commitTracked(['.zshrc'], 'trace-commit-1') // "Commit 1 file(s) from this-mac: .zshrc"
+    await writeFile(join(home, '.zshrc'), 'export EDITOR=nvim\nexport PAGER=less\n')
+    await env.commitTracked(['.zshrc'], 'trace-commit-2')
+    await writeFile(join(home, '.zshrc'), 'export EDITOR=nvim\nexport PAGER=bat\n')
+    await env.commitTracked(['.zshrc'], 'trace-commit-3')
+
+    // Also Commit a DIFFERENT File: history is strictly per-File, so it must not leak in.
+    await writeFile(join(home, '.gitconfig'), 'name = a\n')
+    await env.trackFile('.gitconfig', 'trace-track-other')
+    await env.commitTracked(['.gitconfig'], 'trace-commit-other')
+
+    const history = await env.fileHistory('.zshrc')
+    // Every version the user committed for THIS File (3) — and only this File's versions.
+    expect(history).toHaveLength(3)
+    // Newest first (git log default): the newest version matches the current Den state.
+    expect(history[0]?.current).toBe(true)
+    expect(history.slice(1).every((v) => !v.current)).toBe(true)
+    expect(history.filter((v) => v.current)).toHaveLength(1)
+    // Each row carries its message, a 7-char short SHA, and a readable ISO timestamp.
+    for (const version of history) {
+      expect(version.sha).toMatch(/^[0-9a-f]{40}$/i)
+      expect(version.shortSha).toHaveLength(7)
+      expect(version.shortSha).toBe(version.sha.slice(0, 7))
+      expect(version.message).toContain('.zshrc')
+      expect(version.committedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+      // The author comes straight from git config (the fixture pins it), not the dotden label.
+      expect(version.authorName).toBe('dotden tests')
+      expect(version.authorEmail).toBe('dotden@example.invalid')
+    }
+    // The other File's commit subject never appears in this File's history (per-File scope).
+    expect(history.some((v) => v.message.includes('.gitconfig'))).toBe(false)
+
+    // The read-only preview of the NEWEST version shows the change it introduced (bat over less),
+    // mapped from `git show <sha> -- <sourcePath>` — the same PatchDiff role the diff pane uses.
+    const newestPreview = await env.fileVersionDiff('.zshrc', history[0]!.sha)
+    expect(newestPreview).toContain('PAGER=bat')
+    // The FIRST version's preview shows the File's introduction (EDITOR=nvim added).
+    const firstPreview = await env.fileVersionDiff('.zshrc', history[2]!.sha)
+    expect(firstPreview).toContain('EDITOR=nvim')
+
+    // A File with no resolvable source path (never tracked) previews/empties rather than throwing.
+    await expect(env.fileHistory('.does-not-exist')).resolves.toEqual([])
+    await expect(env.fileVersionDiff('.does-not-exist', history[0]!.sha)).resolves.toBe('')
+  })
+
   it('env B never applies a File outside its subscription (invariant #3 end-to-end)', async () => {
     const remote = join(root, 'remote.git')
     await runCommand(gitBin, ['init', '--bare', remote])

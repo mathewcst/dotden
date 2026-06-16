@@ -19,7 +19,7 @@
  * proven by an `AppliesHere` witness from {@link SyncEngine}, never re-derived here.
  */
 import { access, readFile, rm } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { relative, resolve } from 'node:path'
 import { ChezmoiAdapter, UncommittedLocalEditError } from './chezmoi-adapter.js'
 import { GitTransport } from './git-transport.js'
 import {
@@ -51,6 +51,7 @@ import { PushQueue } from './push-queue.js'
 import { isOfflineError } from './offline.js'
 import type { UnsubscribeDisposition } from './subscription-settings.js'
 import { scanForSecrets, type SecretFinding } from './secret-scanner.js'
+import { parseFileHistory, type FileVersion } from './file-history.js'
 
 /** Construction wiring for a {@link DenService}, bound to one environment's dirs. */
 export interface DenServiceOptions {
@@ -1578,6 +1579,85 @@ export class DenService {
    */
   async fileDiff(targetPath: string): Promise<string> {
     return this.chezmoi.diff([targetPath])
+  }
+
+  /**
+   * Build a File's **version history** for the History tab — every Commit that ever touched
+   * it, newest first (issue 2-01; file-history.md).
+   *
+   * Derived PURELY from `git log` scoped to the File's source-state path — there is NO
+   * separate history store (the issue's load-bearing criterion). Faithful chezmoi wrapper
+   * (ADR 0003): each Commit is already a git commit, so the version list is just the File's
+   * git log. The flow is:
+   *  1. resolve the File's source-state path via `chezmoi source-path` (e.g. `.zshrc` →
+   *     `<sourceDir>/dot_zshrc`) and make it repo-relative for git;
+   *  2. `git log -- <sourcePath>` in the source repo (newest first, git's default order);
+   *  3. {@link parseFileHistory} turns the raw log into the ordered {@link FileVersion} list,
+   *     flagging the newest as **Current** (the version matching the current Den state).
+   *
+   * Read-only — it mutates nothing and emits no wide event (like {@link fileTree}/
+   * {@link fileDiff}); the IpcBridge still asserts the `_trace` envelope so the call is
+   * correlated. A File with no committed history yet (tracked-but-never-committed, or a
+   * brand-new repo) yields an empty list — the tab shows an honest empty state, never an
+   * error (never fail silently). A File whose source path can't be resolved (e.g. it is not
+   * actually managed) likewise yields an empty list rather than throwing the tab open red.
+   *
+   * @param targetPath Destination-relative File path whose history to read (e.g. `.zshrc`).
+   * @returns The File's versions, newest first, with the newest flagged `current`.
+   */
+  async fileHistory(targetPath: string): Promise<readonly FileVersion[]> {
+    const sourcePath = await this.repoRelativeSourcePath(targetPath)
+    // A File with no resolvable source-state path is not managed (or was just removed):
+    // there is no history to show, so surface an empty list rather than a thrown error.
+    if (sourcePath === null) return []
+    // `git log -- <sourcePath>` is the per-File history (newest first). GitTransport.log
+    // already swallows the "no commits yet" case to an empty string, so a fresh repo is
+    // an empty list, not a throw.
+    const raw = await this.git.log({ path: sourcePath })
+    return parseFileHistory(raw)
+  }
+
+  /**
+   * Read-only diff/preview of ONE version of a File in the History tab (issue 2-01).
+   *
+   * Maps to `git show <sha> -- <sourcePath>` (via {@link GitTransport.showFile}): the patch
+   * that version's Commit applied to this File, rendered through the same read-only
+   * `@pierre/diffs` `PatchDiff` role as the everyday diff (file-history.md) — NO resolve/edit
+   * affordances, NO checkout. Selecting a version in the list calls this to fill the preview
+   * panel.
+   *
+   * Returns an empty string when the File can't be resolved to a source path or the version
+   * didn't change it, so the preview shows "nothing changed in this version" honestly rather
+   * than a fake patch or a hard error.
+   *
+   * @param targetPath Destination-relative File path being previewed (e.g. `.zshrc`).
+   * @param sha The version's commit SHA (full or short) to preview.
+   * @returns The version's unified diff for the File (empty when there is nothing to show).
+   */
+  async fileVersionDiff(targetPath: string, sha: string): Promise<string> {
+    const sourcePath = await this.repoRelativeSourcePath(targetPath)
+    if (sourcePath === null) return ''
+    return this.git.showFile(sha, sourcePath)
+  }
+
+  /**
+   * Resolve a File's git-repo-relative source-state path, or `null` when it is not managed.
+   *
+   * `chezmoi source-path` returns the ABSOLUTE path of the source-state file (e.g.
+   * `<sourceDir>/dot_zshrc`); `git log`/`git show` run inside the source repo and want a
+   * repo-relative pathspec, so we relativize against the source dir (which is the git repo
+   * dir). A path chezmoi can't resolve (not managed / just removed) returns `null` so callers
+   * surface an empty history/preview instead of throwing (never fail silently). Separators are
+   * normalised to `/` so the pathspec is stable across platforms.
+   */
+  private async repoRelativeSourcePath(targetPath: string): Promise<string | null> {
+    try {
+      const absolute = await this.chezmoi.sourcePath(targetPath)
+      return relative(this.options.sourceDir, absolute).replaceAll('\\', '/')
+    } catch {
+      // chezmoi source-path exits non-zero when the path is not managed — no history to read.
+      return null
+    }
   }
 
   // ── Workspaces + nested Groups (issue 1-14) ──

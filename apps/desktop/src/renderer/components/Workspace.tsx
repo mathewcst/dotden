@@ -33,6 +33,7 @@ import { OfflineBanner } from '@/components/OfflineBanner'
 import { ReviewApply } from '@/components/ReviewApply'
 import { ConflictResolver } from '@/components/ConflictResolver'
 import { SecretWarning } from '@/components/SecretWarning'
+import { FileHistory } from '@/components/FileHistory'
 import { remoteAxisDecoration } from '@/lib/remote-axis'
 import type { SecretFinding } from '../../main/foundation/secret-scanner'
 import type {
@@ -102,6 +103,10 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
   // axis when a File is in ⚠ Conflict — the cross-environment merge the user resolves.
   const [resolving, setResolving] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
+  // Which center-pane tab is active (issue 2-01 adds the live History tab). Changes is the
+  // everyday diff; History is the per-File version list + read-only preview; Scope is 1-15.
+  // env B (incoming review) only ever shows Changes, so this is meaningful on env A.
+  const [centerTab, setCenterTab] = useState<'changes' | 'history'>('changes')
   const [diff, setDiff] = useState<string | null>(null)
   const [lastCommitMessage, setLastCommitMessage] = useState<string | null>(null)
   // This environment's automation level (issue 1-12). Auto-sync auto-pushes Commits and
@@ -239,6 +244,9 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
     async (path: string | null) => {
       setSelected(path)
       const token = ++diffTokenRef.current
+      // A cleared selection can't have a History tab to show; snap back to Changes so the
+      // active-tab highlight never disagrees with the body (the fall-through shows Changes).
+      if (path === null) setCenterTab('changes')
       if (path === null || role !== 'a') {
         setDiff(null)
         return
@@ -874,12 +882,34 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
             </div>
           </div>
 
-          {/* Tabs — Changes is the diff this slice owns; History (2-01) / Scope (1-15) follow. */}
+          {/* Tabs — Changes is the everyday diff; History (2-01) is the per-File version list +
+              read-only preview; Scope (1-15) is surfaced in the inspector. History is meaningful
+              for a managed File on env A (incoming-review env B has no committed history to show),
+              so it is only selectable there. */}
           <div className="border-border text-muted-foreground flex items-center gap-4 border-b px-4 text-xs">
-            <span className="text-foreground border-primary border-b-2 py-2 font-medium">
+            <button
+              type="button"
+              onClick={() => setCenterTab('changes')}
+              className={
+                centerTab === 'changes'
+                  ? 'text-foreground border-primary border-b-2 py-2 font-medium'
+                  : 'hover:text-foreground border-b-2 border-transparent py-2'
+              }
+            >
               Changes
-            </span>
-            <span className="cursor-default py-2 opacity-50">History</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCenterTab('history')}
+              disabled={role !== 'a' || !selectedFile}
+              className={
+                centerTab === 'history'
+                  ? 'text-foreground border-primary border-b-2 py-2 font-medium'
+                  : 'hover:text-foreground border-b-2 border-transparent py-2 disabled:cursor-default disabled:opacity-50 disabled:hover:text-current'
+              }
+            >
+              History
+            </button>
             <span className="cursor-default py-2 opacity-50">Scope</span>
           </div>
 
@@ -906,25 +936,35 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
             </div>
           ) : null}
 
-          <div className="min-h-0 flex-1 overflow-auto p-4 text-sm">
-            {selected === null ? (
-              <p className="text-muted-foreground">Select a File in the tree to see its changes.</p>
-            ) : busy === 'diff' ? (
-              <p className="text-muted-foreground flex items-center gap-2">
-                <Loader2 className="size-4 animate-spin" /> Loading diff…
-              </p>
-            ) : role === 'b' ? (
-              <p className="text-muted-foreground">
-                Incoming Files have no local copy yet — review and Apply to write them.
-              </p>
-            ) : diff && diff.trim().length > 0 ? (
-              <PatchDiff patch={diff} disableWorkerPool />
-            ) : (
-              <p className="text-muted-foreground">
-                No uncommitted changes — this File matches the Den.
-              </p>
-            )}
-          </div>
+          {/* History tab (issue 2-01): the per-File version list + read-only preview, a
+              master-detail surface that owns its own independent-scroll regions. Only for a
+              managed File on env A; if the active tab is History but the selection no longer
+              qualifies (e.g. the File was deselected), fall through to the Changes body. */}
+          {centerTab === 'history' && role === 'a' && selectedFile ? (
+            <FileHistory key={selected} targetPath={selectedFile.targetPath} />
+          ) : (
+            <div className="min-h-0 flex-1 overflow-auto p-4 text-sm">
+              {selected === null ? (
+                <p className="text-muted-foreground">
+                  Select a File in the tree to see its changes.
+                </p>
+              ) : busy === 'diff' ? (
+                <p className="text-muted-foreground flex items-center gap-2">
+                  <Loader2 className="size-4 animate-spin" /> Loading diff…
+                </p>
+              ) : role === 'b' ? (
+                <p className="text-muted-foreground">
+                  Incoming Files have no local copy yet — review and Apply to write them.
+                </p>
+              ) : diff && diff.trim().length > 0 ? (
+                <PatchDiff patch={diff} disableWorkerPool />
+              ) : (
+                <p className="text-muted-foreground">
+                  No uncommitted changes — this File matches the Den.
+                </p>
+              )}
+            </div>
+          )}
         </main>
 
         {/* Right pane — inspector. */}

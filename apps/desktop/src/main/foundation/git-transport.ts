@@ -458,6 +458,33 @@ export class GitTransport {
   }
 
   /**
+   * Read the unified diff a single commit introduced for ONE File — the read-only
+   * **version preview** in the History tab (issue 2-01).
+   *
+   * Maps to `git show <sha> -- <path>`: git prints the patch that commit applied to
+   * exactly that path (its own change against its parent), so the History tab can render
+   * "what this version did" through the same read-only `@pierre/diffs` `PatchDiff` role
+   * the everyday diff uses (file-history.md). This is purely a READ — it never checks out,
+   * resets, or otherwise mutates the working tree (the History tab is non-destructive;
+   * restore-forward is issue 2-02).
+   *
+   * A SHA that did not touch the path yields an empty patch (git prints just the commit
+   * header, which carries no `diff` hunks) — the preview then shows "no change for this
+   * File in this version" rather than a fake patch. The root commit (no parent) still
+   * shows the File's full introduction, because `git show` diffs it against the empty tree.
+   *
+   * @param sha The commit SHA to preview (full or unambiguous short form).
+   * @param path Repo-relative source-state path of the File (e.g. `dot_zshrc`).
+   * @returns The commit's unified diff for the path (empty when the commit didn't touch it).
+   * @throws CommandFailedError if the SHA is unknown or git exits non-zero.
+   */
+  async showFile(sha: string, path: string): Promise<string> {
+    // `--` separates the revision from the pathspec so a path that looks like a ref is
+    // never misread; the diff is scoped to exactly this File (no unrelated hunks).
+    return (await this.git(['show', sha, '--', path])).stdout
+  }
+
+  /**
    * Run a git subcommand in the repo directory.
    *
    * The dir is re-created (`mkdir` recursive, a no-op if it exists) on every
