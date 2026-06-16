@@ -38,10 +38,18 @@ describe('automation-settings (environment-local, ADR 0024)', () => {
     expect(await readAutomationLevel(dir)).toBe('auto-apply')
   })
 
-  it('refuses to persist a non-selectable level (yolo, issue 2-13)', async () => {
-    // yolo is a valid AutomationLevel but NOT built yet; writing it must throw, never leave
-    // an unbuilt level on disk that a later read might act on.
-    await expect(writeAutomationLevel(dir, 'yolo')).rejects.toThrow(/unsupported/)
+  it('round-trips the YOLO opt-in (issue 2-13 — now a built, selectable rung)', async () => {
+    // yolo's full hands-off path ships in 2-13, so it is selectable and must persist; it is
+    // still OFF until explicitly chosen, but once chosen it round-trips like any rung.
+    await writeAutomationLevel(dir, 'yolo')
+    expect(await readAutomationLevel(dir)).toBe('yolo')
+  })
+
+  it('refuses to persist a non-selectable level (an unknown future rung)', async () => {
+    // An unbuilt/unknown level must throw, never leave a level on disk a later read might act on.
+    await expect(
+      writeAutomationLevel(dir, 'turbo' as Parameters<typeof writeAutomationLevel>[1]),
+    ).rejects.toThrow(/unsupported/)
   })
 
   it('falls back to Manual on corrupt JSON (never silently more automated)', async () => {
@@ -49,12 +57,12 @@ describe('automation-settings (environment-local, ADR 0024)', () => {
     expect(await readAutomationLevel(dir)).toBe('manual')
   })
 
-  it('falls back to Manual when an unbuilt level is somehow on disk', async () => {
+  it('falls back to Manual when an unknown level is somehow on disk', async () => {
     // A forward-incompatible file (e.g. written by a newer build) must not turn on a
-    // mode this MVP cannot run — it reads as the safe Manual default.
+    // mode this build cannot run — an unrecognized level reads as the safe Manual default.
     await writeFile(
       join(dir, 'automation-settings.json'),
-      JSON.stringify({ level: 'yolo' }),
+      JSON.stringify({ level: 'turbo' }),
       'utf8',
     )
     expect(await readAutomationLevel(dir)).toBe('manual')

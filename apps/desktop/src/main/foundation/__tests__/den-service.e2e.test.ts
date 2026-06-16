@@ -219,6 +219,146 @@ describe('DenService end-to-end thread (real chezmoi/git)', () => {
     expect(existsSync(join(bHome, '.zshrc'))).toBe(false)
   })
 
+  it('YOLO (issue 2-13): auto-Commits a local edit BEFORE merge so it survives as a Commit, then auto-applies the clean incoming change (stories 30–31)', async () => {
+    // The CORE YOLO acceptance criterion, end to end: a hands-off env B with an in-progress
+    // local edit + an incoming clean change must (a) record the local edit as a Commit BEFORE
+    // the merge so it is never lost, and (b) auto-apply the clean incoming File.
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    // env A: track `.zshrc` (the File env B will locally edit) + push.
+    const aHome = join(root, 'a-home')
+    const aSource = join(root, 'a-source')
+    await mkdir(aHome, { recursive: true })
+    await initSourceRepo(aSource, remote)
+    const envA = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: aHome,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+    await writeFile(join(aHome, '.zshrc'), 'export EDITOR=base\n')
+    await envA.trackFile('.zshrc', 'trace-track')
+    await envA.commitTracked(['.zshrc'], 'trace-commit')
+    await envA.syncPush('trace-push-1')
+
+    // env B: clone the Den (on YOLO), apply `.zshrc`, then make an in-progress LOCAL EDIT to it
+    // on disk WITHOUT committing — exactly the work YOLO must protect.
+    const bHome = join(root, 'b-home')
+    const bSource = join(root, 'b-source')
+    await mkdir(bHome, { recursive: true })
+    await cloneRepo(gitBin, remote, bSource)
+    await configureIdentity(bSource)
+    const envB = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: bSource,
+      destinationDir: bHome,
+      environment: { id: 'env-b', label: 'work-laptop', os: process.platform },
+      automationLevel: 'yolo',
+    })
+    await envB.applyIncoming(['.zshrc'], 'trace-apply')
+    await writeFile(join(bHome, '.zshrc'), 'export EDITOR=NEOVIM-LOCAL-EDIT\n')
+
+    // env A: author a NEW clean File `.vimrc` (incoming-clean for env B) + push — so env B's
+    // YOLO Sync has both a local edit to Commit AND an incoming change to merge + apply.
+    await writeFile(join(aHome, '.vimrc'), 'set number\n')
+    await envA.trackFile('.vimrc', 'trace-track-vimrc')
+    await envA.commitTracked(['.vimrc'], 'trace-commit-vimrc')
+    await envA.syncPush('trace-push-2')
+
+    // One hands-off YOLO Sync does the whole loop in the safe order.
+    const result = await envB.yoloSync('trace-yolo')
+
+    // Phase 1 — the local edit was auto-Committed BEFORE merge (it survives as a Commit). Its
+    // own push is deferred (false) — the push goes out after the merge, reported in `push`.
+    expect(result.autoCommitEnabled).toBe(true)
+    expect(result.autoCommit.committedPaths).toEqual(['.zshrc'])
+    expect(result.autoCommit.commit?.pushed).toBe(false)
+    // Its source state now holds the local edit — proof it was recorded, not overwritten by merge.
+    await expect(readFile(join(bSource, 'dot_zshrc'), 'utf8')).resolves.toBe(
+      'export EDITOR=NEOVIM-LOCAL-EDIT\n',
+    )
+
+    // Phase 2 — the merge had nothing overlapping to resolve (env A only ADDED `.vimrc`).
+    expect(result.autoMerged).toBe(true)
+    expect(result.conflicts).toEqual([])
+    // 2½ — the merged history pushed to the Remote after a clean merge (never before).
+    expect(result.push?.pushed).toBe(true)
+
+    // Phase 3 — the clean incoming `.vimrc` auto-applied to disk with no review.
+    expect(result.autoApplied.autoApplyEnabled).toBe(true)
+    expect(result.autoApplied.applied.applied).toEqual(['.vimrc'])
+    await expect(readFile(join(bHome, '.vimrc'), 'utf8')).resolves.toBe('set number\n')
+
+    // The working tree is clean — the local edit became history, nothing was left silently dirty.
+    await expect(new GitTransport({ gitBin, repoDir: bSource }).status()).resolves.toBe('')
+  })
+
+  it('YOLO (issue 2-13): a true overlapping Conflict is STILL surfaced, never auto-resolved (story 32 — the sacred boundary)', async () => {
+    // Even fully hands-off, YOLO must NOT pick a side on a real Conflict. It auto-Commits the
+    // local edit first (so it is safe), then the merge surfaces the overlapping Conflict for the
+    // user — exactly as every other rung does.
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const aHome = join(root, 'a-home')
+    const aSource = join(root, 'a-source')
+    await mkdir(aHome, { recursive: true })
+    await initSourceRepo(aSource, remote)
+    const envA = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: aHome,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+    await writeFile(join(aHome, '.zshrc'), 'export EDITOR=base\n')
+    await envA.trackFile('.zshrc', 'trace-track')
+    await envA.commitTracked(['.zshrc'], 'trace-commit')
+    await envA.syncPush('trace-push-1')
+
+    // env B clones (on YOLO), applies, then edits the SAME line locally (uncommitted).
+    const bHome = join(root, 'b-home')
+    const bSource = join(root, 'b-source')
+    await mkdir(bHome, { recursive: true })
+    await cloneRepo(gitBin, remote, bSource)
+    await configureIdentity(bSource)
+    const envB = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: bSource,
+      destinationDir: bHome,
+      environment: { id: 'env-b', label: 'work-laptop', os: process.platform },
+      automationLevel: 'yolo',
+    })
+    await envB.applyIncoming(['.zshrc'], 'trace-apply')
+    await writeFile(join(bHome, '.zshrc'), 'export EDITOR=theirs-on-B\n')
+
+    // env A changes the SAME line differently + pushes — now the histories will overlap.
+    await writeFile(join(aHome, '.zshrc'), 'export EDITOR=mine-on-A\n')
+    await envA.commitTracked(['.zshrc'], 'trace-commit-a')
+    await envA.syncPush('trace-push-a')
+
+    // env B's hands-off YOLO Sync: Commit local edit first, then the merge surfaces a Conflict.
+    const result = await envB.yoloSync('trace-yolo-conflict')
+
+    // The local edit was safely Committed before merge (never lost).
+    expect(result.autoCommit.committedPaths).toEqual(['.zshrc'])
+    // The overlapping Conflict is SURFACED for the user — NOT auto-resolved (invariant #1).
+    expect(result.autoMerged).toBe(false)
+    expect(result.conflicts).toHaveLength(1)
+    const conflict = result.conflicts[0]!
+    expect(conflict.targetPath).toBe('dot_zshrc')
+    expect(conflict.current).toContain('theirs-on-B') // ours = B's just-Committed edit
+    expect(conflict.incoming).toContain('mine-on-A') // theirs = A's Remote edit
+    expect(conflict.both).toContain('<<<<<<<') // the marker-bearing union, for the user
+    // Nothing auto-picked a side: the source File still has the markers, awaiting the user.
+    const onDisk = await readFile(join(bSource, 'dot_zshrc'), 'utf8')
+    expect(onDisk).toContain('<<<<<<<')
+  })
+
   it('fileTree() reads managed Files with their placement, local status, and diff (issue 1-07)', async () => {
     const remote = join(root, 'remote.git')
     await runCommand(gitBin, ['init', '--bare', remote])

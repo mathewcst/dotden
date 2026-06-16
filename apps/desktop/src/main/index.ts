@@ -221,7 +221,7 @@ function getAutomationLevel(): Promise<AutomationLevel> {
  *   the new auto-push decision);
  * - the {@link TrayPoller} is independent of Auto-sync, so it keeps running unchanged.
  *
- * The store rejects a non-selectable level (e.g. `yolo`, issue 2-13), so an unbuilt rung
+ * The store rejects a non-selectable level (any unknown future rung), so an unbuilt level
  * never reaches disk.
  */
 async function setAutomationLevel(level: AutomationLevel): Promise<void> {

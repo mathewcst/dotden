@@ -119,6 +119,45 @@ export interface AutoApplyRouting {
   readonly needsReview: readonly { targetPath: string; reason: AutoApplyHoldReason }[]
 }
 
+/**
+ * The decision of the **YOLO auto-Commit-before-merge** event path (issue 2-13) — WHICH
+ * local edits the engine should record as a Commit *before* the incoming merge runs.
+ *
+ * It is the realization of ADR 0008's named "YOLO auto-commit-before-merge path". The
+ * whole point of the slice: a fully hands-off environment must not stop to ask the user to
+ * Commit, but it must also never lose in-progress local work (invariant #2). So before
+ * pulling, YOLO records the local edits as a Commit — and the ORDERING is the safety, so
+ * the local edits survive as Commits and the merge runs against them. This routing object
+ * is the *plan* for that Commit; the actual `git commit` + `git merge` are executed
+ * downstream in `DenService` (this engine performs no I/O).
+ */
+export interface YoloPreMergeRouting {
+  /**
+   * Whether this level even permits the pre-merge auto-Commit. `false` at every rung below
+   * YOLO (Commit stays a deliberate user action there), in which case {@link commitPaths}
+   * is empty and the caller does NOT auto-Commit — it leaves Commit to the user and the
+   * merge to the ordinary reviewed path. `true` only at YOLO.
+   */
+  readonly autoCommitEnabled: boolean
+  /**
+   * The destination-relative paths to auto-Commit before the merge — the subset of the
+   * environment's local edits that are **applicable here** (each backed by an
+   * {@link AppliesHere} witness, invariant #3). A local edit to a File this environment does
+   * NOT subscribe to is deliberately excluded ({@link skipped}), so the hands-off Commit
+   * never sweeps in out-of-subscription drift. Empty when nothing is editable here or the
+   * level forbids it.
+   */
+  readonly commitPaths: readonly string[]
+  /**
+   * Local-edit paths deliberately NOT auto-Committed because they are **outside this
+   * environment's subscription** (no witness; invariant #3, `ApplicabilityResolver`). They
+   * are surfaced rather than silently dropped — an out-of-subscription local edit is not the
+   * engine's to Commit, but the user should be able to see it was left alone (never fail
+   * silently).
+   */
+  readonly skipped: readonly { targetPath: string; reason: 'not-applicable' }[]
+}
+
 /** Construction dependencies for {@link SyncEngine}. */
 export interface SyncEngineOptions {
   /** This environment's registry entry (its subscriptions), from `.myenv/`. */
@@ -306,6 +345,83 @@ export class SyncEngine {
     }
 
     return { autoApply, needsReview }
+  }
+
+  /**
+   * Route the **YOLO auto-Commit-before-merge** event path (issue 2-13) — decide which of
+   * this environment's local edits to Commit *before* the incoming merge, depending on the
+   * {@link AutomationPolicy} level gate and never re-checking an owner's invariant (ADR
+   * 0008). This is the third load-bearing per-event-path test point ADR 0008 names
+   * ("the YOLO auto-commit-before-merge path").
+   *
+   * The dangerous composition this path exists to make safe-by-construction is the ORDERING:
+   * a hands-off environment must Commit local edits **before** it merges, so the edits
+   * survive as Commits (the never-lose-data invariant #2 expressed as an action) instead of
+   * being overwritten by — or lost to — the incoming merge. This method does NOT merge and
+   * does NOT Commit; it returns the *plan* (`autoCommitEnabled` + `commitPaths`) the caller
+   * executes in the strict order Commit→push→merge→auto-apply.
+   *
+   * It depends on two owners and re-derives neither:
+   * - {@link AutomationPolicy.mayAutoCommitBeforeMerge} — the LEVEL gate. At every rung below
+   *   YOLO it is `false`, so `autoCommitEnabled` is `false` and `commitPaths` is empty: the
+   *   engine auto-Commits nothing and Commit stays the user's (transport-not-commit, ADR
+   *   0006). The method degrades to a clean no-op at those rungs.
+   * - {@link ApplicabilityResolver} — invariant #3. Only a local edit to a File this
+   *   environment subscribes to gets a witness and is eligible to Commit; an
+   *   out-of-subscription edit is reported in `skipped` (`not-applicable`), never swept into
+   *   the hands-off Commit.
+   *
+   * Crucially, this path does NOT touch Conflicts at all. Auto-Committing first is what lets
+   * the *subsequent* merge surface a true overlapping Conflict to the resolver — and that
+   * Conflict is STILL never auto-resolved (invariant #1 stays with `ConflictModel`; the
+   * merge is routed through {@link routeConflictResolution} / `DenService.detectConflicts`,
+   * which only ever writes branded, user-chosen resolutions). So even YOLO's hands-off
+   * Commit cannot manufacture a silent Conflict resolution.
+   *
+   * @param localEdits The destination-relative paths with uncommitted local edits on THIS
+   *   environment (the local-drift axis, from `chezmoi status` column X).
+   * @param policy The environment's {@link AutomationPolicy} — the LEVEL gate this depends on.
+   * @param traceId Correlation id for the wide event (the IPC `_trace.traceId`).
+   * @returns Whether the pre-merge auto-Commit is enabled and exactly which applicable paths
+   *   to Commit (plus the out-of-subscription edits deliberately left alone).
+   */
+  routeYoloPreMerge(
+    localEdits: readonly string[],
+    policy: AutomationPolicy,
+    traceId: string,
+  ): YoloPreMergeRouting {
+    const span = this.tracer?.startOperation('sync', traceId)
+    // The LEVEL gate, read straight off the policy — never re-derived. At any rung below YOLO
+    // this is false: we auto-Commit nothing and leave Commit to the user (ADR 0006).
+    const autoCommitEnabled = policy.mayAutoCommitBeforeMerge()
+
+    const commitPaths: string[] = []
+    const skipped: { targetPath: string; reason: 'not-applicable' }[] = []
+
+    if (autoCommitEnabled) {
+      for (const targetPath of localEdits) {
+        // Invariant #3: only Commit an edit to a File this environment actually subscribes to.
+        // We cannot mint the witness ourselves — we ask the sole owner (ApplicabilityResolver).
+        const result = this.resolver.resolve(targetPath)
+        if (isAppliesHere(result)) {
+          // Carry the witness's targetPath (not a raw input string) so the committed set is
+          // scoped-by-construction to applicable Files.
+          commitPaths.push(result.targetPath)
+        } else {
+          // An out-of-subscription local edit is not ours to Commit — surface it, never sweep it.
+          skipped.push({ targetPath, reason: 'not-applicable' })
+        }
+      }
+    }
+
+    if (span) {
+      span.setAttribute('fileCount', commitPaths.length)
+      span.setAttribute('automationLevel', policy.automationLevel)
+      span.setAttribute('outcome', 'ok')
+      span.end('ok')
+    }
+
+    return { autoCommitEnabled, commitPaths, skipped }
   }
 
   /**

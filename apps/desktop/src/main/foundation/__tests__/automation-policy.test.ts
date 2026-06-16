@@ -55,26 +55,37 @@ function candidateFor(
   return { witness: result, item: plan.items[0]! }
 }
 
-describe('AutomationPolicy gates LEVELS (ADR 0008, selectable = Manual + Auto-sync + Auto-apply)', () => {
-  it('exposes Manual + Auto-sync + Auto-apply and defaults to Manual', () => {
-    expect(SELECTABLE_AUTOMATION_LEVELS).toEqual(['manual', 'auto-sync', 'auto-apply'])
+describe('AutomationPolicy gates LEVELS (ADR 0008, selectable = Manual + Auto-sync + Auto-apply + YOLO)', () => {
+  it('exposes the full four-rung ladder and defaults to Manual', () => {
+    expect(SELECTABLE_AUTOMATION_LEVELS).toEqual(['manual', 'auto-sync', 'auto-apply', 'yolo'])
     expect(DEFAULT_AUTOMATION_LEVEL).toBe('manual')
     // An unset level constructs as the safest, fully-manual rung.
     expect(new AutomationPolicy().automationLevel).toBe('manual')
   })
 
-  it('accepts the selectable levels through the guard but NOT yolo (issue 2-13)', () => {
+  it('accepts every selectable level through the guard, including yolo (issue 2-13)', () => {
     expect(isSelectableAutomationLevel('manual')).toBe(true)
     expect(isSelectableAutomationLevel('auto-sync')).toBe(true)
     expect(isSelectableAutomationLevel('auto-apply')).toBe(true)
-    // yolo exists in the type to fix the ladder shape, but is NOT selectable yet.
-    expect(isSelectableAutomationLevel('yolo')).toBe(false)
+    // yolo's full hands-off auto-Commit-before-merge path ships in 2-13, so it is now selectable.
+    expect(isSelectableAutomationLevel('yolo')).toBe(true)
     expect(isSelectableAutomationLevel('nonsense')).toBe(false)
   })
 
-  it('Manual auto-pushes nothing; Auto-sync auto-pushes Commits', () => {
+  it('Manual auto-pushes nothing; Auto-sync + above auto-push Commits', () => {
     expect(new AutomationPolicy('manual').mayAutoPush()).toBe(false)
     expect(new AutomationPolicy('auto-sync').mayAutoPush()).toBe(true)
+    expect(new AutomationPolicy('yolo').mayAutoPush()).toBe(true)
+  })
+
+  it('ONLY YOLO may auto-Commit local edits before a merge (issue 2-13, ADR 0006)', () => {
+    // Commit stays a deliberate user action at every rung BELOW yolo (transport-not-commit).
+    expect(new AutomationPolicy('manual').mayAutoCommitBeforeMerge()).toBe(false)
+    expect(new AutomationPolicy('auto-sync').mayAutoCommitBeforeMerge()).toBe(false)
+    expect(new AutomationPolicy('auto-apply').mayAutoCommitBeforeMerge()).toBe(false)
+    // YOLO is the one strongly-warned exception: a hands-off env Commits local edits itself,
+    // BEFORE merge, so they survive as Commits (the never-lose-data invariant as an action).
+    expect(new AutomationPolicy('yolo').mayAutoCommitBeforeMerge()).toBe(true)
   })
 
   it('leaves Apply MANUAL at Manual + Auto-sync, but Auto-apply auto-applies a clean item', () => {
@@ -127,12 +138,16 @@ describe('AutomationPolicy never re-checks an owner invariant (ADR 0008 #2/#3/#4
     expect(new AutomationPolicy('auto-apply').mayAutoApply(clean)).toBe(true)
   })
 
-  it('never offers an auto-commit decision (Commit is never automatic — ADR 0006)', () => {
-    // Structural: the policy surface has mayAutoPush (transport of an already-Committed
-    // change) but NO mayAutoCommit — there is nothing to gate, because nothing the user
-    // didn't Commit ever syncs. This asserts the absence so a regression that adds one is caught.
+  it('exposes ONLY the scoped, before-merge auto-Commit decision (never a blanket mayAutoCommit)', () => {
+    // Structural: the policy surface has mayAutoPush (transport of an existing Commit) and the
+    // ONE explicit, narrowly-scoped mayAutoCommitBeforeMerge (YOLO's never-lose-data action) —
+    // but NO blanket `mayAutoCommit`, which would imply "Commit whatever, whenever". The only
+    // auto-Commit allowed is the pre-merge one that protects local edits. This asserts the
+    // absence so a regression that broadens it into a general auto-Commit is caught.
     const policy = new AutomationPolicy('yolo') as unknown as Record<string, unknown>
     expect(policy['mayAutoCommit']).toBeUndefined()
+    // The scoped decision exists and is a function (the only sanctioned auto-Commit gate).
+    expect(typeof new AutomationPolicy('yolo').mayAutoCommitBeforeMerge).toBe('function')
   })
 })
 

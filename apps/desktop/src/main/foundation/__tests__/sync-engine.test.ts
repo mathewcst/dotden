@@ -478,6 +478,161 @@ describe('SyncEngine Auto-apply routing (ADR 0008 #1/#2/#3/#4, issue 2-12 load-b
   })
 })
 
+describe('SyncEngine YOLO auto-Commit-before-merge routing (ADR 0008 named path, issue 2-13 load-bearing)', () => {
+  // One subscribed Workspace ('personal'); '.work-only' is OUT of this env's subscription.
+  const workspaces: WorkspacesDoc = {
+    workspaces: [
+      { id: 'personal', label: 'Personal', groups: [], scope: null },
+      { id: 'work', label: 'Work', groups: [], scope: null },
+    ],
+    placements: [
+      { targetPath: '.zshrc', workspaceId: 'personal', groupId: null, scope: null },
+      { targetPath: '.gitconfig', workspaceId: 'personal', groupId: null, scope: null },
+      { targetPath: '.work-only', workspaceId: 'work', groupId: null, scope: null },
+    ],
+  }
+
+  it('at YOLO, plans an auto-Commit of the applicable local edits BEFORE merge (story 30)', () => {
+    const engine = new SyncEngine({ environment: env(['personal']), workspaces })
+
+    const routing = engine.routeYoloPreMerge(
+      ['.zshrc', '.gitconfig'],
+      new AutomationPolicy('yolo'),
+      'trace-yolo-precommit',
+    )
+
+    // The hands-off Commit is enabled and names exactly the applicable local edits — so they
+    // become Commits BEFORE the merge and survive it (the never-lose-data invariant as action).
+    expect(routing.autoCommitEnabled).toBe(true)
+    expect([...routing.commitPaths].sort()).toEqual(['.gitconfig', '.zshrc'])
+    expect(routing.skipped).toEqual([])
+  })
+
+  it('at every rung BELOW YOLO, auto-Commits NOTHING (Commit stays the user’s — ADR 0006)', () => {
+    const engine = new SyncEngine({ environment: env(['personal']), workspaces })
+
+    for (const level of ['manual', 'auto-sync', 'auto-apply'] as const) {
+      const routing = engine.routeYoloPreMerge(
+        ['.zshrc'],
+        new AutomationPolicy(level),
+        `trace-precommit-${level}`,
+      )
+      // Below YOLO the LEVEL gate forbids the pre-merge auto-Commit entirely: nothing is
+      // planned, so Commit remains a deliberate user action at those rungs.
+      expect(routing.autoCommitEnabled).toBe(false)
+      expect(routing.commitPaths).toEqual([])
+    }
+  })
+
+  it('never auto-Commits an OUT-OF-SUBSCRIPTION local edit (invariant #3, even at YOLO)', () => {
+    const engine = new SyncEngine({ environment: env(['personal']), workspaces })
+
+    const routing = engine.routeYoloPreMerge(
+      ['.zshrc', '.work-only'],
+      new AutomationPolicy('yolo'),
+      'trace-yolo-na',
+    )
+
+    // Only the subscribed File is committed; the 'work' File this env doesn't subscribe to is
+    // surfaced as skipped (not-applicable) — the hands-off Commit never sweeps in foreign drift.
+    expect(routing.commitPaths).toEqual(['.zshrc'])
+    expect(routing.skipped).toEqual([{ targetPath: '.work-only', reason: 'not-applicable' }])
+  })
+
+  it('a true Conflict is STILL never auto-resolved at YOLO — only branded user choices write', () => {
+    // YOLO's auto-Commit-before-merge does NOT relax invariant #1. The merge that follows the
+    // auto-Commit is routed through the SAME conflict-resolution gate every rung uses: an
+    // un-branded (auto) "resolution" is refused, only a real ConflictModel.resolve passes.
+    const engine = new SyncEngine({ environment: env(['personal']), workspaces })
+
+    const userChoice = new ConflictModel({
+      targetPath: '.zshrc',
+      current: 'mine\n',
+      incoming: 'theirs\n',
+      both: '<<<<<<<\nmine\n=======\ntheirs\n>>>>>>>\n',
+    }).resolve('current')
+    const forgedAutoResolve = {
+      targetPath: '.zshrc',
+      choice: 'incoming' as const,
+      bytes: 'theirs\n',
+    } as unknown as ResolvedConflict
+
+    const { writes, rejected } = engine.routeConflictResolution(
+      [userChoice, forgedAutoResolve],
+      'trace-yolo-conflict',
+    )
+
+    // The genuine user choice is accepted; the forged auto-resolution (what a "YOLO just picks
+    // a side" regression would smuggle) is refused, never written.
+    expect(writes.map((w) => w.targetPath)).toEqual(['.zshrc'])
+    expect(writes.every((w) => isResolvedConflict(w))).toBe(true)
+    expect(rejected).toEqual([{ targetPath: '.zshrc', reason: 'not-user-resolved' }])
+  })
+
+  it('property: every YOLO-committed path is applicable; below YOLO nothing is ever committed', () => {
+    // Drive randomized subscription/placement/drift combos and assert the two YOLO guarantees
+    // at the SyncEngine seam: (a) every auto-Committed path is in subscription (invariant #3),
+    // and (b) no rung below YOLO ever auto-Commits anything (Commit stays the user's).
+    const ids = ['personal', 'work', 'home']
+    let committedCount = 0
+    let skippedCount = 0
+
+    for (let seed = 0; seed < 400; seed++) {
+      const rng = mulberry32(seed)
+      const subscribed = ids.filter(() => rng() < 0.5)
+      const placements = ids.flatMap((workspaceId, index) =>
+        rng() < 0.4 ? [] : [{ targetPath: `.f${index}`, workspaceId, groupId: null, scope: null }],
+      )
+      const ws: WorkspacesDoc = {
+        workspaces: ids.map((id) => ({ id, label: id, groups: [], scope: null })),
+        placements,
+      }
+      const engine = new SyncEngine({ environment: env(subscribed), workspaces: ws })
+
+      // A random subset of the Files is locally edited (the local-drift axis).
+      const localEdits = ids.map((_id, index) => `.f${index}`).filter(() => rng() < 0.6)
+
+      // Below-YOLO rungs auto-Commit nothing, no matter the drift.
+      for (const level of ['manual', 'auto-sync', 'auto-apply'] as const) {
+        const r = engine.routeYoloPreMerge(
+          localEdits,
+          new AutomationPolicy(level),
+          `t-${level}-${seed}`,
+        )
+        expect(r.autoCommitEnabled).toBe(false)
+        expect(r.commitPaths).toEqual([])
+      }
+
+      // At YOLO, every committed path is applicable; every skipped one is genuinely out of subscription.
+      const yolo = engine.routeYoloPreMerge(
+        localEdits,
+        new AutomationPolicy('yolo'),
+        `t-yolo-${seed}`,
+      )
+      expect(yolo.autoCommitEnabled).toBe(true)
+      for (const path of yolo.commitPaths) {
+        committedCount++
+        const placement = placements.find((p) => p.targetPath === path)
+        // Invariant #3: the committed File is placed in a Workspace this env subscribes to.
+        expect(placement).toBeDefined()
+        expect(subscribed).toContain(placement?.workspaceId)
+      }
+      for (const s of yolo.skipped) {
+        skippedCount++
+        // A skipped edit is NOT in the committed set and is genuinely not applicable here.
+        expect(yolo.commitPaths).not.toContain(s.targetPath)
+        const placement = placements.find((p) => p.targetPath === s.targetPath)
+        const applicable = placement !== undefined && subscribed.includes(placement.workspaceId)
+        expect(applicable).toBe(false)
+      }
+    }
+
+    // Sanity: the run actually exercised both committed and skipped paths (not vacuous).
+    expect(committedCount).toBeGreaterThan(0)
+    expect(skippedCount).toBeGreaterThan(0)
+  })
+})
+
 /** Tiny deterministic PRNG (mulberry32) so the property test is reproducible. */
 function mulberry32(seed: number): () => number {
   let a = seed

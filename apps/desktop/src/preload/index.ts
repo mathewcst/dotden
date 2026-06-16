@@ -176,6 +176,13 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['autoApply']>
     },
+    // → IPC channel 'den:yolo-sync' (YOLO hands-off: auto-Commit before merge → push → merge →
+    //   auto-apply clean; Conflicts still surfaced for the user, never auto-resolved, 2-13)
+    yoloSync() {
+      return ipcRenderer.invoke('den:yolo-sync', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['yoloSync']>
+    },
     // → IPC channel 'den:detect-conflicts' (fetch + merge; surface true Conflicts, 1-11)
     detectConflicts() {
       return ipcRenderer.invoke('den:detect-conflicts', {

@@ -414,6 +414,56 @@ export interface AutoApplyResult {
 }
 
 /**
+ * The outcome of one **YOLO hands-off Sync** (issue 2-13) — the full ladder's top rung.
+ *
+ * It records the THREE phases in their safety-critical order so the caller (and a test) can
+ * see exactly what the hands-off pass did:
+ * 1. {@link autoCommit} — the local edits YOLO Committed **before** any merge, so in-progress
+ *    work survives as Commits (never-lose-data invariant #2, realized as an action). Empty
+ *    when there was no local drift; `enabled:false` at any rung below YOLO.
+ * 2. {@link conflicts} — the true overlapping Conflicts the post-Commit merge surfaced. These
+ *    are NEVER auto-resolved (invariant #1, `ConflictModel`): YOLO leaves them for the user's
+ *    explicit Keep mine / Take theirs / Open both, exactly as every rung does.
+ * 3. {@link autoApplied} — the clean incoming changes YOLO then applied without review, with
+ *    everything still requiring a human in its `needsReview` (deletions, uncommitted-edit
+ *    guard, non-applicable Files) — never suppressed (never fail silently).
+ *
+ * So even the most hands-off rung composes the SAME four owners: it removes the review
+ * *prompts* for clean changes, never the safety *owners*.
+ */
+export interface YoloSyncResult {
+  /** Whether YOLO's pre-merge auto-Commit ran (true only at the YOLO rung). */
+  readonly autoCommitEnabled: boolean
+  /**
+   * What the pre-merge auto-Commit recorded: the local-edit paths Committed (applicable here)
+   * and any out-of-subscription edits deliberately left alone (invariant #3). The Commit's own
+   * `pushed` is always `false` here — the push is DEFERRED until after a clean merge and is
+   * reported separately in {@link push} (a pre-merge push would be a non-fast-forward rejection).
+   */
+  readonly autoCommit: {
+    readonly committedPaths: readonly string[]
+    readonly skipped: readonly { targetPath: string; reason: 'not-applicable' }[]
+    readonly commit: CommitResult | null
+  }
+  /**
+   * The result of the post-merge push (the merged history → Remote). `null` when there was
+   * nothing to push or the merge left unresolved Conflicts (the half-merged tree is not pushed
+   * until the user resolves). Mirrors {@link SyncPushResult}: `pushed` reached the Remote,
+   * `queued` was held offline for retry — never lost.
+   */
+  readonly push: SyncPushResult | null
+  /**
+   * The true Conflicts the merge surfaced — handed to the user's resolver, NEVER auto-resolved
+   * (invariant #1). Empty when git auto-merged everything (or nothing was incoming).
+   */
+  readonly conflicts: readonly ConflictReviewItem[]
+  /** `true` when the merge auto-merged with no overlapping Conflict left to resolve. */
+  readonly autoMerged: boolean
+  /** The clean incoming changes auto-applied + what was held for review (mirrors {@link AutoApplyResult}). */
+  readonly autoApplied: AutoApplyResult
+}
+
+/**
  * One environment a destructive verb would touch — the blast-radius surface the
  * **Delete everywhere** confirm must enumerate before the user proceeds (issue 1-08).
  *
@@ -694,12 +744,18 @@ export class DenService {
    * @param targetPaths The Files to record (must already be Tracked or new on disk).
    * @param traceId Correlation id for the wide event.
    * @param template Commit-message template; defaults to the built-in default.
+   * @param options.deferAutoPush When `true`, record the Commit but DO NOT auto-push it now,
+   *   even if the level would (`mayAutoPush`). Used by {@link yoloSync}'s auto-Commit-BEFORE-merge
+   *   step: the Commit must be recorded first, but its push can only succeed AFTER the merge
+   *   integrates the Remote (a pre-merge push would be a non-fast-forward rejection). The
+   *   caller pushes once after merging. Defaults to `false` (the normal commit→auto-push).
    * @returns The resolved message + provenance + the local-not-pushed flag.
    */
   async commitTracked(
     targetPaths: readonly string[],
     traceId: string,
     template: CommitMessageTemplate = DEFAULT_COMMIT_TEMPLATE,
+    options: { readonly deferAutoPush?: boolean } = {},
   ): Promise<CommitResult> {
     const span = this.tracer?.startOperation('commit', traceId)
     try {
@@ -729,7 +785,9 @@ export class DenService {
       // automatic.
       let pushed = false
       let queued = false
-      if (this.automation.mayAutoPush()) {
+      // `deferAutoPush` holds the push for the caller (YOLO commits BEFORE merging, then pushes
+      // AFTER the merge — a pre-merge push would be a non-fast-forward rejection, ADR 0006).
+      if (this.automation.mayAutoPush() && !options.deferAutoPush) {
         // OFFLINE QUEUE (issue 1-16): the Commit is ALREADY recorded locally above, so a
         // push that can't reach the Remote because the machine is offline must NOT fail the
         // Commit — it is queued and retried on reconnect / next Sync (ADR 0006). A push that
@@ -1539,6 +1597,111 @@ export class DenService {
         autoApplyEnabled: this.automation.autoAppliesIncoming(),
         applied,
         needsReview,
+      }
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * **YOLO hands-off Sync** (issue 2-13) — the full ladder's top rung: auto-Commit local
+   * edits BEFORE merge, push, merge (surfacing true Conflicts, never resolving them), then
+   * auto-apply the clean incoming changes. The faithful realization of ADR 0006's "YOLO mode".
+   *
+   * The ORDER is the safety, and it is deliberate (ADR 0008's named "YOLO
+   * auto-commit-before-merge path"):
+   *
+   * 1. **Auto-Commit local edits, BEFORE any merge.** A hands-off environment cannot stop to
+   *    ask the user to Commit, so — and ONLY at YOLO — we record the local drift as a Commit
+   *    first. We DEPEND on {@link SyncEngine.routeYoloPreMerge}: it reads
+   *    {@link AutomationPolicy.mayAutoCommitBeforeMerge} (the LEVEL gate) and returns exactly
+   *    the *applicable* local edits (invariant #3 — out-of-subscription drift is left alone).
+   *    Committing first is what lets those edits **survive as Commits** rather than being lost
+   *    to / overwritten by the incoming merge (the never-lose-data invariant #2, as an action).
+   *    The Commit goes through the SAME {@link commitTracked} every Commit uses, but with the
+   *    auto-push DEFERRED (`deferAutoPush`) — a push before merging would be a non-fast-forward
+   *    rejection. The push goes out after the merge (step 2½).
+   * 2. **Merge.** Through the SAME {@link detectConflicts} path the manual resolver uses: git
+   *    auto-merges non-overlapping hunks; a true overlapping **Conflict is surfaced, NEVER
+   *    auto-resolved** (invariant #1, `ConflictModel`). YOLO returns the Conflicts for the
+   *    user's explicit choice exactly as every rung does — the one sacred boundary.
+   *    **2½. Push** the merged history (only when the merge left a clean, committed tree — a
+   *    half-merged Conflict tree is not pushed until the user resolves), via {@link syncPush}
+   *    so the offline-queue semantics still apply (transport-not-commit, ADR 0006).
+   * 3. **Auto-apply the clean changes.** Through the SAME {@link autoApplyIncoming} path
+   *    Auto-apply uses, so deletions (invariant #4), the uncommitted-edit guard (invariant #2,
+   *    re-checked atomically at write time), and non-applicable Files are STILL held for the
+   *    user — never silently applied.
+   *
+   * So even the most hands-off rung re-uses every existing safe path and composes the same
+   * four owners; it never forks a weaker write path and never re-checks (or relaxes) an
+   * owner's invariant (ADR 0008). At any rung below YOLO this would degrade to a no-op
+   * auto-Commit + the ordinary merge/auto-apply, but it is only invoked at YOLO.
+   *
+   * @param traceId Correlation id for the wide event (the IPC `_trace.traceId`).
+   * @returns The three-phase record: what was auto-Committed, the Conflicts left for the user,
+   *   and what was auto-applied / held for review.
+   */
+  async yoloSync(traceId: string): Promise<YoloSyncResult> {
+    const span = this.tracer?.startOperation('sync', traceId)
+    try {
+      span?.setAttribute('automationLevel', this.automation.automationLevel)
+
+      // ── Phase 1: auto-Commit the applicable local edits BEFORE merging ──
+      // Read the local-drift axis (chezmoi status column X) and let the SyncEngine decide —
+      // depending on the policy's LEVEL gate + the ApplicabilityResolver — exactly which edits
+      // are ours to Commit. DenService re-checks neither (ADR 0008).
+      const localEdits = [...(await this.chezmoi.localEdits())]
+      const { environment, workspaces } = await this.loadSyncedModel()
+      const engine = new SyncEngine({ environment, workspaces, tracer: this.tracer })
+      const preMerge = engine.routeYoloPreMerge(localEdits, this.automation, traceId)
+
+      let commit: CommitResult | null = null
+      if (preMerge.autoCommitEnabled && preMerge.commitPaths.length > 0) {
+        // Record the local edits as a Commit FIRST — the never-lose-data action: the edits are
+        // in history before the merge runs. We DEFER the push: a pre-merge push would be a
+        // non-fast-forward rejection against a Remote the env hasn't merged yet. The push goes
+        // out AFTER a clean merge, below (transport-not-commit, ADR 0006).
+        commit = await this.commitTracked(preMerge.commitPaths, traceId, undefined, {
+          deferAutoPush: true,
+        })
+      }
+
+      // ── Phase 2: merge — surface true Conflicts, NEVER auto-resolve them (invariant #1) ──
+      // Re-use the manual resolver's exact fetch+merge path. A true overlapping Conflict is
+      // returned for the user's explicit resolution; YOLO does not pick a side (ConflictModel
+      // owns this, at every level including YOLO).
+      const conflictReview = await this.detectConflicts(traceId)
+
+      // ── Push the (now-merged) history, but ONLY when the merge left a clean, committed tree ──
+      // After a clean merge, local Commits + the merge are pushable; with unresolved Conflicts the
+      // tree is half-merged and NOT committed, so there is nothing valid to push — we hold the push
+      // until the user resolves (the local Commit is safe regardless). Re-use syncPush so the same
+      // offline-queue semantics apply (a push that can't go out is queued, never lost).
+      let pushResult: SyncPushResult | null = null
+      if (conflictReview.autoMerged && this.automation.mayAutoPush()) {
+        pushResult = await this.syncPush(traceId)
+      }
+
+      // ── Phase 3: auto-apply the clean incoming changes (deletions/guards still held) ──
+      // Re-use the Auto-apply path: clean changes land hands-off; everything that still needs
+      // a human (deletions, uncommitted-edit guard, non-applicable) stays in needsReview.
+      const autoApplied = await this.autoApplyIncoming(traceId)
+
+      span?.setAttribute('fileCount', autoApplied.applied.applied.length)
+      span?.end('ok')
+      return {
+        autoCommitEnabled: preMerge.autoCommitEnabled,
+        autoCommit: {
+          committedPaths: preMerge.commitPaths,
+          skipped: preMerge.skipped,
+          commit,
+        },
+        push: pushResult,
+        conflicts: conflictReview.conflicts,
+        autoMerged: conflictReview.autoMerged,
+        autoApplied,
       }
     } catch (error) {
       span?.end('error')

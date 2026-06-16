@@ -289,6 +289,14 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   registrar.handle('den:auto-apply', async (_event, payload: TracedPayload) => {
     return (await deps.denService()).autoApplyIncoming(traceId(payload))
   })
+  // YOLO hands-off Sync (issue 2-13): auto-Commit local edits BEFORE merge, push, merge
+  // (surfacing — never resolving — true Conflicts), then auto-apply clean changes. A
+  // sync+commit+apply Operation, _trace forwarded. The pre-merge auto-Commit gate is
+  // AutomationPolicy's and every safety verdict stays with its owner — the bridge re-checks
+  // nothing (ADR 0008). Conflicts surfaced here are NEVER auto-resolved (ConflictModel owns #1).
+  registrar.handle('den:yolo-sync', async (_event, payload: TracedPayload) => {
+    return (await deps.denService()).yoloSync(traceId(payload))
+  })
   // The Conflict path (issue 1-11): detect fetches+merges in the source repo (a sync
   // Operation, _trace forwarded) and surfaces true Conflicts; resolve/complete/abort MUTATE
   // the merge, so each forwards its _trace so the Operation emits a correlated wide event.

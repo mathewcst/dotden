@@ -294,6 +294,20 @@ describe('IpcBridge', () => {
       resolveConflictFile: vi.fn(async () => undefined),
       completeConflictResolution: vi.fn(async () => undefined),
       abortConflictResolution: vi.fn(async () => undefined),
+      // YOLO hands-off Sync (issue 2-13): a sync+commit+apply Operation; the bridge must
+      // forward the _trace id like every other den:* channel.
+      yoloSync: vi.fn(async () => ({
+        autoCommitEnabled: true,
+        autoCommit: { committedPaths: [], skipped: [], commit: null },
+        push: null,
+        conflicts: [],
+        autoMerged: true,
+        autoApplied: {
+          autoApplyEnabled: true,
+          applied: { results: [], applied: [], failed: [] },
+          needsReview: [],
+        },
+      })),
     }
     const { registrar, handlers } = fakeRegistrar()
     registerIpcBridge(registrar, {
@@ -336,12 +350,15 @@ describe('IpcBridge', () => {
     } as never)
     await handlers.get('den:complete-conflicts')?.({}, { _trace: { traceId: 'c3' } } as never)
     await handlers.get('den:abort-conflicts')?.({}, { _trace: { traceId: 'c4' } } as never)
+    await handlers.get('den:yolo-sync')?.({}, { _trace: { traceId: 'c5' } } as never)
 
     // detect is a sync Operation; resolve/complete/abort MUTATE the merge — all forward the id.
     expect(den.detectConflicts).toHaveBeenCalledWith('c1')
     expect(den.resolveConflictFile).toHaveBeenCalledWith('dot_zshrc', 'incoming', 'c2')
     expect(den.completeConflictResolution).toHaveBeenCalledWith('c3')
     expect(den.abortConflictResolution).toHaveBeenCalledWith('c4')
+    // YOLO hands-off Sync forwards its _trace id like every other den:* channel (2-13).
+    expect(den.yoloSync).toHaveBeenCalledWith('c5')
 
     // …and each still hard-fails without a _trace envelope (never an uncorrelated mutation).
     await expect(

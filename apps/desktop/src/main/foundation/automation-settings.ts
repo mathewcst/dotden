@@ -45,9 +45,9 @@ export async function readAutomationLevel(userDataDir: string): Promise<Automati
     const parsed = JSON.parse(
       await readFile(join(userDataDir, AUTOMATION_FILE), 'utf8'),
     ) as PersistedAutomation
-    // Only honor a selectable rung (Manual/Auto-sync/Auto-apply). A `yolo` value written by
-    // a future build is NOT silently respected — it falls back to Manual rather than
-    // enabling behavior this version does not implement (fail safe, never fail silently).
+    // Only honor a selectable rung (Manual/Auto-sync/Auto-apply/YOLO). An unrecognized level
+    // written by a future build is NOT silently respected — it falls back to Manual rather
+    // than enabling behavior this version does not implement (fail safe, never fail silently).
     return isSelectableAutomationLevel(parsed.level) ? parsed.level : DEFAULT_AUTOMATION_LEVEL
   } catch {
     return DEFAULT_AUTOMATION_LEVEL
@@ -57,12 +57,12 @@ export async function readAutomationLevel(userDataDir: string): Promise<Automati
 /**
  * Persist this environment's automation level (the onboarding opt-in + the Settings toggle).
  *
- * Rejects any non-selectable level, so the only states that can be written are Manual,
- * Auto-sync, and Auto-apply — the engine can therefore trust a read value without
- * re-validating against unbuilt behavior (`yolo` arrives in issue 2-13).
+ * Rejects any non-selectable level, so the only states that can be written are the four
+ * built rungs — Manual, Auto-sync, Auto-apply, and YOLO — and the engine can therefore
+ * trust a read value without re-validating against unbuilt behavior.
  *
  * @param userDataDir Electron's `app.getPath('userData')`; a tempdir in tests.
- * @param level The selectable level to persist (`manual` | `auto-sync` | `auto-apply`).
+ * @param level The selectable level to persist (`manual` | `auto-sync` | `auto-apply` | `yolo`).
  * @throws Error when `level` is not a selectable rung (never persist an unbuilt level).
  */
 export async function writeAutomationLevel(
@@ -71,7 +71,7 @@ export async function writeAutomationLevel(
 ): Promise<void> {
   if (!isSelectableAutomationLevel(level)) {
     throw new Error(
-      `Cannot set unsupported automation level "${level}" (selectable = manual | auto-sync | auto-apply)`,
+      `Cannot set unsupported automation level "${level}" (selectable = manual | auto-sync | auto-apply | yolo)`,
     )
   }
   const file = join(userDataDir, AUTOMATION_FILE)

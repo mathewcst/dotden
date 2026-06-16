@@ -17,16 +17,26 @@
  *   *unrepresentable*, exactly as for a manual Apply — the policy gates the LEVEL, the
  *   owners gate the SAFETY.
  *
- * **Selectable scope (through issue 2-12):** **Manual** (default), **Auto-sync**, and
- * **Auto-apply** are selectable rungs. `YOLO` is named in the level type so the ladder's
- * shape is fixed, but its full hands-off behavior (auto-Commit-before-merge) is **deferred**
- * (issue 2-13). At Manual/Auto-sync `mayAutoApply()` is always `false`, so **Apply stays a
- * manual review** (the Auto-sync contract, CONTEXT.md); at **Auto-apply** a *clean, ready,
- * witness-backed* item auto-applies while Conflicts, the uncommitted-edit guard, and
- * incoming deletions still require the user (issue 2-12). **Commit is never automatic at
- * any selectable level** — the policy exposes no "auto-commit" decision at all, because
- * nothing syncs that you didn't Commit (transport-not-commit, ADR 0006); even the auto-push
- * decision only ever moves an *already-Committed* change.
+ * **Selectable scope (through issue 2-13):** **Manual** (default), **Auto-sync**,
+ * **Auto-apply**, and **YOLO** are all selectable rungs. At Manual/Auto-sync
+ * `mayAutoApply()` is always `false`, so **Apply stays a manual review** (the Auto-sync
+ * contract, CONTEXT.md); at **Auto-apply** a *clean, ready, witness-backed* item
+ * auto-applies while Conflicts, the uncommitted-edit guard, and incoming deletions still
+ * require the user (issue 2-12); at **YOLO** the policy *additionally* permits
+ * auto-Committing local edits **before** a merge — {@link mayAutoCommitBeforeMerge} —
+ * which is the ONE place "Commit becomes automatic" is allowed (issue 2-13).
+ *
+ * **Why a YOLO-only auto-Commit decision is still faithful to transport-not-commit (ADR
+ * 0006).** Every lower rung exposes NO auto-Commit decision, because nothing syncs that
+ * you didn't Commit, and auto-push only ever moves an *already-Committed* change. YOLO is
+ * the deliberate, strongly-warned exception: the auto-Commit happens **before** any merge
+ * so a hands-off environment's local edits **survive as Commits** rather than being lost
+ * to (or silently overwritten by) the incoming merge — it is the never-lose-data
+ * invariant (#2) realized as an *action*, not a relaxation of it. Even at YOLO this only
+ * ever Commits + then transports + then auto-applies *clean* changes; a true overlapping
+ * **Conflict is still never auto-resolved** ({@link ConflictModel} owns invariant #1), and
+ * the deletion/subscription/uncommitted-edit guards still hold exactly as at every rung —
+ * YOLO removes the *review prompts*, never the *safety owners*.
  */
 import type { AppliesHere } from './applicability-resolver.js'
 import type { ApplyPlanItem } from './apply-planner.js'
@@ -40,26 +50,29 @@ import type { ApplyPlanItem } from './apply-planner.js'
  *   and incoming changes **notify**, but **Apply stays manual** (CONTEXT.md "Auto-sync").
  * - `auto-apply` — clean incoming changes apply without review (Conflicts/risky changes
  *   still ask). **Selectable as of issue 2-12** (Warned in the ladder UI).
- * - `yolo` — full hands-off (auto-Commit, Sync, Apply except Conflicts). Its auto-apply
- *   verdict already routes through {@link mayAutoApply} like Auto-apply, but its
- *   auto-Commit-before-merge path is **deferred to issue 2-13**; not selectable yet. Even
- *   YOLO can never auto-resolve a Conflict — that is `ConflictModel`'s job, not the
- *   policy's (invariant #1).
+ * - `yolo` — full hands-off (auto-Commit local edits, Sync, Apply except Conflicts).
+ *   **Selectable as of issue 2-13** (Strongly-warned in the ladder UI). Its auto-apply
+ *   verdict routes through {@link mayAutoApply} exactly like Auto-apply, and it ADDITIONALLY
+ *   permits auto-Committing local edits before a merge ({@link mayAutoCommitBeforeMerge}) so
+ *   hands-off local work survives as Commits. Even YOLO can never auto-resolve a Conflict —
+ *   that is `ConflictModel`'s job, not the policy's (invariant #1).
  */
 export type AutomationLevel = 'manual' | 'auto-sync' | 'auto-apply' | 'yolo'
 
 /**
- * The levels the app actually exposes for selection (through issue 2-12): **Manual,
- * Auto-sync, Auto-apply**.
+ * The levels the app actually exposes for selection (through issue 2-13): **Manual,
+ * Auto-sync, Auto-apply, YOLO** — the full risk-graded ladder.
  *
- * `yolo` exists in {@link AutomationLevel} to fix the ladder's shape but is not selectable
- * yet (its auto-Commit-before-merge path is issue 2-13). A settings UI iterates THIS list,
- * so it can never offer a level whose behavior is not built (never fail silently).
+ * A settings UI iterates THIS list, so it can never offer a level whose behavior is not
+ * built (never fail silently). `yolo` is now included because its full hands-off
+ * auto-Commit-before-merge path ships in issue 2-13 — but it is presented **strongly
+ * warned** and is, like every rung, OFF until the user explicitly turns it on.
  */
 export const SELECTABLE_AUTOMATION_LEVELS: readonly AutomationLevel[] = [
   'manual',
   'auto-sync',
   'auto-apply',
+  'yolo',
 ]
 
 /**
@@ -71,14 +84,15 @@ export const SELECTABLE_AUTOMATION_LEVELS: readonly AutomationLevel[] = [
 export const DEFAULT_AUTOMATION_LEVEL: AutomationLevel = 'manual'
 
 /**
- * True when `value` is one of the **selectable** rungs (Manual / Auto-sync / Auto-apply).
+ * True when `value` is one of the **selectable** rungs (Manual / Auto-sync / Auto-apply /
+ * YOLO) — the full ladder as of issue 2-13.
  *
  * The persistence layer ({@link import('./automation-settings.js')}) gates reads + writes
- * through this so a corrupt/forward-incompatible file (or a future `yolo`) can never
- * silently enable an unbuilt rung — it falls back to the safe Manual default instead.
+ * through this so a corrupt/forward-incompatible file (or an unknown future rung) can never
+ * silently enable an unbuilt level — it falls back to the safe Manual default instead.
  */
 export function isSelectableAutomationLevel(value: unknown): value is AutomationLevel {
-  return value === 'manual' || value === 'auto-sync' || value === 'auto-apply'
+  return value === 'manual' || value === 'auto-sync' || value === 'auto-apply' || value === 'yolo'
 }
 
 /**
@@ -131,15 +145,41 @@ export class AutomationPolicy {
    * `true` only at `auto-sync` and above (`auto-apply`/`yolo` are strictly more
    * automated, so they also push). `manual` ⇒ `false`: the user pushes with **Sync now**.
    *
-   * This is the ONLY automatic transport the MVP performs, and it is faithful to
-   * transport-not-commit (ADR 0006): it moves a change the user ALREADY Committed — it
-   * never decides *what* to Commit. **Commit is never automatic at any level**, which is
-   * why this class exposes no "auto-commit" decision: there is nothing for it to gate.
+   * It is faithful to transport-not-commit (ADR 0006): it moves a change that already
+   * exists as a Commit — it never decides *what* to Commit. At every rung BELOW `yolo`,
+   * the Commit it transports was authored by the user; only `yolo` additionally permits
+   * the engine to *create* that Commit on the user's behalf, via the separate, explicit
+   * {@link mayAutoCommitBeforeMerge} decision (the one strongly-warned exception).
    *
    * @returns Whether the engine should `git push` after a Commit without the user asking.
    */
   mayAutoPush(): boolean {
     return this.level !== 'manual'
+  }
+
+  /**
+   * Whether this level may **auto-Commit local edits BEFORE a merge** — the YOLO-only
+   * hands-off Commit decision (issue 2-13, ADR 0006 "YOLO mode").
+   *
+   * `true` ONLY at `yolo`; `false` at every other rung (Manual / Auto-sync / Auto-apply),
+   * which all leave **Commit** a deliberate user action (transport-not-commit, ADR 0006).
+   * YOLO is the sole, strongly-warned exception: a fully hands-off environment cannot stop
+   * to ask the user to Commit before pulling, so the engine records the local edits as a
+   * Commit itself.
+   *
+   * The ordering is the safety: the Commit is taken **before** the merge so the local edits
+   * become part of history *first* — the incoming merge then merges against them (or
+   * surfaces a true Conflict for the resolver) instead of silently overwriting in-progress
+   * work. This realizes the never-lose-data invariant (#2) as an action; it does NOT relax
+   * any owner. In particular it is NOT a license to auto-resolve: if the post-Commit merge
+   * overlaps, `ConflictModel` still owns invariant #1 and the Conflict is never picked for
+   * the user. (Like `mayAutoPush`, this is a pure LEVEL predicate — the engine performs the
+   * Commit; the policy only says whether this rung is allowed to.)
+   *
+   * @returns Whether the engine should auto-Commit local edits before merging at this level.
+   */
+  mayAutoCommitBeforeMerge(): boolean {
+    return this.level === 'yolo'
   }
 
   /**

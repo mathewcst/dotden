@@ -36,6 +36,7 @@ import type {
   RestoreResult,
   SubscriptionState,
   SyncPushResult,
+  YoloSyncResult,
 } from '../main/foundation/den-service.js'
 import type { UnsubscribeDisposition } from '../main/foundation/subscription-settings.js'
 import type { SecretFinding } from '../main/foundation/secret-scanner.js'
@@ -264,6 +265,19 @@ export interface DotdenApi {
      * unconfirmed deletion. Returns what landed plus what was held back (with the reason).
      */
     autoApply(): Promise<AutoApplyResult>
+    /**
+     * **YOLO hands-off Sync** (issue 2-13) — the full ladder's top rung. In strict order:
+     * auto-Commit the applicable local edits **before** merging (so in-progress work survives
+     * as Commits — never-lose-data), push, merge (surfacing true Conflicts but **never**
+     * auto-resolving them), then auto-apply the *clean* incoming changes while still holding
+     * deletions / the uncommitted-edit guard / non-applicable Files for the user.
+     *
+     * Only meaningful at the YOLO level; the renderer invokes it when this environment is on
+     * YOLO. It re-uses the SAME owners and write paths every other rung uses (ADR 0008): YOLO
+     * removes review *prompts* for clean changes, never the safety *owners*. Returns the
+     * three-phase record (what was Committed, the Conflicts left for the user, what landed).
+     */
+    yoloSync(): Promise<YoloSyncResult>
     /**
      * **Conflict** — fetch + merge the Remote in the source repo and surface the true
      * Conflicts for resolution (issue 1-11). git auto-merges non-overlapping hunks, so
