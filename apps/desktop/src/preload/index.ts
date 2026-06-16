@@ -222,6 +222,12 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['diff']>
     },
+    // → IPC channel 'den:connected-remote' (Account tab: git Remote URL + Provider, issue 2-11)
+    connectedRemote() {
+      return ipcRenderer.invoke('den:connected-remote', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['connectedRemote']>
+    },
     // → IPC channel 'den:file-history' (per-File version list from git log, issue 2-01)
     fileHistory(targetPath) {
       return ipcRenderer.invoke('den:file-history', {

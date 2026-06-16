@@ -1787,6 +1787,48 @@ describe('DenService commit-anyway + synced "don\'t warn" allowlist (issue 2-04)
   })
 })
 
+describe('DenService connected Remote read (issue 2-11, Account tab, real git)', () => {
+  it('reports the connected Remote URL + parsed Provider host/scheme', async () => {
+    // A source repo with an `origin` pointing at a remote (an scp-like GitHub URL exercises the
+    // scp-form parser path the real Account tab will hit most often).
+    const aSource = join(root, 'a-source')
+    await initSourceRepo(aSource, 'git@github.com:you/den.git')
+    const env = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: join(root, 'a-home'),
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+
+    // The tab reads the EXACT URL git is using, plus the host/scheme it derives the same way the
+    // credential-failure diagnostics do (so "Provider: github.com" always matches a help message).
+    await expect(env.connectedRemote()).resolves.toEqual({
+      url: 'git@github.com:you/den.git',
+      host: 'github.com',
+      scheme: 'ssh',
+    })
+  })
+
+  it('reports an all-null connected Remote for a local-only Den (honest empty state)', async () => {
+    // A Den initialized locally but never connected to a Remote: `git remote get-url origin` fails,
+    // so the tab must get all-null and render its "no Remote connected" empty state (never blank).
+    const localSource = join(root, 'local-source')
+    await mkdir(localSource, { recursive: true })
+    const git = new GitTransport({ gitBin, repoDir: localSource })
+    await git.init()
+    const env = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: localSource,
+      destinationDir: join(root, 'local-home'),
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+
+    await expect(env.connectedRemote()).resolves.toEqual({ url: null, host: null, scheme: null })
+  })
+})
+
 /** Read raw `chezmoi status` for a source/destination pair (test setup probe only). */
 async function readChezmoiStatus(sourceDir: string, destinationDir: string): Promise<string> {
   const { stdout } = await runCommand(chezmoiBin, [

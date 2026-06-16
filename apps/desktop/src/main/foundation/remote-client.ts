@@ -396,8 +396,12 @@ function initHelp(host: string): string {
  * Supports `https://github.com/org/repo.git`, `ssh://git@example/repo.git`, and
  * scp-like `git@github.com:org/repo.git`. If parsing fails, diagnostics still
  * return a generic host so UI copy remains actionable.
+ *
+ * Exported so the Account tab's data seam ({@link import('./den-service.js').DenService.connectedRemote})
+ * can derive the SAME host/scheme the preflight diagnostics use, keeping "what Provider is this"
+ * consistent between the connected-Remote display and a credential-failure message (issue 2-11).
  */
-function parseRemoteLocation(remoteUrl: string): {
+export function parseRemoteLocation(remoteUrl: string): {
   readonly host: string
   readonly scheme: string
 } {

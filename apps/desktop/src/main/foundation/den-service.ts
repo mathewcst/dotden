@@ -53,6 +53,7 @@ import type { UnsubscribeDisposition } from './subscription-settings.js'
 import { scanForSecrets, type SecretFinding } from './secret-scanner.js'
 import { partitionFindings, type SecretAllowlist } from './secret-allowlist.js'
 import { parseFileHistory, shortSha, type FileVersion } from './file-history.js'
+import { parseRemoteLocation } from './remote-client.js'
 import {
   detectPasswordManagers,
   type DetectedPasswordManager,
@@ -137,6 +138,29 @@ export interface PollSnapshot {
   readonly remoteUrl: string | null
   /** This environment's local HEAD SHA (`git rev-parse HEAD`), or null on a fresh repo. */
   readonly headSha: string | null
+}
+
+/**
+ * The connected Remote, surfaced to the Settings → Account tab (issue 2-11, V1-Lean / ADR 0020).
+ *
+ * This is the honest "what is dotden actually using" read: the git Remote URL the user connected
+ * plus the Provider host/scheme derived from it (`github.com`, `gitlab.com`, a self-hosted host, …).
+ * There is deliberately **no account, token, or keychain field** — v1 holds none (ADR 0020); push
+ * and fetch ride the user's own git credentials. The live credential check is a SEPARATE call
+ * (`remote.preflight(url)` → `git ls-remote`), so the tab can show "is auth working right now?"
+ * without this read having to spawn anything.
+ *
+ * `url` is `null` when no Remote is configured yet (a Den initialized locally but never connected),
+ * in which case `host`/`scheme` are also `null` and the tab shows its honest "no Remote connected"
+ * empty state rather than a blank card (never fail silently).
+ */
+export interface ConnectedRemote {
+  /** The configured Remote URL (`git remote get-url origin`), shown read-only in mono; null when none. */
+  readonly url: string | null
+  /** Provider host parsed from the URL (e.g. `github.com`); null when no Remote is connected. */
+  readonly host: string | null
+  /** URL scheme/protocol class (e.g. `https`, `ssh`); null when no Remote is connected. */
+  readonly scheme: string | null
 }
 
 /**
@@ -674,6 +698,27 @@ export class DenService {
   async pollSnapshot(): Promise<PollSnapshot> {
     const [remoteUrl, headSha] = await Promise.all([this.git.remoteUrl(), this.git.headSha()])
     return { remoteUrl, headSha }
+  }
+
+  /**
+   * The connected Remote for the Settings → Account tab (issue 2-11, V1-Lean / ADR 0020).
+   *
+   * Maps to `git remote get-url origin`, then derives the Provider host/scheme from the URL with
+   * the SAME parser the preflight diagnostics use ({@link parseRemoteLocation}) so the displayed
+   * Provider always matches what a credential message would say. Read-only — it emits no wide event
+   * and spawns nothing beyond the cheap `get-url` (the live credential check is the separate
+   * `remote.preflight` → `git ls-remote` call the tab makes itself).
+   *
+   * Returns all-`null` when no Remote is configured (a local-only Den), so the tab renders its honest
+   * "no Remote connected" empty state. There is NO account/token field by construction (ADR 0020).
+   *
+   * @returns The configured Remote URL + parsed host/scheme, or all-`null` when none is connected.
+   */
+  async connectedRemote(): Promise<ConnectedRemote> {
+    const url = await this.git.remoteUrl()
+    if (!url) return { url: null, host: null, scheme: null }
+    const { host, scheme } = parseRemoteLocation(url)
+    return { url, host, scheme }
   }
 
   /**

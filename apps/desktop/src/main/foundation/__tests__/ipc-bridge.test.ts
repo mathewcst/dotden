@@ -47,6 +47,12 @@ describe('IpcBridge', () => {
       applyIncoming: vi.fn(async () => ({ results: [], applied: [], failed: [] })),
       fileTree: vi.fn(async () => ({ files: [], workspaces: [] })),
       fileDiff: vi.fn(async () => ''),
+      // The Account tab (issue 2-11): the connected Remote URL + parsed Provider host/scheme.
+      connectedRemote: vi.fn(async () => ({
+        url: 'git@github.com:you/den.git',
+        host: 'github.com',
+        scheme: 'ssh',
+      })),
       // The History tab (issue 2-01): per-File version list + read-only version preview.
       fileHistory: vi.fn(async () => []),
       fileVersionDiff: vi.fn(async () => ''),
@@ -120,6 +126,8 @@ describe('IpcBridge', () => {
       targetPath: '.zshrc',
       _trace: { traceId: 't7' },
     } as never)
+    // The Account tab's connected-Remote read (issue 2-11): read-only, still _trace-correlated.
+    await handlers.get('den:connected-remote')?.({}, { _trace: { traceId: 't16' } } as never)
     // The History tab queries (issue 2-01): read-only, still _trace-correlated.
     await handlers.get('den:file-history')?.({}, {
       targetPath: '.zshrc',
@@ -156,6 +164,8 @@ describe('IpcBridge', () => {
     // tree/diff are read-only: the bridge asserts _trace but does not forward an id.
     expect(den.fileTree).toHaveBeenCalledTimes(1)
     expect(den.fileDiff).toHaveBeenCalledWith('.zshrc')
+    // connected-remote is read-only too (asserts _trace, forwards no id).
+    expect(den.connectedRemote).toHaveBeenCalledTimes(1)
     // file-history / file-version-diff are read-only (assert _trace, forward no id).
     expect(den.fileHistory).toHaveBeenCalledWith('.zshrc')
     expect(den.fileVersionDiff).toHaveBeenCalledWith('.zshrc', 'abc1234')

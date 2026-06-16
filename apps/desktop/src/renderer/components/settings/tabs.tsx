@@ -31,6 +31,7 @@ import { SyncTab } from './SyncTab'
 import { CommitTab } from './CommitTab'
 import { AppearanceTab } from './AppearanceTab'
 import { AutomationTab } from './AutomationTab'
+import { AccountTab } from './AccountTab'
 import { PrivacyTab } from './PrivacyTab'
 import { EnvironmentsTab } from './EnvironmentsTab'
 import { AboutTab } from './AboutTab'
@@ -57,9 +58,9 @@ export interface SettingsTab {
 
 /**
  * The seven v1 Settings tabs, in nav order (design: settings.md). Automation (2-12), Sync
- * (2-08), Commit (2-09), Appearance (2-10), Privacy (2-14), and About (2-16) are `live`; every
- * remaining tab is a `placeholder` whose slice flips it to `live` later. Icons match the spec's
- * per-tab nav glyphs.
+ * (2-08), Commit (2-09), Appearance (2-10), Account (2-11), Privacy (2-14), Environments (2-15),
+ * and About (2-16) are `live`; every remaining tab is a `placeholder` whose slice flips it to
+ * `live` later. Icons match the spec's per-tab nav glyphs.
  */
 export const SETTINGS_TABS: readonly SettingsTab[] = [
   // Automation (2-12): the risk-graded ladder (Manual → Auto-sync → Auto-apply → YOLO).
@@ -77,8 +78,9 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   { id: 'appearance', label: 'Appearance', icon: Palette, status: 'live', Content: AppearanceTab },
   // Sync (2-08): the first real tab — poller on/off + cadence, start-on-login.
   { id: 'sync', label: 'Sync', icon: Cloud, status: 'live', Content: SyncTab },
-  // Account / Remote (2-11): connected Remote + git-credential + detected PM CLI. Inert for now.
-  { id: 'account', label: 'Account', icon: GitBranch, status: 'placeholder' },
+  // Account / Remote (2-11): the connected Remote (URL + Provider) + a live git-credential
+  // (ls-remote) status + the detected PM CLI. V1-Lean (ADR 0020): no dotden account/token/keychain.
+  { id: 'account', label: 'Account', icon: GitBranch, status: 'live', Content: AccountTab },
   // Privacy (2-14): opt-in telemetry consent toggles (analytics · crash reports · diagnostic
   // logs), all OFF by default. Control surface only — persists consent; egress is PRD 3.
   { id: 'privacy', label: 'Privacy', icon: Shield, status: 'live', Content: PrivacyTab },

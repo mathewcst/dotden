@@ -28,6 +28,7 @@ import type {
   CommitResult,
   CommitTemplateState,
   ConflictReview,
+  ConnectedRemote,
   FileTreeView,
   ConvertSecretRequest,
   ConvertSecretResult,
@@ -323,6 +324,15 @@ export interface DotdenApi {
      * straight into `@pierre/diffs` `PatchDiff`.
      */
     diff(targetPath: string): Promise<string>
+    /**
+     * **Read the connected Remote** for the Settings → Account tab (issue 2-11, V1-Lean / ADR 0020).
+     * Maps to `git remote get-url origin`, returning the URL plus its parsed Provider host/scheme
+     * (e.g. `github.com` / `https`). All-`null` when no Remote is connected (a local-only Den), so the
+     * tab shows an honest "no Remote connected" empty state. There is NO account/token field by
+     * construction — v1 holds none; the live credential check is the separate {@link DotdenApi.remote.preflight}
+     * (`git ls-remote`) call the tab makes to show whether auth is working right now.
+     */
+    connectedRemote(): Promise<ConnectedRemote>
     /**
      * The selected File's **version history** for the History tab (issue 2-01) — every Commit
      * the user ever made for that File, newest first, each carrying its message, short SHA, and

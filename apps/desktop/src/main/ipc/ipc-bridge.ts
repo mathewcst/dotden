@@ -330,6 +330,15 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     const { targetPath } = payload as TracedPayload & { targetPath: string }
     return (await deps.denService()).fileDiff(targetPath)
   })
+  // The Account tab's connected-Remote read (issue 2-11, V1-Lean / ADR 0020): the git Remote URL
+  // + parsed Provider host/scheme dotden is actually using. Read-only (`git remote get-url`), so it
+  // emits no wide event, but it still asserts the `_trace` envelope like every other read. There is
+  // NO account/token in this read by construction — the live credential status is the SEPARATE
+  // `remote:preflight` (`git ls-remote`) call the tab makes itself.
+  registrar.handle('den:connected-remote', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    return (await deps.denService()).connectedRemote()
+  })
   // The History tab (issue 2-01): the per-File version list (derived purely from `git log`,
   // no separate store) + the read-only preview of one version (`git show <sha> -- <path>`).
   // Both are read-only, so DenService emits no wide event; each still asserts the `_trace`
