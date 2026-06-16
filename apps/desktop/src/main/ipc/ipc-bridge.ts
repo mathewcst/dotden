@@ -68,8 +68,9 @@ export interface IpcBridgeDeps {
  *
  * Channels (all payloads carry `_trace`):
  * - `remote:preflight` / `remote:connect` / `remote:latest-sha` → {@link RemoteClient}
- * - `den:track` / `den:commit` / `den:sync-push` / `den:list-incoming` / `den:apply` /
- *   `den:tree` / `den:diff` / `den:untrack` / `den:delete-everywhere` /
+ * - `den:track` / `den:commit` / `den:sync-push` / `den:list-incoming` /
+ *   `den:incoming-summary` / `den:incoming-diff` / `den:apply` / `den:tree` /
+ *   `den:diff` / `den:untrack` / `den:delete-everywhere` /
  *   `den:affected-environments` → {@link DenService}
  * - `discover:scan` / `discover:inspect-path` → {@link DiscoveryScanner} (issue 1-06)
  *
@@ -115,6 +116,18 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   })
   registrar.handle('den:list-incoming', async (_event, payload: TracedPayload) => {
     return (await deps.denService()).listIncomingClean(traceId(payload))
+  })
+  // The Review & Apply surface (issue 1-09): the incoming summary names the source
+  // environment for the top-level "N incoming from <env>" entry; incoming-diff previews
+  // an incoming File before Apply. incoming-summary fetches (a sync Operation, _trace
+  // forwarded); incoming-diff is read-only (asserts the `_trace` envelope only).
+  registrar.handle('den:incoming-summary', async (_event, payload: TracedPayload) => {
+    return (await deps.denService()).incomingSummary(traceId(payload))
+  })
+  registrar.handle('den:incoming-diff', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    const { targetPath } = payload as TracedPayload & { targetPath: string }
+    return (await deps.denService()).incomingDiff(targetPath)
   })
   registrar.handle('den:apply', async (_event, payload: TracedPayload) => {
     const { targetPaths } = payload as TracedPayload & { targetPaths: readonly string[] }

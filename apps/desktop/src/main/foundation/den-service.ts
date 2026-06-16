@@ -84,18 +84,90 @@ export interface CommitResult {
   readonly pushed: boolean
 }
 
+/**
+ * The Remote-axis marker for an incoming File — the SECOND status axis (issue 1-09).
+ *
+ * This is the ↓/⚠ glyph the tree's `renderRowDecoration` overlay lane paints beside
+ * the local git-status letter (the 1-00 spike geometry): `incoming` (↓) is a clean
+ * incoming change this slice can Apply; `conflict` (⚠) is a File changed both here and
+ * on the Remote, which the incoming-clean path never applies — it is handed to the
+ * ConflictModel owner (issue 1-11). The marker type carries `conflict` now so the
+ * decoration lane + Review surface are shaped for it, even though this slice only
+ * produces `incoming`.
+ */
+export type RemoteAxisMarker = 'incoming' | 'conflict'
+
 /** One incoming File shown to the user for a reviewed Apply (env B). */
 export interface IncomingReviewItem {
   /** Destination-relative File path arriving from the Remote (e.g. `.zshrc`). */
   readonly targetPath: string
   /** Workspace the File belongs to, from the synced `.myenv/` placements. */
   readonly workspaceId: string
+  /**
+   * The Remote-axis marker for this File (issue 1-09). The incoming-clean path always
+   * mints `incoming`; the `conflict` value exists so the Review surface + decoration
+   * lane are ready for the ConflictModel slice (issue 1-11) without reshaping.
+   */
+  readonly marker: RemoteAxisMarker
 }
 
-/** Result of applying reviewed incoming Files to disk (env B). */
+/**
+ * A summary of what is incoming from the Remote, for the top-level
+ * "N incoming from `<environment>` — Review & Apply" entry (issue 1-09).
+ *
+ * It pairs the reviewable Files with the SOURCE environment's label so the entry can
+ * name where the changes came from (e.g. "3 incoming from work-laptop"). The source is
+ * derived from the synced registry: the environment(s) that are NOT this one. When the
+ * registry has not recorded another environment yet, {@link fromEnvironmentLabel} is a
+ * neutral fallback rather than a silent blank (never fail silently).
+ */
+export interface IncomingSummary {
+  /** The reviewable incoming Files (each with its Remote-axis marker). */
+  readonly items: readonly IncomingReviewItem[]
+  /** Label of the environment the incoming changes came from, for the entry copy. */
+  readonly fromEnvironmentLabel: string
+}
+
+/**
+ * The per-File outcome of an Apply, recording that each File **applied independently**
+ * (per-file atomicity, issue 1-09): one File's failure never blocks the others.
+ *
+ * `ok` means `chezmoi apply <file>` wrote the File; `error` means it failed and carries
+ * a human `reason` for the failure + a `retryable` flag so the Review surface can offer
+ * a retry that re-runs ONLY the failures. A File the witness gate dropped (it turned
+ * non-applicable between review and apply) is recorded as a `not-applicable` error so it
+ * is surfaced, never silently skipped.
+ */
+export interface ApplyFileResult {
+  /** The destination-relative File path this outcome is for. */
+  readonly targetPath: string
+  /** Whether the File was written (`ok`) or its Apply failed (`error`). */
+  readonly outcome: 'ok' | 'error'
+  /** Human-readable failure reason when `outcome` is `error`; absent on success. */
+  readonly reason?: string
+  /**
+   * Whether a failed File can be retried (re-run just this File). A per-file chezmoi
+   * failure is retryable (the user can fix and re-run); a File the witness gate refused
+   * is NOT retryable (it does not apply to this environment at all).
+   */
+  readonly retryable?: boolean
+}
+
+/**
+ * Result of applying reviewed incoming Files to disk (env B), with per-File atomicity.
+ *
+ * Each File is applied in its OWN `chezmoi apply <file>` invocation so one failure does
+ * not block the rest (issue 1-09). {@link results} carries every File's outcome; the
+ * convenience {@link applied}/{@link failed} splits are derived from it for the callers
+ * that only need the path lists (e.g. the tree refresh after a successful Apply).
+ */
 export interface ApplyResult {
-  /** The destination-relative File paths actually written to disk by `chezmoi apply`. */
+  /** Per-File outcome for every File the Apply attempted (the per-file-atomicity record). */
+  readonly results: readonly ApplyFileResult[]
+  /** The destination-relative File paths that applied successfully. */
   readonly applied: readonly string[]
+  /** The Files that failed, each with its reason + retryable flag (for the retry UI). */
+  readonly failed: readonly ApplyFileResult[]
 }
 
 /**
@@ -325,7 +397,7 @@ export class DenService {
    * deferred, never silently applied.
    *
    * @param traceId Correlation id for the wide event.
-   * @returns The reviewable incoming Files (path + Workspace), for the inspector UI.
+   * @returns The reviewable incoming Files (path + Workspace + Remote-axis marker).
    */
   async listIncomingClean(traceId: string): Promise<readonly IncomingReviewItem[]> {
     const span = this.tracer?.startOperation('sync', traceId)
@@ -336,10 +408,12 @@ export class DenService {
       const engine = new SyncEngine({ environment, workspaces, tracer: this.tracer })
       const { plan } = engine.routeIncomingClean(incoming, traceId)
       const placementOf = new Map(workspaces.placements.map((p) => [p.targetPath, p.workspaceId]))
-      const items = plan.items.map((item) => ({
+      const items: IncomingReviewItem[] = plan.items.map((item) => ({
         targetPath: item.witness.targetPath,
         // The witness only exists for placed Files, so this lookup always resolves.
         workspaceId: placementOf.get(item.witness.targetPath) ?? '',
+        // Incoming-clean Files are all the ↓ Remote axis here; ⚠ conflict is issue 1-11.
+        marker: 'incoming',
       }))
       span?.setAttribute('fileCount', items.length)
       span?.end('ok')
@@ -351,37 +425,141 @@ export class DenService {
   }
 
   /**
-   * **env B** — apply reviewed incoming Files to disk.
+   * **env B** — the Review & Apply summary: fetch + list incoming Files AND name the
+   * source environment, for the top-level "N incoming from `<environment>`" entry
+   * (issue 1-09).
    *
-   * Maps to `chezmoi apply <files>` (the Apply verb). The caller passes the exact
-   * paths the user reviewed; this re-routes them through {@link SyncEngine} so the
-   * write is still witness-gated (a path that turned non-applicable between review
-   * and apply is dropped, never written) — defense in depth for invariant #3.
+   * Reuses {@link listIncomingClean} for the (witness-gated, incoming-clean) Files, then
+   * derives the source environment label from the synced registry: the most-recently
+   * active environment that is NOT this one (the environment whose Commits these
+   * incoming Files came from). A Den with no other environment recorded yet falls back
+   * to a neutral label rather than a blank, so the entry never reads "N incoming from "
+   * (never fail silently).
    *
-   * @param targetPaths The reviewed File paths to write.
+   * @param traceId Correlation id for the wide event (reuses the sync Operation).
+   * @returns The incoming Files plus the source environment's label.
+   */
+  async incomingSummary(traceId: string): Promise<IncomingSummary> {
+    const items = await this.listIncomingClean(traceId)
+    return { items, fromEnvironmentLabel: await this.incomingSourceLabel() }
+  }
+
+  /**
+   * **env B** — apply reviewed incoming Files to disk, **one File at a time**
+   * (per-file atomicity, issue 1-09).
+   *
+   * Maps to a SEPARATE `chezmoi apply <file>` per File rather than one batched apply,
+   * because the Review & Apply contract is that each File **applies independently**:
+   * one File failing must not block the others, and a failure must be reported with a
+   * reason + a retry that re-runs just the failures. (chezmoi is already per-path —
+   * each invocation is its own atomic write of that File — so this is the faithful
+   * mapping of "Apply one"/"Apply all" onto chezmoi's per-path model, ADR 0003.)
+   *
+   * The reviewed paths are still re-routed through {@link SyncEngine} so every write is
+   * witness-gated (a path that turned non-applicable between review and apply is refused,
+   * never written) — defense in depth for invariant #3. A refused path is recorded as a
+   * non-retryable `not-applicable` failure so it is surfaced, not silently dropped.
+   *
+   * This Operation is NEVER thrown out of: a per-File chezmoi failure is caught and
+   * recorded so the rest of the batch still applies (the whole point of per-file
+   * atomicity). The wide event's `outcome` reflects whether ALL Files applied.
+   *
+   * @param targetPaths The reviewed File paths to write ("Apply all" = every reviewed
+   *   path; "Apply one" = a single path; "Retry" = just the previously-failed paths).
    * @param traceId Correlation id for the wide event.
-   * @returns The Files actually applied (a subset if any became non-applicable).
+   * @returns Per-File outcomes, plus the applied/failed splits for convenience.
    */
   async applyIncoming(targetPaths: readonly string[], traceId: string): Promise<ApplyResult> {
     const span = this.tracer?.startOperation('apply', traceId)
     try {
       const { environment, workspaces } = await this.loadSyncedModel()
       const engine = new SyncEngine({ environment, workspaces })
-      // Re-route the reviewed paths as incoming-clean so only witness-backed Files
-      // are written: SyncEngine refuses to plan a non-applicable File.
-      const { plan } = engine.routeIncomingClean(
+      // Re-route the reviewed paths as incoming-clean so only witness-backed Files are
+      // written: SyncEngine refuses to plan a non-applicable File (invariant #3).
+      const { plan, deferred } = engine.routeIncomingClean(
         targetPaths.map((targetPath) => ({ targetPath, status: 'incoming-clean' as const })),
         traceId,
       )
-      const applied = plan.items.map((item) => item.witness.targetPath)
-      if (applied.length > 0) await this.chezmoi.apply(applied)
+      const applicable = new Set(plan.items.map((item) => item.witness.targetPath))
+
+      const results: ApplyFileResult[] = []
+      // Apply each witness-backed File in its OWN chezmoi invocation so a single File's
+      // failure is isolated — the loop continues and the remaining Files still apply.
+      for (const targetPath of targetPaths) {
+        if (!applicable.has(targetPath)) {
+          // The witness gate refused this path (it does not apply to this environment).
+          // Surface it as a non-retryable failure rather than a silent omission.
+          results.push({
+            targetPath,
+            outcome: 'error',
+            reason:
+              deferred.find((d) => d.targetPath === targetPath)?.reason === 'conflict'
+                ? 'This File is in Conflict — resolve it before applying.'
+                : 'This File does not apply to this environment (not in a subscribed Workspace).',
+            retryable: false,
+          })
+          continue
+        }
+        try {
+          await this.chezmoi.apply([targetPath])
+          results.push({ targetPath, outcome: 'ok' })
+        } catch (caught) {
+          // A per-File chezmoi failure: record the reason and mark it retryable so the
+          // user can fix the cause and re-run JUST this File, without blocking the others.
+          results.push({
+            targetPath,
+            outcome: 'error',
+            reason:
+              caught instanceof Error ? caught.message : 'chezmoi apply failed for this File.',
+            retryable: true,
+          })
+        }
+      }
+
+      const applied = results.filter((r) => r.outcome === 'ok').map((r) => r.targetPath)
+      const failed = results.filter((r) => r.outcome === 'error')
       span?.setAttribute('fileCount', applied.length)
-      span?.end('ok')
-      return { applied }
+      // The Operation's outcome is `error` if ANY File failed, so the wide event reflects
+      // a partial Apply honestly (the per-File detail lives in the returned result).
+      span?.end(failed.length === 0 ? 'ok' : 'error')
+      return { results, applied, failed }
     } catch (error) {
       span?.end('error')
       throw error
     }
+  }
+
+  /**
+   * **env B** — the diff of an incoming File the user reviews BEFORE applying it
+   * (issue 1-09).
+   *
+   * Maps to `chezmoi diff <file>` on env B: for an incoming-clean File (one that does
+   * not yet exist locally) chezmoi reports the would-be-written content as additions,
+   * which is exactly the "review the change before you Apply" surface. Read-only — it
+   * writes nothing — so like {@link fileDiff} it emits no wide event. An empty string
+   * means there is nothing to apply for the File (it already matches), which the Review
+   * surface shows honestly rather than fabricating a patch.
+   *
+   * @param targetPath Destination-relative incoming File path to preview (e.g. `.zshrc`).
+   * @returns chezmoi's unified diff of what Apply would write (empty when nothing to do).
+   */
+  async incomingDiff(targetPath: string): Promise<string> {
+    return this.chezmoi.diff([targetPath])
+  }
+
+  /**
+   * Derive the label of the environment incoming changes came FROM (issue 1-09).
+   *
+   * The source is read from the synced registry: the most-recently-active environment
+   * that is NOT this one (activity is git-log-derived, never persisted — ADR 0024). A
+   * Den that has not recorded another environment yet (a fresh env B before any peer
+   * is registered) falls back to a neutral "another environment" label so the
+   * top-level entry always names a source rather than a blank (never fail silently).
+   */
+  private async incomingSourceLabel(): Promise<string> {
+    const { environments } = await this.store.readEnvironments()
+    const others = environments.filter((e) => e.id !== this.options.environment.id)
+    return others[0]?.label ?? 'another environment'
   }
 
   /**

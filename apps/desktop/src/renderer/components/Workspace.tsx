@@ -25,10 +25,14 @@ import { RowContextMenu, type RowVerb } from '@/components/RowContextMenu'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { WorkspaceSidebar } from '@/components/WorkspaceSidebar'
 import { FileRow } from '@/components/FileRow'
+import { IncomingBanner } from '@/components/IncomingBanner'
+import { ReviewApply } from '@/components/ReviewApply'
+import { remoteAxisDecoration } from '@/lib/remote-axis'
 import type {
   AffectedEnvironment,
   FileTreeEntry,
   IncomingReviewItem,
+  RemoteAxisMarker,
 } from '../../main/foundation/den-service'
 import type { Workspace as WorkspaceModel } from '../../main/foundation/myenv-store'
 
@@ -78,6 +82,13 @@ export function Workspace({ role }: { role: Role }) {
   const workspaceLabel = workspaces[0]?.label ?? 'Personal'
   // env B: incoming Files for a reviewed Apply (the 1-04 detect→apply half).
   const [incoming, setIncoming] = useState<readonly IncomingReviewItem[]>([])
+  // The Remote axis (issue 1-09): the incoming/conflict markers per File for THIS
+  // environment's tree decoration lane, plus the source environment label for the
+  // top-level "N incoming from <env>" banner. Empty until a Sync surfaces incoming.
+  const [remoteAxis, setRemoteAxis] = useState<ReadonlyMap<string, RemoteAxisMarker>>(new Map())
+  const [incomingFrom, setIncomingFrom] = useState<string>('another environment')
+  // Whether the dedicated Review & Apply surface is open (the banner/card CTA opens it).
+  const [reviewing, setReviewing] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const [diff, setDiff] = useState<string | null>(null)
   const [lastCommitMessage, setLastCommitMessage] = useState<string | null>(null)
@@ -118,11 +129,15 @@ export function Workspace({ role }: { role: Role }) {
     [role, files],
   )
 
-  // Remote-axis decoration lane (the 1-00 spike's `renderRowDecoration`). The local
-  // axis (M/A/D/R/U) is owned by `setGitStatus`; this overlay lane is where the
-  // Remote ↓ incoming / ⚠ conflict glyphs land in 1-09. Here it is a no-op so the
-  // seam exists and 1-09 only swaps the body, not the wiring.
-  const renderRowDecoration = useCallback<FileTreeRowDecorationRenderer>(() => null, [])
+  // Remote-axis decoration lane (the 1-00 spike's `renderRowDecoration`, issue 1-09).
+  // The local axis (M/A/D/R/U) is owned by `setGitStatus`; this overlay lane paints the
+  // independent Remote ↓ incoming / ⚠ conflict glyph directly LEFT of the status letter
+  // (`↓ M`, `⚠ U`) per the spike geometry. The marker per File comes from the Remote-axis
+  // map a Sync populated; a File with nothing incoming returns null (no overlay glyph).
+  const renderRowDecoration = useCallback<FileTreeRowDecorationRenderer>(
+    ({ item }) => remoteAxisDecoration(remoteAxis.get(item.path)),
+    [remoteAxis],
+  )
 
   // Inline rename: the user renames a File in place; we move its placement so the
   // tree, the synced `.myenv/`, and chezmoi stay in step. The faithful chezmoi move
@@ -219,6 +234,25 @@ export function Workspace({ role }: { role: Role }) {
     [run],
   )
 
+  // Fetch the Remote axis for THIS environment (issue 1-09): the incoming/conflict
+  // markers per File (for the tree decoration lane) + the source environment label (for
+  // the top-level banner). This fetches the Remote, so it is the env-A side of "checking
+  // for incoming" — run on load and after a Sync. Failures here must never break the
+  // local tree, so it surfaces a soft error rather than throwing out of the caller.
+  const refreshIncoming = useCallback(async () => {
+    try {
+      const summary = await window.dotden.den.incomingSummary()
+      setRemoteAxis(new Map(summary.items.map((i) => [i.targetPath, i.marker])))
+      setIncomingFrom(summary.fromEnvironmentLabel)
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Could not check the Remote for incoming changes.',
+      )
+    }
+  }, [])
+
   // env A starts by reading its real managed Files (env B waits for an explicit
   // Detect). App.tsx keys this component by role, so switching environments remounts
   // it and resets all state (the React `key` reset pattern). The initial load mirrors
@@ -234,6 +268,15 @@ export function Workspace({ role }: { role: Role }) {
         if (active) {
           setFiles(view.files)
           setWorkspaces(view.workspaces)
+        }
+        // Also check the Remote for incoming changes so the tree's Remote-axis
+        // decorations + the top-level banner are live on first paint (issue 1-09).
+        if (active) {
+          const summary = await window.dotden.den.incomingSummary()
+          if (active) {
+            setRemoteAxis(new Map(summary.items.map((i) => [i.targetPath, i.marker])))
+            setIncomingFrom(summary.fromEnvironmentLabel)
+          }
         }
       } catch (caught) {
         if (active) {
@@ -271,20 +314,19 @@ export function Workspace({ role }: { role: Role }) {
   const push = () =>
     run('push', async () => {
       await window.dotden.den.syncPush()
+      // A Sync also checks for incoming, so refresh the Remote axis + banner afterwards.
+      await refreshIncoming()
     })
 
   // ── env B verbs ──
+  // Detect lists incoming Files so the inspector callout + the "Review & Apply" button
+  // wake up; the actual reviewed Apply (one/all, per-file atomicity, retry) happens on
+  // the dedicated Review & Apply surface (issue 1-09), opened by the button below.
   const list = () =>
     run('list', async () => {
       const items = await window.dotden.den.listIncoming()
       setIncoming(items)
       await selectFile(items[0]?.targetPath ?? null)
-    })
-
-  const apply = () =>
-    run('apply', async () => {
-      const { applied } = await window.dotden.den.apply(incoming.map((i) => i.targetPath))
-      setIncoming((prev) => prev.filter((i) => !applied.includes(i.targetPath)))
     })
 
   // ── Right-click row verbs (issue 1-08) ──
@@ -401,8 +443,26 @@ export function Workspace({ role }: { role: Role }) {
   const selectedFileGroups =
     workspaces.find((w) => w.id === selectedFile?.workspaceId)?.groups ?? []
 
+  // How many changes are incoming for THIS environment (issue 1-09): drives the
+  // top-level banner + inspector card. Only env A's everyday view shows the banner.
+  const incomingCount = remoteAxis.size
+
+  // The dedicated Review & Apply surface (issue 1-09): the banner/card CTA opens it. On
+  // close it re-checks the Remote so the tree decorations + banner reflect what is left.
+  if (reviewing) {
+    return (
+      <ReviewApply
+        onClose={() => {
+          setReviewing(false)
+          void refreshIncoming()
+          void reloadTree()
+        }}
+      />
+    )
+  }
+
   return (
-    <div className="bg-background text-foreground grid h-screen grid-rows-[auto_1fr]">
+    <div className="bg-background text-foreground grid h-screen grid-rows-[auto_auto_1fr]">
       {/* Title bar — workspace switcher · centered search · sync · bell · settings (signature screen). */}
       <header className="border-border bg-sidebar flex items-center gap-3 border-b px-4 py-2 text-sm">
         <span className="bg-dd-ember-950 text-dd-ember-400 inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-semibold">
@@ -428,6 +488,22 @@ export function Workspace({ role }: { role: Role }) {
           <Settings className="size-4" aria-label="settings" />
         </div>
       </header>
+
+      {/* The top-level "N incoming from <environment> — Review & Apply" entry (issue
+          1-09): a persistent strip between the titlebar and the body (detach + insert,
+          not overlay — sync-states spec). Only env A's everyday view, only when there is
+          something incoming; its CTA jumps straight to the Review & Apply surface. The
+          row keeps the body's height (auto row) rather than covering the pane headers. */}
+      {role === 'a' && incomingCount > 0 ? (
+        <IncomingBanner
+          count={incomingCount}
+          fromEnvironmentLabel={incomingFrom}
+          onReview={() => setReviewing(true)}
+        />
+      ) : (
+        // Keep the middle grid row collapsed when there is no banner (no layout shift).
+        <div className="hidden" />
+      )}
 
       <div className="grid grid-cols-[260px_1fr_300px] overflow-hidden">
         {/* Left pane — Workspace tree. */}
@@ -551,7 +627,7 @@ export function Workspace({ role }: { role: Role }) {
                   <Button
                     size="sm"
                     disabled={busy !== null || incoming.length === 0}
-                    onClick={apply}
+                    onClick={() => setReviewing(true)}
                   >
                     {busy === 'apply' ? (
                       <Loader2 className="size-4 animate-spin" />
@@ -643,14 +719,26 @@ export function Workspace({ role }: { role: Role }) {
                   Nothing incoming. Detect the Remote to pull the Den, then refresh.
                 </p>
               ) : (
-                <ul className="flex flex-col gap-1">
-                  {incoming.map((item) => (
-                    <li key={item.targetPath} className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-xs">{item.targetPath}</span>
-                      <StatusTag status="incoming" />
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <ul className="flex flex-col gap-1">
+                    {incoming.map((item) => (
+                      <li key={item.targetPath} className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-xs">{item.targetPath}</span>
+                        <StatusTag status="incoming" />
+                      </li>
+                    ))}
+                  </ul>
+                  {/* The inspector card's own jump-to-review CTA (issue 1-09), mirroring
+                      the design's "N incoming changes · Review & Apply" card button. */}
+                  <Button
+                    size="sm"
+                    className="mt-3 w-full"
+                    disabled={busy !== null}
+                    onClick={() => setReviewing(true)}
+                  >
+                    <Download className="size-4" /> Review &amp; Apply
+                  </Button>
+                </>
               )}
             </section>
           ) : null}

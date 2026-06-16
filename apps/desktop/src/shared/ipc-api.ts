@@ -27,6 +27,7 @@ import type {
   CommitResult,
   FileTreeView,
   IncomingReviewItem,
+  IncomingSummary,
 } from '../main/foundation/den-service.js'
 import type { Group, Workspace } from '../main/foundation/myenv-store.js'
 import type {
@@ -99,10 +100,30 @@ export interface DotdenApi {
     syncPush(): Promise<void>
     /**
      * **env B** — fetch the Remote and list incoming Files for a reviewed Apply,
-     * restricted to the incoming-clean path (no local copy, no Conflict).
+     * restricted to the incoming-clean path (no local copy, no Conflict). Each item
+     * carries its Remote-axis marker (↓ incoming) for the tree decoration lane (1-09).
      */
     listIncoming(): Promise<readonly IncomingReviewItem[]>
-    /** **Apply** reviewed incoming Files to disk (env B). Maps to `chezmoi apply`. */
+    /**
+     * **env B** — the Review & Apply summary (issue 1-09): the incoming Files PLUS the
+     * source environment's label, for the top-level "N incoming from `<environment>` —
+     * Review & Apply" entry. Fetches the Remote like {@link listIncoming}.
+     */
+    incomingSummary(): Promise<IncomingSummary>
+    /**
+     * **env B** — the diff of one incoming File the user reviews BEFORE applying
+     * (issue 1-09). Maps to `chezmoi diff <file>`; an empty string means nothing to
+     * apply. Fed into `@pierre/diffs` `PatchDiff`, like {@link DotdenApi.den.diff}.
+     */
+    incomingDiff(targetPath: string): Promise<string>
+    /**
+     * **Apply** reviewed incoming Files to disk (env B). Maps to a per-File
+     * `chezmoi apply <file>` so each File applies independently (per-file atomicity,
+     * issue 1-09): one File's failure never blocks the rest. The result reports every
+     * File's outcome with a reason for failures, so the UI can retry just the failures.
+     * "Apply one" passes a single path; "Apply all" passes every reviewed path; "Retry"
+     * passes only the previously-failed paths.
+     */
     apply(targetPaths: readonly string[]): Promise<ApplyResult>
     /**
      * The three-pane tree view (issue 1-07): every managed File joined with its

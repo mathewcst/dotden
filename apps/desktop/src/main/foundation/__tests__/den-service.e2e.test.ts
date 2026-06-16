@@ -112,7 +112,10 @@ describe('DenService end-to-end thread (real chezmoi/git)', () => {
     // List incoming for a reviewed Apply — incoming-clean only (no local copy).
     expect(existsSync(join(bHome, '.zshrc'))).toBe(false)
     const incoming = await envB.listIncomingClean('trace-list')
-    expect(incoming).toEqual([{ targetPath: '.zshrc', workspaceId: 'personal' }])
+    // Each incoming File carries its Remote-axis marker (↓ incoming for the clean path, 1-09).
+    expect(incoming).toEqual([
+      { targetPath: '.zshrc', workspaceId: 'personal', marker: 'incoming' },
+    ])
 
     // Apply writes the File to env B's disk with the exact source bytes.
     const applied = await envB.applyIncoming(['.zshrc'], 'trace-apply')
@@ -490,6 +493,96 @@ describe('DenService Workspaces + nested Groups (issue 1-14)', () => {
     expect(view.workspaces.find((w) => w.id === 'personal')?.groups.map((g) => g.label)).toEqual([
       'Shell',
     ])
+  })
+})
+
+// Review & Apply surface (issue 1-09): the incoming summary names the SOURCE
+// environment for the "N incoming from <env>" entry, each incoming File carries its
+// Remote-axis marker (↓), the incoming diff previews a File before Apply, and Apply is
+// per-File atomic across the real two-environment thread.
+describe('DenService Review & Apply surface (issue 1-09)', () => {
+  it('incomingSummary names the source environment + marks each incoming File; incomingDiff previews it; Apply writes it', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    // ── env A Tracks + Commits + Syncs a File (the source environment "this-mac"). ──
+    const aHome = join(root, 'a-home')
+    const aSource = join(root, 'a-source')
+    await mkdir(aHome, { recursive: true })
+    await initSourceRepo(aSource, remote)
+    const envA = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: aHome,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+    await writeFile(join(aHome, '.zshrc'), 'export EDITOR=nvim\nexport PAGER=less\n')
+    await envA.trackFile('.zshrc', 'trace-track')
+    await envA.commitTracked(['.zshrc'], 'trace-commit')
+    await envA.syncPush('trace-push')
+
+    // ── env B clones the Den and registers itself, so the registry has BOTH envs. ──
+    const bHome = join(root, 'b-home')
+    const bSource = join(root, 'b-source')
+    await mkdir(bHome, { recursive: true })
+    await cloneRepo(gitBin, remote, bSource)
+    await new MyenvStore(bSource).registerEnvironment({
+      id: 'env-b',
+      label: 'work-laptop',
+      os: process.platform,
+      subscribedWorkspaces: ['personal'],
+    })
+    const envB = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: bSource,
+      destinationDir: bHome,
+      environment: { id: 'env-b', label: 'work-laptop', os: process.platform },
+    })
+
+    // The summary names where the incoming change came FROM (the OTHER environment)…
+    const summary = await envB.incomingSummary('trace-summary')
+    expect(summary.fromEnvironmentLabel).toBe('this-mac')
+    // …and each incoming File carries its Remote-axis marker (↓ incoming for clean).
+    expect(summary.items).toEqual([
+      { targetPath: '.zshrc', workspaceId: 'personal', marker: 'incoming' },
+    ])
+
+    // The user can REVIEW the incoming change as a diff BEFORE applying anything.
+    const preview = await envB.incomingDiff('.zshrc')
+    expect(preview).toContain('PAGER=less')
+    // Nothing is on disk yet — review precedes Apply.
+    expect(existsSync(join(bHome, '.zshrc'))).toBe(false)
+
+    // Apply writes the File with per-File outcomes (one File, one ok result).
+    const result = await envB.applyIncoming(['.zshrc'], 'trace-apply')
+    expect(result.applied).toEqual(['.zshrc'])
+    expect(result.failed).toEqual([])
+    expect(result.results).toEqual([{ targetPath: '.zshrc', outcome: 'ok' }])
+    await expect(readFile(join(bHome, '.zshrc'), 'utf8')).resolves.toBe(
+      'export EDITOR=nvim\nexport PAGER=less\n',
+    )
+  })
+
+  it('incomingSummary falls back to a neutral source label when no other environment is recorded', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+    const home = join(root, 'home')
+    const source = join(root, 'source')
+    await mkdir(home, { recursive: true })
+    await initSourceRepo(source, remote)
+    const env = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: source,
+      destinationDir: home,
+      environment: { id: 'env-solo', label: 'this-mac', os: process.platform },
+    })
+    // Only this environment is registered → the source label must not be a blank.
+    await env.registerEnvironment('trace-register')
+    const summary = await env.incomingSummary('trace-summary')
+    expect(summary.fromEnvironmentLabel).toBe('another environment')
   })
 })
 

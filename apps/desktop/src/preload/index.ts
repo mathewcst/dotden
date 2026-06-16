@@ -77,6 +77,19 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['listIncoming']>
     },
+    // → IPC channel 'den:incoming-summary' (Review & Apply: incoming + source env label)
+    incomingSummary() {
+      return ipcRenderer.invoke('den:incoming-summary', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['incomingSummary']>
+    },
+    // → IPC channel 'den:incoming-diff' (preview an incoming File before Apply)
+    incomingDiff(targetPath) {
+      return ipcRenderer.invoke('den:incoming-diff', {
+        targetPath,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['incomingDiff']>
+    },
     // → IPC channel 'den:apply'
     apply(targetPaths) {
       return ipcRenderer.invoke('den:apply', {

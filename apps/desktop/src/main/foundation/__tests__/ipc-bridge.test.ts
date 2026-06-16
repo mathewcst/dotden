@@ -37,7 +37,9 @@ describe('IpcBridge', () => {
       })),
       syncPush: vi.fn(async () => undefined),
       listIncomingClean: vi.fn(async () => []),
-      applyIncoming: vi.fn(async () => ({ applied: [] })),
+      incomingSummary: vi.fn(async () => ({ items: [], fromEnvironmentLabel: 'this-mac' })),
+      incomingDiff: vi.fn(async () => ''),
+      applyIncoming: vi.fn(async () => ({ results: [], applied: [], failed: [] })),
       fileTree: vi.fn(async () => ({ files: [], workspaces: [] })),
       fileDiff: vi.fn(async () => ''),
     }
@@ -69,6 +71,13 @@ describe('IpcBridge', () => {
       targetPath: '.zshrc',
       _trace: { traceId: 't7' },
     } as never)
+    // The Review & Apply surface (issue 1-09): incoming-summary fetches (forwards the
+    // trace id); incoming-diff is read-only (asserts _trace, forwards no id).
+    await handlers.get('den:incoming-summary')?.({}, { _trace: { traceId: 't8' } } as never)
+    await handlers.get('den:incoming-diff')?.({}, {
+      targetPath: '.zshrc',
+      _trace: { traceId: 't9' },
+    } as never)
 
     expect(den.trackFile).toHaveBeenCalledWith('.zshrc', 't1')
     expect(den.commitTracked).toHaveBeenCalledWith(['.zshrc'], 't2')
@@ -78,6 +87,9 @@ describe('IpcBridge', () => {
     // tree/diff are read-only: the bridge asserts _trace but does not forward an id.
     expect(den.fileTree).toHaveBeenCalledTimes(1)
     expect(den.fileDiff).toHaveBeenCalledWith('.zshrc')
+    // incoming-summary is a sync Operation (id forwarded); incoming-diff is read-only.
+    expect(den.incomingSummary).toHaveBeenCalledWith('t8')
+    expect(den.incomingDiff).toHaveBeenCalledWith('.zshrc')
   })
 
   it('forwards the _trace id into the DenService on every organize den:* channel (issue 1-14)', async () => {
