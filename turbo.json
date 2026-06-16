@@ -17,6 +17,9 @@
     "check:lint": {
       "dependsOn": ["topo"]
     },
+    "test": {
+      "dependsOn": ["topo"]
+    },
     "dev": {
       "cache": false,
       "persistent": true

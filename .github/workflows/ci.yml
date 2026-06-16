@@ -1,0 +1,71 @@
+# Continuous integration for the dotden monorepo.
+#
+# Runs on every pull request and on pushes to main. It installs from the
+# committed, frozen lockfile (so CI can never silently drift from what's in the
+# repo) and then runs type-check, lint, build, and tests on only the *affected*
+# packages via turbo (ADR 0009 monorepo, ADR 0015 supply-chain hardening).
+#
+# The frozen install is itself a supply-chain gate: under pnpm 11 the
+# `pnpm install --frozen-lockfile` step STILL enforces every guard configured
+# in pnpm-workspace.yaml (ADR 0015) —
+#   - minimumReleaseAge (strict): a too-fresh transitive dep hard-fails resolution;
+#   - default-deny build scripts (strictDepBuilds): a dependency with an
+#     install/build script that is NOT in the committed `allowBuilds` map makes
+#     the install exit non-zero (ERR_PNPM_IGNORED_BUILDS), even when frozen;
+#   - nodeLinker: hoisted.
+# So an unapproved build script or a tampered lockfile fails CI at install time,
+# before any task runs.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Least-privilege: CI only needs to read the repo.
+permissions:
+  contents: read
+
+# Don't pile up redundant runs on the same ref; a newer push/PR-update wins.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # turbo --affected needs git history to compute the change set.
+          # Full history guarantees the merge-base (PR) / previous commit (push)
+          # is present even when it's far back; a shallow clone would make turbo
+          # fall back to running every package.
+          fetch-depth: 0
+
+      # corepack ships the exact pnpm version pinned in root package.json
+      # ("packageManager": "pnpm@11.6.0"), so CI and local stay byte-identical.
+      - name: Enable corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # Frozen install = ADR 0015 supply-chain gate (see file header). The
+      # committed allowBuilds map is what lets the default-deny build-script
+      # policy pass non-interactively here; an unapproved script fails the step.
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # On a push to main there is no PR base branch, so turbo's default
+      # `main...HEAD` diff would be empty. Pin the comparison base to the commit
+      # we pushed *from* so a push still validates exactly what changed.
+      # (On pull_request, turbo auto-detects GITHUB_BASE_REF — no override.)
+      - name: Run affected check, build, test
+        env:
+          TURBO_SCM_BASE: ${{ github.event_name == 'push' && github.event.before || '' }}
+        run: pnpm turbo run check:types check:lint build test --affected

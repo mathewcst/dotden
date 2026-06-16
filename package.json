@@ -19,6 +19,7 @@
     "check": "turbo run check:types check:lint",
     "check:types": "turbo run check:types",
     "check:lint": "turbo run check:lint",
+    "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,astro,css,md,json}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,astro,css,md,json}\"",
     "package": "turbo run package"
