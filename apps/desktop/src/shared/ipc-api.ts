@@ -32,6 +32,7 @@ import type {
 } from '../main/foundation/den-service.js'
 import type { ResolutionChoice } from '../main/foundation/conflict-model.js'
 import type { Group, Workspace } from '../main/foundation/myenv-store.js'
+import type { Scope } from '../main/foundation/os-scope.js'
 import type {
   ClaimSuggestion,
   EnvironmentWithAttribution,
@@ -232,6 +233,23 @@ export interface DotdenApi {
      * File's on-disk path is still untouched.
      */
     setFileWorkspace(targetPath: string, workspaceId: string): Promise<void>
+    /**
+     * **Scope a File** to specific OSes (issue 1-15) — a File scoped to other OSes is not
+     * synced/applied where it doesn't belong. Maps to per-OS `.chezmoiignore` (ADR 0003).
+     * The requested Scope is **clamped to the File's inherited Folder/Workspace Scope** in
+     * the main process (narrowable, never broadenable — CONTEXT.md "Scope"); pass `null` to
+     * clear the File's own restriction and inherit only. Returns the resulting EFFECTIVE
+     * Scope so the inspector reflects what was actually applied (which may be narrower than
+     * requested if the request tried to broaden past the Folder). Committed LOCALLY (ADR 0006).
+     */
+    setFileScope(targetPath: string, scope: Scope): Promise<Scope>
+    /**
+     * **Scope a Group (Folder)** to specific OSes (issue 1-15) — its Files and child Groups
+     * inherit the Scope (narrowable, never broadenable). Like {@link DotdenApi.den.setFileScope}
+     * but for a Folder; the request is clamped under the Group's inherited Scope. Returns the
+     * Group's resulting EFFECTIVE Scope. Committed LOCALLY.
+     */
+    setGroupScope(workspaceId: string, groupId: string, scope: Scope): Promise<Scope>
   }
   /**
    * First-run **discovery** operations (issue 1-06), forwarded to `discover:*` IPC

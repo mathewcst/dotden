@@ -19,6 +19,7 @@
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, relative, resolve } from 'node:path'
 import { parseChezmoiStatus } from './chezmoi-status.js'
+import { scopedOutPaths, type Os, type Scope } from './os-scope.js'
 import { runCommand } from './process.js'
 
 /**
@@ -295,13 +296,17 @@ export class ChezmoiAdapter {
   }
 
   /**
-   * Compile the OS Scope feature into chezmoi's `.chezmoiignore` inside the source
-   * dir, so paths scoped to other operating systems are not applied here.
+   * Compile the OS Scope feature into chezmoi's `.chezmoiignore` inside the source dir
+   * (issue 1-15), so paths scoped to other operating systems are not applied here.
    *
-   * The file contents come from {@link renderOsScopeIgnore}; it is fully generated
-   * and overwritten on every call (its header warns against hand-editing).
+   * The file is **fully generated and overwritten** on every call (its header warns against
+   * hand-editing), and it is the SINGLE writer of `.chezmoiignore`: it always re-emits the
+   * `.myenv/` rule (dotden metadata is never a managed target, ADR 0024) PLUS the
+   * scoped-out paths, so it never clobbers `MyenvStore`'s `.myenv/` rule and the two
+   * concerns can't drift. The scoped-out set is computed by {@link scopedOutPaths} from each
+   * path's EFFECTIVE Scope (inheritance pre-folded by the caller).
    *
-   * @param scope The current OS plus the per-path OS scoping to compile.
+   * @param scope The current OS plus the per-path EFFECTIVE OS scoping to compile.
    * @returns Absolute path to the written `.chezmoiignore` file.
    */
   async writeOsScopeIgnore(scope: OsScopeIgnore): Promise<string> {
@@ -439,15 +444,23 @@ function ensureTrailingNewline(text: string): string {
   return `${text.replace(/\n*$/, '')}\n`
 }
 
+/** The relative path dotden's chezmoi-ignored synced-metadata directory lives at (ADR 0024). */
+const MYENV_IGNORE_RULE = '.myenv/'
+
 /**
- * One entry of the OS Scope feature: a managed dotfile and the set of operating
- * systems it is scoped to.
+ * One entry of the OS Scope feature: a managed dotfile/Folder and its **effective** Scope
+ * (issue 1-15).
+ *
+ * `scope` is the path's EFFECTIVE Scope — the OSes it applies on AFTER the caller folded
+ * Folder/Workspace inheritance ({@link import('./os-scope.js').effectiveScope}) — or `null`
+ * for the universal Scope ("applies everywhere"). This adapter does not know the Folder
+ * hierarchy; it only translates already-resolved effective Scopes into ignore entries.
  */
 export interface OsScopedPath {
   /** Destination-relative dotfile path being scoped (e.g. `.config/foo`). */
   readonly targetPath: string
-  /** Platforms on which this path is in scope; on others it is ignored by chezmoi. */
-  readonly oses: readonly NodeJS.Platform[]
+  /** EFFECTIVE Scope: the OSes this path applies on, or `null` for universal. */
+  readonly scope: Scope
 }
 
 /**
@@ -455,31 +468,38 @@ export interface OsScopedPath {
  */
 export interface OsScopeIgnore {
   /** The platform this environment is running on; paths not scoped to it are ignored. */
-  readonly currentOs: NodeJS.Platform
-  /** All OS-scoped paths to consider when building the ignore list. */
+  readonly currentOs: Os
+  /** All OS-scoped paths to consider when building the ignore list (each with its effective Scope). */
   readonly paths: readonly OsScopedPath[]
 }
 
 /**
- * Build the contents of a generated `.chezmoiignore` from an OS Scope.
+ * Build the FULL contents of a generated `.chezmoiignore` from an OS Scope (issue 1-15).
  *
- * Emits exactly the paths NOT scoped to {@link OsScopeIgnore.currentOs} (so chezmoi
- * skips them in this environment), prefixed by a generated-file header that warns
- * the file is owned by dotden and must not be hand-edited. Paths are made relative
- * and forward-slashed because chezmoi's ignore patterns are POSIX-style even on
- * Windows.
+ * Emits, in order:
+ * 1. a generated-file header warning the file is dotden-owned and must not be hand-edited;
+ * 2. the `.myenv/` rule (dotden's synced metadata is never a managed target, ADR 0024), so
+ *    this renderer can be the SINGLE writer of `.chezmoiignore` without dropping that rule;
+ * 3. exactly the paths whose effective Scope does NOT include {@link OsScopeIgnore.currentOs}
+ *    ({@link scopedOutPaths}), so chezmoi skips them in this environment.
  *
- * @param scope The current OS and the per-path OS scoping.
+ * Paths are made relative and forward-slashed because chezmoi's ignore patterns are
+ * POSIX-style even on Windows.
+ *
+ * @param scope The current OS and the per-path EFFECTIVE OS scoping.
  * @returns The full `.chezmoiignore` text, header comment included, newline-terminated.
  */
 export function renderOsScopeIgnore(scope: OsScopeIgnore): string {
-  const ignored = scope.paths
-    .filter((path) => !path.oses.includes(scope.currentOs))
-    .map((path) => relative('.', path.targetPath).replaceAll('\\', '/'))
+  const ignored = scopedOutPaths(scope.paths, scope.currentOs).map((targetPath) =>
+    relative('.', targetPath).replaceAll('\\', '/'),
+  )
 
   return [
-    '# Generated by dotden from File/Folder OS Scope. Do not edit by hand.',
-    "# Paths listed here are outside this environment's Scope.",
+    '# Generated by dotden. Do not edit by hand.',
+    '# dotden owns this file: it keeps its synced metadata out of chezmoi, and lists',
+    "# the Files/Folders scoped to other operating systems than this environment's.",
+    // The synced-metadata rule ALWAYS comes first so it survives every regeneration.
+    MYENV_IGNORE_RULE,
     ...ignored,
     '',
   ].join('\n')

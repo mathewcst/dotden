@@ -46,6 +46,7 @@ import {
   DEFAULT_AUTOMATION_LEVEL,
   type AutomationLevel,
 } from './automation-policy.js'
+import type { Os, Scope } from './os-scope.js'
 
 /** Construction wiring for a {@link DenService}, bound to one environment's dirs. */
 export interface DenServiceOptions {
@@ -324,9 +325,18 @@ export interface FileTreeEntry {
    * `true` when this File is scoped out of THIS environment's OS and therefore
    * ignored by chezmoi here (it appears in `chezmoi ignored`). The renderer renders
    * the row **muted/ignored** (issue 1-07 owns the muted rendering; the OS-Scope rule
-   * that produces it lands in issue 1-15).
+   * that produces it is issue 1-15). This is the FAITHFUL signal — it comes from
+   * `chezmoi ignored` over the generated `.chezmoiignore`, not from re-deriving Scope.
    */
   readonly muted: boolean
+  /**
+   * The File's **effective OS Scope** after inheritance + narrowing (issue 1-15): the OSes
+   * it applies on, or `null` for the universal Scope ("applies everywhere"). Carried so the
+   * inspector can render the Scope chips and the Scope editor can show the current value
+   * without a second round-trip. Distinct from {@link muted}: `muted` is "ignored on THIS
+   * OS right now"; `scope` is the full applicability set across OSes.
+   */
+  readonly scope: Scope
 }
 
 /**
@@ -1094,6 +1104,15 @@ export class DenService {
    * still appear, defaulted to the default Workspace, so a managed File never silently
    * disappears from the tree (never fail silently).
    *
+   * **OS Scope (issue 1-15).** A File scoped out of THIS environment's OS lands in the
+   * generated `.chezmoiignore`, and chezmoi treats an ignored File as **unmanaged here** —
+   * so it drops out of `chezmoi managed`. If the tree were built from `managed` alone, a
+   * scoped-out File would *vanish* rather than show **muted**. So the row set is the UNION
+   * of `chezmoi managed` (applies here) and the synced `.myenv/` placements (the Den's known
+   * Files): a placed File missing from `managed` is exactly a scoped-out File, rendered muted
+   * (it appears in `chezmoi ignored`). The muted flag stays FAITHFUL — it is membership in
+   * `chezmoi ignored`, OR (for the scoped-out, hence unmanaged, File) placed-but-not-managed.
+   *
    * No `traceId` parameter: this read-only query emits no wide event, and the
    * IpcBridge already asserts the `_trace` envelope for the channel (like the other
    * read-only `discover:*`/`env:*` channels) — there is nothing here to correlate it to.
@@ -1110,8 +1129,14 @@ export class DenService {
     // Index the local-axis status + the muted set + placements for O(1) per-File joins.
     const statusByPath = new Map(parseChezmoiStatus(statusRaw).map((s) => [s.path, s.status]))
     const ignoredSet = new Set(ignored)
+    const managedSet = new Set(managed)
     const placementOf = new Map(workspacesDoc.placements.map((p) => [p.targetPath, p]))
-    const files: FileTreeEntry[] = managed.map((targetPath) => {
+    // The row set is the UNION of "managed here" and "placed in the Den" so a scoped-out
+    // (and therefore unmanaged-here) File still shows as a muted row instead of vanishing.
+    const allPaths = [
+      ...new Set([...managed, ...workspacesDoc.placements.map((p) => p.targetPath)]),
+    ]
+    const files: FileTreeEntry[] = allPaths.map((targetPath) => {
       const placement = placementOf.get(targetPath)
       return {
         targetPath,
@@ -1120,7 +1145,12 @@ export class DenService {
         // An unplaced/ungrouped File sits at its Workspace root (null).
         groupId: placement?.groupId ?? null,
         status: statusByPath.get(targetPath) ?? null,
-        muted: ignoredSet.has(targetPath),
+        // FAITHFUL muted signal (issue 1-15): the File appears in `chezmoi ignored`, OR it is
+        // placed in the Den but absent from `chezmoi managed` (scoped out → unmanaged here).
+        // Either way chezmoi will NOT apply it on this environment, so the row is dimmed.
+        muted: ignoredSet.has(targetPath) || !managedSet.has(targetPath),
+        // The File's effective OS Scope after inheritance, for the inspector chips/editor.
+        scope: this.store.effectiveScopeOf(workspacesDoc, targetPath),
       }
     })
     return { files, workspaces: workspacesDoc.workspaces }
@@ -1259,19 +1289,121 @@ export class DenService {
     }
   }
 
+  // ── OS Scope (issue 1-15) ──
+  // Scope is the OS-applicability axis (CONTEXT.md "Scope"): the OSes a File/Folder applies
+  // on, inherited Workspace → Group → File and narrowable but never broadenable. The intent
+  // is user-authored, stored in `.myenv/`; the realized rules are native `.chezmoiignore`
+  // (ADR 0024). Setting a Scope (1) clamps the request under the inherited ceiling in the
+  // store (the narrowing invariant), then (2) re-compiles `.chezmoiignore` from the WHOLE
+  // Den's effective Scopes so chezmoi ignores exactly the out-of-OS Files here, then (3)
+  // commits the metadata + the regenerated ignore LOCALLY so the Scope travels (ADR 0006).
+
+  /**
+   * **Scope a File** to specific OSes (issue 1-15): a File scoped to other OSes is not
+   * applied where it doesn't belong.
+   *
+   * Maps faithfully to per-OS `.chezmoiignore` (ADR 0003, CONTEXT.md mapping). The request is
+   * **clamped to the File's inherited Folder/Workspace Scope** by {@link MyenvStore.setFileScope}
+   * (narrowable, never broadenable — issue 1-15), then the generated `.chezmoiignore` is
+   * re-compiled from every File's effective Scope and committed with the `.myenv/` intent. The
+   * Commit is LOCAL until the next Sync (ADR 0006), which carries the Scope to other environments.
+   *
+   * @param targetPath The managed File to scope (must already be placed).
+   * @param scope The requested Scope (a subset of OSes), or `null` to clear the File's own
+   *   restriction and fall back to pure inheritance.
+   * @param traceId Correlation id for the wide event.
+   * @returns The File's resulting EFFECTIVE Scope after clamping + inheritance.
+   */
+  async setFileScope(targetPath: string, scope: Scope, traceId: string): Promise<Scope> {
+    const span = this.tracer?.startOperation('organize', traceId)
+    try {
+      // 1) Clamp + persist the File's own Scope under its inherited ceiling (the invariant).
+      const effective = await this.store.setFileScope(targetPath, scope)
+      // 2) Re-compile the native `.chezmoiignore` from the WHOLE Den's effective Scopes.
+      await this.regenerateOsScopeIgnore()
+      // 3) Commit the intent (`.myenv/`) + the regenerated ignore LOCALLY so the Scope travels.
+      await this.commitMetadata(`Scope ${targetPath}`)
+      span?.setAttribute('fileCount', 1)
+      span?.end('ok')
+      return effective
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * **Scope a Folder (Group)** to specific OSes (issue 1-15) — its Files and child Groups
+   * inherit the Scope, narrowable but never broadenable.
+   *
+   * Like {@link setFileScope} but for a Group: the request is clamped under the Group's
+   * inherited ceiling, then the ignore file is re-compiled (every File under the Group now
+   * reflects the narrowing) and committed LOCALLY.
+   *
+   * @param workspaceId The Workspace the Group lives in.
+   * @param groupId The Group to scope.
+   * @param scope The requested Scope, or `null` to clear the Group's own restriction.
+   * @param traceId Correlation id for the wide event.
+   * @returns The Group's resulting EFFECTIVE Scope after clamping + inheritance.
+   */
+  async setGroupScope(
+    workspaceId: string,
+    groupId: string,
+    scope: Scope,
+    traceId: string,
+  ): Promise<Scope> {
+    const span = this.tracer?.startOperation('organize', traceId)
+    try {
+      const effective = await this.store.setGroupScope(workspaceId, groupId, scope)
+      await this.regenerateOsScopeIgnore()
+      await this.commitMetadata(`Scope Group ${groupId}`)
+      span?.end('ok')
+      return effective
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * Re-compile the native `.chezmoiignore` from the WHOLE Den's per-File **effective** OS
+   * Scopes for THIS environment (issue 1-15).
+   *
+   * Reads every placement, folds each File's inheritance into an effective Scope
+   * ({@link MyenvStore.effectiveScopeOf}), and hands the set to
+   * {@link ChezmoiAdapter.writeOsScopeIgnore}, which emits the `.myenv/` rule plus exactly
+   * the paths scoped out of this environment's OS. The adapter is the single writer of the
+   * file, so this never clobbers the `.myenv/` rule. Idempotent — safe to call after any
+   * Scope/placement change to keep the ignore in lock-step with the synced intent.
+   */
+  private async regenerateOsScopeIgnore(): Promise<void> {
+    const doc = await this.store.readWorkspaces()
+    await this.chezmoi.writeOsScopeIgnore({
+      currentOs: this.options.environment.os as Os,
+      paths: doc.placements.map((p) => ({
+        targetPath: p.targetPath,
+        scope: this.store.effectiveScopeOf(doc, p.targetPath),
+      })),
+    })
+  }
+
   /**
    * Commit a `.myenv/`-only metadata edit LOCALLY (ADR 0006).
    *
-   * The Workspace/Group operations touch only `.myenv/workspaces.json` (and the
-   * `.chezmoiignore` that keeps `.myenv/` out of chezmoi's managed set) — never chezmoi
-   * source state or any file on disk. Staging just those paths keeps the commit scoped
-   * to the organization change. Local until the next Sync, which is what carries the
-   * tree to a second environment (ADR 0024).
+   * The Workspace/Group/Scope operations touch only `.myenv/workspaces.json` and the
+   * generated `.chezmoiignore` (which keeps `.myenv/` out of chezmoi's managed set AND
+   * carries the OS-Scope rules, issue 1-15) — never chezmoi source state or any file on
+   * disk. Staging just those paths keeps the commit scoped to the change. Local until the
+   * next Sync, which is what carries the tree + Scope to a second environment (ADR 0024).
    *
    * @param message The git commit subject (e.g. "Create Workspace Work").
    */
   private async commitMetadata(message: string): Promise<void> {
-    await this.git.commit(['.myenv', '.chezmoiignore'], message)
+    // `commitIfChanged`, not `commit`: an OS-Scope edit can be a CLAMP that leaves the
+    // synced model byte-for-byte unchanged (a request to broaden past a Folder is clamped to
+    // the existing Scope, issue 1-15), so there may be nothing to record. A plain commit
+    // would fail "nothing to commit"; the idempotent variant makes that a clean no-op.
+    await this.git.commitIfChanged(['.myenv', '.chezmoiignore'], message)
   }
 
   /** Read the synced model (this environment's registry entry + the Workspace doc). */

@@ -41,8 +41,8 @@ function witnessFor(targetPath: string): AppliesHere {
     subscribedWorkspaces: ['personal'],
   }
   const workspaces: WorkspacesDoc = {
-    workspaces: [{ id: 'personal', label: 'Personal', groups: [] }],
-    placements: [{ targetPath, workspaceId: 'personal', groupId: null }],
+    workspaces: [{ id: 'personal', label: 'Personal', groups: [], scope: null }],
+    placements: [{ targetPath, workspaceId: 'personal', groupId: null, scope: null }],
   }
   const result = new ApplicabilityResolver(environment, workspaces).resolve(targetPath)
   if (!isAppliesHere(result)) throw new Error(`test setup: ${targetPath} should be applicable`)

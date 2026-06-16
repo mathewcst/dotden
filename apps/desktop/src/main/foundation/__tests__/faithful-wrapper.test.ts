@@ -89,18 +89,50 @@ describe('ChezmoiAdapter faithful verb mapping', () => {
     const ignored = await repo.chezmoi.writeOsScopeIgnore({
       currentOs: 'linux',
       paths: [
-        { targetPath: '.zshrc', oses: ['linux', 'darwin'] },
-        { targetPath: '.config/powershell/profile.ps1', oses: ['win32'] },
+        { targetPath: '.zshrc', scope: ['linux', 'darwin'] },
+        { targetPath: '.config/powershell/profile.ps1', scope: ['win32'] },
       ],
     })
 
-    await expect(readFile(ignored, 'utf8')).resolves.toContain('.config/powershell/profile.ps1')
+    const contents = await readFile(ignored, 'utf8')
+    // The win-only File is ignored on linux…
+    expect(contents).toContain('.config/powershell/profile.ps1')
+    // …the linux-scoped File is NOT…
+    expect(contents).not.toContain('.zshrc')
+    // …and the generated file is the SINGLE writer of `.chezmoiignore`, so it always
+    // re-emits the `.myenv/` rule (dotden metadata is never a managed target, ADR 0024).
+    expect(contents).toContain('.myenv/')
+
+    // A universally-scoped File (null) is never ignored on any OS.
     expect(
       renderOsScopeIgnore({
-        currentOs: 'linux',
-        paths: [{ targetPath: '.zshrc', oses: ['linux'] }],
+        currentOs: 'win32',
+        paths: [{ targetPath: '.zshrc', scope: null }],
       }),
     ).not.toContain('.zshrc')
+  })
+
+  it('a scoped-out path actually shows up in `chezmoi ignored` (the muted set, issue 1-07/1-15)', async () => {
+    // Track two Files, then scope one to a DIFFERENT OS than this environment. The
+    // generated `.chezmoiignore` must make `chezmoi ignored` report exactly that File —
+    // the real signal that drives the muted/ignored tree rendering.
+    const otherOs = process.platform === 'win32' ? 'linux' : 'win32'
+    await writeFile(join(repo.home, '.zshrc'), 'keep me\n')
+    await writeFile(join(repo.home, '.other-os-file'), 'scope me out\n')
+    await repo.chezmoi.track('.zshrc')
+    await repo.chezmoi.track('.other-os-file')
+
+    await repo.chezmoi.writeOsScopeIgnore({
+      currentOs: process.platform as never,
+      paths: [
+        { targetPath: '.zshrc', scope: null }, // universal → applied here
+        { targetPath: '.other-os-file', scope: [otherOs] }, // other-OS-only → ignored here
+      ],
+    })
+
+    const ignored = await repo.chezmoi.ignoredPaths()
+    expect(ignored).toContain('.other-os-file')
+    expect(ignored).not.toContain('.zshrc')
   })
 })
 

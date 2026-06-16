@@ -27,6 +27,7 @@ import { RowContextMenu, type RowVerb } from '@/components/RowContextMenu'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { WorkspaceSidebar } from '@/components/WorkspaceSidebar'
 import { FileRow } from '@/components/FileRow'
+import { ScopeEditor } from '@/components/ScopeEditor'
 import { IncomingBanner } from '@/components/IncomingBanner'
 import { ReviewApply } from '@/components/ReviewApply'
 import { ConflictResolver } from '@/components/ConflictResolver'
@@ -39,6 +40,7 @@ import type {
 } from '../../main/foundation/den-service'
 import type { Workspace as WorkspaceModel } from '../../main/foundation/myenv-store'
 import type { AutomationLevel } from '../../main/foundation/automation-policy'
+import type { Scope } from '../../main/foundation/os-scope'
 
 /** Discriminates which environment's role this shell is driving (A vs B copy/actions). */
 type Role = 'a' | 'b'
@@ -482,6 +484,21 @@ export function Workspace({ role }: { role: Role }) {
     [run, reloadTree, selected],
   )
 
+  // Scope the selected File to specific OSes (issue 1-15). The main process CLAMPS the
+  // request to the File's inherited Folder/Workspace Scope (narrowable, never broadenable)
+  // and re-compiles the native `.chezmoiignore`, so we reload the tree to reflect the
+  // EFFECTIVE Scope that was actually applied + the new muted state on this environment.
+  const scopeSelectedFile = useCallback(
+    (scope: Scope) => {
+      if (!selected) return
+      void run('organize', async () => {
+        await window.dotden.den.setFileScope(selected, scope)
+        await reloadTree()
+      })
+    },
+    [run, reloadTree, selected],
+  )
+
   // The header/inspector status pill for the selected File (the honest dotden state).
   const selectedFile = files.find((f) => f.targetPath === selected)
   const selectedIncoming = incoming.find((i) => i.targetPath === selected)
@@ -882,11 +899,16 @@ export function Workspace({ role }: { role: Role }) {
               <dt className="text-muted-foreground">Scope</dt>
               <dd className="text-right">
                 {selectedFile?.muted ? (
+                  // Scoped out of THIS OS → chezmoi ignores it here; the tree dims the row.
                   <span className="border-border text-muted-foreground rounded border px-1.5 py-0.5">
-                    out of OS
+                    out of this OS
                   </span>
+                ) : selectedFile && selectedFile.scope !== null ? (
+                  // In scope here, but narrowed to a specific OS set (the effective Scope).
+                  <span className="text-muted-foreground">{selectedFile.scope.join(', ')}</span>
                 ) : (
-                  <span className="text-muted-foreground">This OS</span>
+                  // The universal Scope (null) applies on every OS.
+                  <span className="text-muted-foreground">Every OS</span>
                 )}
               </dd>
               <dt className="text-muted-foreground">Path</dt>
@@ -928,6 +950,18 @@ export function Workspace({ role }: { role: Role }) {
                 </select>
               )}
             </section>
+          ) : null}
+
+          {/* OS SCOPE — scope the selected File to specific OSes (issue 1-15). The main
+              process clamps the request to the File's inherited Folder/Workspace Scope
+              (narrowable, never broadenable) and re-compiles the native `.chezmoiignore`;
+              a scoped-out File renders muted here. Only for a managed File on env A. */}
+          {role === 'a' && selectedFile ? (
+            <ScopeEditor
+              scope={selectedFile.scope}
+              disabled={busy !== null}
+              onChange={scopeSelectedFile}
+            />
           ) : null}
 
           {role === 'a' && lastCommitMessage ? (

@@ -21,6 +21,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
+import { effectiveScope, narrowScope, type Scope } from './os-scope.js'
 
 /**
  * The default Workspace id every Den is seeded with.
@@ -54,6 +55,16 @@ export interface Group {
    * directly under its Workspace. Nesting is expressed purely through this link.
    */
   readonly parentId: string | null
+  /**
+   * This Group's **OS Scope** — the set of OSes Files under it apply on, or `null` for
+   * the universal (unrestricted) Scope (issue 1-15, CONTEXT.md "Scope"). A Group acting
+   * as a Folder carries Scope its children inherit and may narrow but never broaden
+   * ({@link import('./os-scope.js').narrowScope}). UNLIKE access (Workspace) and on-disk
+   * path, Scope is an applicability axis: a Group's Scope changes WHERE its Files apply,
+   * not which Workspace owns them or where they land. Defaults to `null` for a Group
+   * written before this slice (forward-compat in {@link MyenvStore.readWorkspaces}).
+   */
+  readonly scope: Scope
 }
 
 /**
@@ -80,6 +91,16 @@ export interface FilePlacement {
    * never affects access (which is `workspaceId`) or the File's path (`targetPath`).
    */
   readonly groupId: string | null
+  /**
+   * This File's OWN declared **OS Scope** — the OSes it applies on, or `null` for the
+   * universal Scope (issue 1-15). This is the File's *requested* Scope; its EFFECTIVE
+   * Scope is this **narrowed by** every ancestor Folder/Workspace Scope it inherits, so a
+   * File can restrict itself further than its Folder but never broaden past it
+   * ({@link MyenvStore.effectiveScopeOf}). Defaults to `null` (applies everywhere) — dotden
+   * never silently scopes a freshly Tracked File out. Forward-compat: a placement written
+   * before this slice has no `scope` and reads back as `null`.
+   */
+  readonly scope: Scope
 }
 
 /** A top-level Workspace: the user-named container and environment-access boundary (ADR 0005). */
@@ -94,6 +115,14 @@ export interface Workspace {
    * the Workspace's access boundary (ADR 0005).
    */
   readonly groups: readonly Group[]
+  /**
+   * This Workspace's **OS Scope** — the root of the inheritance chain for every File and
+   * Group inside it (issue 1-15), or `null` for the universal Scope (the default). A
+   * Workspace-level Scope is the outermost narrowing: its Groups and Files inherit it and
+   * may narrow further but never broaden past it. Forward-compat: a Workspace written
+   * before this slice has no `scope` and reads back as `null`.
+   */
+  readonly scope: Scope
 }
 
 /** The synced Workspace tree + File placements (`workspaces.json`). */
@@ -164,9 +193,10 @@ export class MyenvStore {
     const existing = await this.readWorkspaces()
     if (existing.workspaces.length === 0) {
       await this.writeWorkspaces({
-        // The single default Workspace seeds with no Groups; the UI keeps the whole
-        // Workspace concept invisible while only this one exists (issue 1-14).
-        workspaces: [{ id: DEFAULT_WORKSPACE_ID, label: 'Personal', groups: [] }],
+        // The single default Workspace seeds with no Groups and the universal Scope
+        // (`null` — applies on every OS); the UI keeps the whole Workspace concept
+        // invisible while only this one exists (issue 1-14).
+        workspaces: [{ id: DEFAULT_WORKSPACE_ID, label: 'Personal', groups: [], scope: null }],
         placements: [],
       })
     }
@@ -201,6 +231,10 @@ export class MyenvStore {
           targetPath,
           workspaceId,
           groupId: previous?.workspaceId === workspaceId ? (previous?.groupId ?? null) : null,
+          // Re-Tracking is sticky: preserve the File's own declared Scope so it is never
+          // silently widened back to universal. A brand-new File starts universal (`null`)
+          // — dotden never scopes a freshly Tracked File out (issue 1-15).
+          scope: previous?.scope ?? null,
         },
       ],
     })
@@ -222,7 +256,8 @@ export class MyenvStore {
    */
   async createWorkspace(label: string): Promise<Workspace> {
     const doc = await this.readWorkspaces()
-    const workspace: Workspace = { id: `ws-${randomUUID()}`, label, groups: [] }
+    // A new Workspace starts with the universal Scope (`null`); the user narrows it later.
+    const workspace: Workspace = { id: `ws-${randomUUID()}`, label, groups: [], scope: null }
     await this.writeWorkspaces({ ...doc, workspaces: [...doc.workspaces, workspace] })
     return workspace
   }
@@ -258,7 +293,9 @@ export class MyenvStore {
         `Cannot nest under Group "${parentId}": it is not a Group of Workspace "${workspaceId}".`,
       )
     }
-    const group: Group = { id: `grp-${randomUUID()}`, label, parentId }
+    // A new Group starts with the universal Scope (`null`); it inherits its ancestors'
+    // Scope as its EFFECTIVE Scope until the user narrows it (issue 1-15).
+    const group: Group = { id: `grp-${randomUUID()}`, label, parentId, scope: null }
     const workspaces = doc.workspaces.map((w) =>
       w.id === workspaceId ? { ...w, groups: [...w.groups, group] } : w,
     )
@@ -326,6 +363,143 @@ export class MyenvStore {
     await this.writeWorkspaces({ ...doc, placements })
   }
 
+  // ── OS Scope (issue 1-15) ──
+  // Scope is the OS-applicability axis (CONTEXT.md "Scope"): the set of OSes a File or
+  // Folder applies on, inherited down the Workspace → Group → File chain and narrowable
+  // but never broadenable. The realized rules are native `.chezmoiignore` (ADR 0024); the
+  // user-authored intent lives here in `.myenv/`. The narrowing math lives in os-scope.ts.
+
+  /**
+   * Set a managed File's **OS Scope**, clamped so it can NARROW but never BROADEN past the
+   * Scope it inherits from its Folder/Workspace (issue 1-15; CONTEXT.md "Scope").
+   *
+   * The `requested` Scope is intersected with the File's inherited parent Scope
+   * ({@link narrowScope}), so a request for an OS the parent does not allow is silently
+   * clamped away rather than honored as a widening — the "never broaden" invariant is
+   * enforced by the math, not a guard a caller could forget. Pass `null` to clear the
+   * File's own restriction and fall back to pure inheritance.
+   *
+   * @param targetPath The managed File to scope (must already be placed).
+   * @param requested The File's requested Scope (`null` ⇒ inherit only, no own restriction).
+   * @returns The File's resulting EFFECTIVE Scope after clamping + inheritance.
+   * @throws Error when the File is not placed (never fail silently).
+   */
+  async setFileScope(targetPath: string, requested: Scope): Promise<Scope> {
+    const doc = await this.readWorkspaces()
+    const placement = doc.placements.find((p) => p.targetPath === targetPath)
+    if (!placement) {
+      throw new Error(`Cannot scope "${targetPath}": it is not placed in any Workspace.`)
+    }
+    // The Scope this File inherits from its ancestors (Workspace + Group chain), WITHOUT its
+    // own current declared Scope — the ceiling the request is clamped under.
+    const parentScope = this.inheritedScope(doc, placement.workspaceId, placement.groupId)
+    // Narrow the request under the inherited ceiling: the stored own-Scope can only ever be
+    // a subset of what the parent allows, so the File can never broaden past its Folder.
+    const clamped = narrowScope(parentScope, requested)
+    const placements = doc.placements.map((p) =>
+      p.targetPath === targetPath ? { ...p, scope: clamped } : p,
+    )
+    await this.writeWorkspaces({ ...doc, placements })
+    // The effective Scope equals the clamped own-Scope (already narrowed under the parent).
+    return clamped
+  }
+
+  /**
+   * Set a **Group's** (Folder's) OS Scope, clamped so it can NARROW but never BROADEN past
+   * the Scope it inherits from its parent Group/Workspace (issue 1-15).
+   *
+   * Like {@link setFileScope}, the request is intersected with the Group's inherited
+   * ceiling. Narrowing a Group narrows every File and child Group under it (they inherit it),
+   * which is exactly the Folder-Scope-is-inherited-by-children behavior the issue requires.
+   *
+   * @param workspaceId The Workspace the Group lives in.
+   * @param groupId The Group to scope.
+   * @param requested The Group's requested Scope (`null` ⇒ inherit only).
+   * @returns The Group's resulting EFFECTIVE Scope after clamping + inheritance.
+   * @throws Error when the Workspace or Group does not exist.
+   */
+  async setGroupScope(workspaceId: string, groupId: string, requested: Scope): Promise<Scope> {
+    const doc = await this.readWorkspaces()
+    const workspace = doc.workspaces.find((w) => w.id === workspaceId)
+    const group = workspace?.groups.find((g) => g.id === groupId)
+    if (!workspace || !group) {
+      throw new Error(
+        `Cannot scope Group "${groupId}": it is not a Group of Workspace "${workspaceId}".`,
+      )
+    }
+    // The Group's inherited ceiling = the Workspace Scope narrowed by its PARENT Group chain
+    // (excluding this Group's own current Scope, so re-scoping is idempotent under the ceiling).
+    const parentScope = this.inheritedScope(doc, workspaceId, group.parentId)
+    const clamped = narrowScope(parentScope, requested)
+    const workspaces = doc.workspaces.map((w) =>
+      w.id === workspaceId
+        ? { ...w, groups: w.groups.map((g) => (g.id === groupId ? { ...g, scope: clamped } : g)) }
+        : w,
+    )
+    await this.writeWorkspaces({ ...doc, workspaces })
+    return clamped
+  }
+
+  /**
+   * The **effective OS Scope** of a managed File after inheritance + narrowing (issue 1-15).
+   *
+   * Folds the whole ancestor chain — Workspace Scope → each Group from the outermost down to
+   * the File's own Group → the File's own declared Scope — by intersection
+   * ({@link effectiveScope}), so the result is a subset of every ancestor's Scope. This is
+   * the single source of "which OSes does this File actually apply on?", consumed by the
+   * scope→`.chezmoiignore` translation and the `appliesHere` OS clause.
+   *
+   * An unplaced File (managed on disk but missing from `.myenv/`) is treated as universally
+   * scoped (`null`) so it never silently disappears from a Scope-aware surface.
+   *
+   * @param doc The current Workspace doc (read once by the caller, passed in to avoid re-I/O).
+   * @param targetPath The managed File whose effective Scope to compute.
+   * @returns The File's effective Scope (`null` = applies everywhere).
+   */
+  effectiveScopeOf(doc: WorkspacesDoc, targetPath: string): Scope {
+    const placement = doc.placements.find((p) => p.targetPath === targetPath)
+    if (!placement) return null
+    // Inherited Scope (Workspace + the Group chain up to and including the File's Group),
+    // then narrowed by the File's OWN declared Scope.
+    const inherited = this.inheritedScope(doc, placement.workspaceId, placement.groupId)
+    return narrowScope(inherited, placement.scope)
+  }
+
+  /**
+   * Compute the Scope a File or Group **inherits** — the Workspace Scope narrowed down the
+   * chain of Group ancestors up to (and INCLUDING) `groupId` — WITHOUT the leaf's own Scope.
+   *
+   * Building the chain from the outermost ancestor inward and folding by intersection
+   * realizes "a Folder's Scope is inherited by its children, narrowable but never
+   * broadenable" at arbitrary depth. Passing `groupId = null` returns just the Workspace
+   * Scope (a File/Group directly under the Workspace inherits only that).
+   *
+   * @param doc The current Workspace doc.
+   * @param workspaceId The owning Workspace.
+   * @param groupId The deepest Group in the chain to include, or `null` for the Workspace root.
+   * @returns The inherited (ancestor) Scope before the leaf narrows it further.
+   */
+  private inheritedScope(doc: WorkspacesDoc, workspaceId: string, groupId: string | null): Scope {
+    const workspace = doc.workspaces.find((w) => w.id === workspaceId)
+    // Walk from the leaf Group up to the Workspace root, collecting Group Scopes, then
+    // reverse so the chain runs outermost → innermost for the inheritance fold.
+    const chain: Scope[] = [workspace?.scope ?? null]
+    const ancestors: Scope[] = []
+    let current = groupId
+    const seen = new Set<string>() // guard against a malformed parent cycle (never loop forever).
+    while (current !== null && !seen.has(current)) {
+      seen.add(current)
+      const group = workspace?.groups.find((g) => g.id === current)
+      if (!group) break
+      ancestors.push(group.scope)
+      current = group.parentId
+    }
+    // `ancestors` is innermost → outermost; reverse so the Workspace-then-outer-then-inner
+    // order matches `effectiveScope`'s outermost-first contract.
+    chain.push(...ancestors.reverse())
+    return effectiveScope(chain)
+  }
+
   /**
    * Drop a File's placement from the Workspace tree — the synced half of the
    * **Untrack** (`forget`) and **Delete everywhere** (`destroy`) verbs (CONTEXT.md).
@@ -371,8 +545,19 @@ export class MyenvStore {
     const raw = await this.readJson<WorkspacesDoc>(WORKSPACES_FILE)
     if (!raw) return { workspaces: [], placements: [] }
     return {
-      workspaces: raw.workspaces.map((w) => ({ ...w, groups: w.groups ?? [] })),
-      placements: raw.placements.map((p) => ({ ...p, groupId: p.groupId ?? null })),
+      // Default `groups`/`scope`/`groupId` for docs written before the 1-14/1-15 slices so
+      // an older Den loads forward-compat: a missing Scope is the universal Scope (`null`),
+      // i.e. "applies everywhere" — never silently scoping an old File out (issue 1-15).
+      workspaces: raw.workspaces.map((w) => ({
+        ...w,
+        groups: (w.groups ?? []).map((g) => ({ ...g, scope: g.scope ?? null })),
+        scope: w.scope ?? null,
+      })),
+      placements: raw.placements.map((p) => ({
+        ...p,
+        groupId: p.groupId ?? null,
+        scope: p.scope ?? null,
+      })),
     }
   }
 

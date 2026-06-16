@@ -30,12 +30,12 @@ describe('SyncEngine incoming-clean routing (ADR 0008 load-bearing)', () => {
   it('plans Apply only for incoming-clean Files in a subscribed Workspace', () => {
     const workspaces: WorkspacesDoc = {
       workspaces: [
-        { id: 'personal', label: 'Personal', groups: [] },
-        { id: 'work', label: 'Work', groups: [] },
+        { id: 'personal', label: 'Personal', groups: [], scope: null },
+        { id: 'work', label: 'Work', groups: [], scope: null },
       ],
       placements: [
-        { targetPath: '.zshrc', workspaceId: 'personal', groupId: null },
-        { targetPath: '.work-only', workspaceId: 'work', groupId: null },
+        { targetPath: '.zshrc', workspaceId: 'personal', groupId: null, scope: null },
+        { targetPath: '.work-only', workspaceId: 'work', groupId: null, scope: null },
       ],
     }
     // Subscribed to 'personal' only — '.work-only' must never be applied here.
@@ -55,8 +55,8 @@ describe('SyncEngine incoming-clean routing (ADR 0008 load-bearing)', () => {
 
   it('never auto-resolves a Conflict: a conflicting File is deferred, never planned', () => {
     const workspaces: WorkspacesDoc = {
-      workspaces: [{ id: 'personal', label: 'Personal', groups: [] }],
-      placements: [{ targetPath: '.zshrc', workspaceId: 'personal', groupId: null }],
+      workspaces: [{ id: 'personal', label: 'Personal', groups: [], scope: null }],
+      placements: [{ targetPath: '.zshrc', workspaceId: 'personal', groupId: null, scope: null }],
     }
     const engine = new SyncEngine({ environment: env(['personal']), workspaces })
 
@@ -73,8 +73,8 @@ describe('SyncEngine incoming-clean routing (ADR 0008 load-bearing)', () => {
 
   it('routes an incoming deletion as a first-class plan item that requires confirmation (invariant #4)', () => {
     const workspaces: WorkspacesDoc = {
-      workspaces: [{ id: 'personal', label: 'Personal', groups: [] }],
-      placements: [{ targetPath: '.zshrc', workspaceId: 'personal', groupId: null }],
+      workspaces: [{ id: 'personal', label: 'Personal', groups: [], scope: null }],
+      placements: [{ targetPath: '.zshrc', workspaceId: 'personal', groupId: null, scope: null }],
     }
     const engine = new SyncEngine({ environment: env(['personal']), workspaces })
 
@@ -93,8 +93,8 @@ describe('SyncEngine incoming-clean routing (ADR 0008 load-bearing)', () => {
 
   it('blocks an incoming change to a File with an uncommitted local edit (invariant #2, no silent overwrite)', () => {
     const workspaces: WorkspacesDoc = {
-      workspaces: [{ id: 'personal', label: 'Personal', groups: [] }],
-      placements: [{ targetPath: '.zshrc', workspaceId: 'personal', groupId: null }],
+      workspaces: [{ id: 'personal', label: 'Personal', groups: [], scope: null }],
+      placements: [{ targetPath: '.zshrc', workspaceId: 'personal', groupId: null, scope: null }],
     }
     const engine = new SyncEngine({ environment: env(['personal']), workspaces })
 
@@ -113,10 +113,10 @@ describe('SyncEngine incoming-clean routing (ADR 0008 load-bearing)', () => {
   it('a non-applicable incoming deletion is deferred, never planned (invariant #3 still gates deletions)', () => {
     const workspaces: WorkspacesDoc = {
       workspaces: [
-        { id: 'personal', label: 'Personal', groups: [] },
-        { id: 'work', label: 'Work', groups: [] },
+        { id: 'personal', label: 'Personal', groups: [], scope: null },
+        { id: 'work', label: 'Work', groups: [], scope: null },
       ],
-      placements: [{ targetPath: '.work-only', workspaceId: 'work', groupId: null }],
+      placements: [{ targetPath: '.work-only', workspaceId: 'work', groupId: null, scope: null }],
     }
     // Subscribed to 'personal' only — a deletion of a 'work' File must never be planned here.
     const engine = new SyncEngine({ environment: env(['personal']), workspaces })
@@ -144,10 +144,10 @@ describe('SyncEngine incoming-clean routing (ADR 0008 load-bearing)', () => {
       const subscribed = workspaceIds.filter(() => rng() < 0.5)
       const placements = workspaceIds.flatMap((workspaceId, index) => {
         if (rng() < 0.4) return []
-        return [{ targetPath: `.file-${index}`, workspaceId, groupId: null }]
+        return [{ targetPath: `.file-${index}`, workspaceId, groupId: null, scope: null }]
       })
       const workspaces: WorkspacesDoc = {
-        workspaces: workspaceIds.map((id) => ({ id, label: id, groups: [] })),
+        workspaces: workspaceIds.map((id) => ({ id, label: id, groups: [], scope: null })),
         placements,
       }
       const engine = new SyncEngine({ environment: env(subscribed), workspaces })
@@ -202,8 +202,8 @@ describe('SyncEngine incoming-clean routing (ADR 0008 load-bearing)', () => {
 
 describe('SyncEngine conflict-resolved routing (ADR 0008 invariant #1, load-bearing)', () => {
   const workspaces: WorkspacesDoc = {
-    workspaces: [{ id: 'personal', label: 'Personal', groups: [] }],
-    placements: [{ targetPath: '.zshrc', workspaceId: 'personal', groupId: null }],
+    workspaces: [{ id: 'personal', label: 'Personal', groups: [], scope: null }],
+    placements: [{ targetPath: '.zshrc', workspaceId: 'personal', groupId: null, scope: null }],
   }
 
   /** Mint a genuine user resolution the only legitimate way: ConflictModel.resolve(choice). */

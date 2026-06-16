@@ -140,10 +140,17 @@ describe('IpcBridge', () => {
 
   it('forwards the _trace id into the DenService on every organize den:* channel (issue 1-14)', async () => {
     const den = {
-      createWorkspace: vi.fn(async () => ({ id: 'ws-1', label: 'Work', groups: [] })),
-      createGroup: vi.fn(async () => ({ id: 'grp-1', label: 'Shell', parentId: null })),
+      createWorkspace: vi.fn(async () => ({ id: 'ws-1', label: 'Work', groups: [], scope: null })),
+      createGroup: vi.fn(async () => ({
+        id: 'grp-1',
+        label: 'Shell',
+        parentId: null,
+        scope: null,
+      })),
       moveFileToGroup: vi.fn(async () => undefined),
       setFileWorkspace: vi.fn(async () => undefined),
+      setFileScope: vi.fn(async () => ['win32'] as const),
+      setGroupScope: vi.fn(async () => ['darwin'] as const),
     }
     const { registrar, handlers } = fakeRegistrar()
     registerIpcBridge(registrar, {
@@ -175,12 +182,26 @@ describe('IpcBridge', () => {
       workspaceId: 'ws-1',
       _trace: { traceId: 'o4' },
     } as never)
+    await handlers.get('den:set-file-scope')?.({}, {
+      targetPath: '.config/powershell/profile.ps1',
+      scope: ['win32'],
+      _trace: { traceId: 'o5' },
+    } as never)
+    await handlers.get('den:set-group-scope')?.({}, {
+      workspaceId: 'personal',
+      groupId: 'grp-1',
+      scope: ['darwin'],
+      _trace: { traceId: 'o6' },
+    } as never)
 
     // Each organize verb MUTATES `.myenv/`, so the bridge forwards its trace id.
     expect(den.createWorkspace).toHaveBeenCalledWith('Work', 'o1')
     expect(den.createGroup).toHaveBeenCalledWith('personal', 'Shell', null, 'o2')
     expect(den.moveFileToGroup).toHaveBeenCalledWith('.zshrc', 'grp-1', 'o3')
     expect(den.setFileWorkspace).toHaveBeenCalledWith('.zshrc', 'ws-1', 'o4')
+    // The OS Scope verbs (issue 1-15) forward the trace id too and pass the requested Scope.
+    expect(den.setFileScope).toHaveBeenCalledWith('.config/powershell/profile.ps1', ['win32'], 'o5')
+    expect(den.setGroupScope).toHaveBeenCalledWith('personal', 'grp-1', ['darwin'], 'o6')
 
     // …and each still hard-fails without a _trace envelope (never an uncorrelated mutation).
     await expect(

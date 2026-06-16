@@ -191,6 +191,23 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['setFileWorkspace']>
     },
+    // → IPC channel 'den:set-file-scope' (OS Scope: clamp+narrow to specific OSes, issue 1-15)
+    setFileScope(targetPath, scope) {
+      return ipcRenderer.invoke('den:set-file-scope', {
+        targetPath,
+        scope,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['setFileScope']>
+    },
+    // → IPC channel 'den:set-group-scope' (OS Scope of a Folder/Group, inherited by children)
+    setGroupScope(workspaceId, groupId, scope) {
+      return ipcRenderer.invoke('den:set-group-scope', {
+        workspaceId,
+        groupId,
+        scope,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['setGroupScope']>
+    },
   },
   discover: {
     // → IPC channel 'discover:scan'

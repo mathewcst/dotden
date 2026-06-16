@@ -137,6 +137,46 @@ export class GitTransport {
   }
 
   /**
+   * Stage the given paths and commit them ONLY IF the staged tree actually changed —
+   * the idempotent metadata-commit primitive (issue 1-15).
+   *
+   * Identical to {@link commit} but tolerant of a no-op: an OS-Scope edit can be a
+   * *clamp* that leaves the synced `.myenv/` + generated `.chezmoiignore` byte-for-byte
+   * unchanged (e.g. a request to broaden past a Folder is clamped to the existing Scope),
+   * so there is nothing to record. A plain `git commit` would exit non-zero ("nothing to
+   * commit") and surface as a spurious failure; this checks `git diff --cached --quiet`
+   * after staging and simply returns when the index matches HEAD — never fail loudly on a
+   * legitimate no-op, never invent an empty commit.
+   *
+   * @param paths Repo-relative or absolute paths to stage (passed verbatim after `--`).
+   * @param message Commit message to record when there is a staged change.
+   * @throws CommandFailedError if staging or the (non-empty) commit exits non-zero.
+   */
+  async commitIfChanged(paths: readonly string[], message: string): Promise<void> {
+    await this.git(['add', '--', ...paths])
+    if (!(await this.hasStagedChanges())) return // index matches HEAD — nothing to record.
+    await this.git(['commit', '--message', message])
+  }
+
+  /**
+   * Whether the index has a staged change relative to HEAD (something to commit).
+   *
+   * Maps to `git diff --cached --quiet`, which exits **0** when the index matches HEAD
+   * (nothing staged) and **non-zero** when there is a staged change. The codebase's
+   * `runCommand` throws on a non-zero exit (like {@link merge}'s pattern), so we treat the
+   * thrown case as "there is a staged change". Used by {@link commitIfChanged} to make an
+   * unchanged metadata write a clean no-op rather than a "nothing to commit" failure.
+   */
+  private async hasStagedChanges(): Promise<boolean> {
+    try {
+      await this.git(['diff', '--cached', '--quiet'])
+      return false // exit 0 → index matches HEAD, nothing staged.
+    } catch {
+      return true // non-zero exit → there is a staged change to commit.
+    }
+  }
+
+  /**
    * Register a named remote pointing at `url`.
    *
    * Maps to `git remote add <name> <url>`.

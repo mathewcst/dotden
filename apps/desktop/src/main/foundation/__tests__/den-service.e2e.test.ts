@@ -77,8 +77,10 @@ describe('DenService end-to-end thread (real chezmoi/git)', () => {
     expect((await aStore.readWorkspaces()).placements).toContainEqual({
       targetPath: '.zshrc',
       workspaceId: 'personal',
-      // A freshly Tracked File sits directly under its Workspace (no Group yet, 1-14).
+      // A freshly Tracked File sits directly under its Workspace (no Group yet, 1-14)…
       groupId: null,
+      // …and is universally scoped (applies on every OS) until the user narrows it (1-15).
+      scope: null,
     })
 
     // Sync now: push the local Commit to the Remote — now it is shared.
@@ -262,6 +264,7 @@ describe('DenService Untrack / Delete everywhere verbs (issue 1-08)', () => {
       targetPath: '.zshrc',
       workspaceId: 'personal',
       groupId: null,
+      scope: null,
     })
 
     await env.untrackFile('.zshrc', 'trace-untrack')
@@ -469,6 +472,7 @@ describe('DenService Workspaces + nested Groups (issue 1-14)', () => {
       targetPath: '.zshrc',
       workspaceId: 'personal',
       groupId: zsh.id,
+      scope: null,
     })
   })
 
@@ -962,6 +966,129 @@ describe('DenService conflict resolution (issue 1-11, real chezmoi/git)', () => 
     const afterAbort = await readFile(join(aSource, 'dot_zshrc'), 'utf8')
     expect(afterAbort).toBe('export EDITOR=mine\n') // env A's own bytes, untouched.
     expect(afterAbort).not.toContain('<<<<<<<')
+  })
+})
+
+// OS Scope + inheritance (issue 1-15): the OS-applicability axis mapped FAITHFULLY onto
+// per-OS `.chezmoiignore`. Proves the whole slice end-to-end against real chezmoi/git: a
+// File scoped to another OS lands in the generated `.chezmoiignore` and `chezmoi ignored`
+// reports it (the muted set), the Scope intent travels through Sync to a second
+// environment, and the narrowable-never-broadenable inheritance holds with real binaries.
+describe('DenService OS Scope + inheritance (issue 1-15, real chezmoi/git)', () => {
+  it('scopes a File out of this OS → it appears in chezmoi ignored (muted) and is not applied', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+    const home = join(root, 'home')
+    const source = join(root, 'source')
+    await mkdir(home, { recursive: true })
+    await initSourceRepo(source, remote)
+    const env = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: source,
+      destinationDir: home,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+
+    // Track a universal File + a File we will scope to a DIFFERENT OS than this environment.
+    const otherOs = process.platform === 'win32' ? 'linux' : 'win32'
+    await writeFile(join(home, '.zshrc'), 'export EDITOR=nvim\n')
+    await writeFile(join(home, '.other-os-file'), 'belongs elsewhere\n')
+    await env.trackFile('.zshrc', 'trace-track-1')
+    await env.trackFile('.other-os-file', 'trace-track-2')
+    await env.commitTracked(['.zshrc', '.other-os-file'], 'trace-commit')
+
+    // Before scoping, neither File is muted (both apply on this OS).
+    let view = await env.fileTree()
+    expect(view.files.find((f) => f.targetPath === '.other-os-file')?.muted).toBe(false)
+
+    // Scope the second File to the OTHER OS only → it does not belong here.
+    const effective = await env.setFileScope('.other-os-file', [otherOs], 'trace-scope')
+    expect(effective).toEqual([otherOs])
+
+    // The FAITHFUL result: `chezmoi ignored` (over the generated `.chezmoiignore`) reports
+    // exactly the out-of-OS File, so the tree renders it muted — the universal File is not.
+    view = await env.fileTree()
+    const scopedOut = view.files.find((f) => f.targetPath === '.other-os-file')
+    expect(scopedOut?.muted).toBe(true)
+    expect(scopedOut?.scope).toEqual([otherOs])
+    expect(view.files.find((f) => f.targetPath === '.zshrc')?.muted).toBe(false)
+
+    // The generated `.chezmoiignore` lists the out-of-OS File AND still keeps `.myenv/` out.
+    const ignore = await readFile(join(source, '.chezmoiignore'), 'utf8')
+    expect(ignore).toContain('.other-os-file')
+    expect(ignore).toContain('.myenv/')
+  })
+
+  it('the OS Scope intent travels through Sync to a second environment', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+    const aHome = join(root, 'a-home')
+    const aSource = join(root, 'a-source')
+    await mkdir(aHome, { recursive: true })
+    await initSourceRepo(aSource, remote)
+    const envA = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: aHome,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+
+    const otherOs = process.platform === 'win32' ? 'linux' : 'win32'
+    await writeFile(join(aHome, '.scoped-file'), 'scope me\n')
+    await envA.trackFile('.scoped-file', 'trace-track')
+    // Commit the File FIRST (so its source state is recorded), THEN scope it out of this OS.
+    // Scoping a File OUT makes chezmoi treat it as unmanaged HERE, so it must already be
+    // committed — the source state + the synced Scope intent both travel on the next Sync.
+    await envA.commitTracked(['.scoped-file'], 'trace-commit')
+    await envA.setFileScope('.scoped-file', [otherOs], 'trace-scope')
+    await envA.syncPush('trace-push')
+
+    // env B clones the Den — the Scope INTENT travelled in `.myenv/`, so env B reads the
+    // same effective Scope (the Scope is synced user-authored data, ADR 0024).
+    const bSource = join(root, 'b-source')
+    await cloneRepo(gitBin, remote, bSource)
+    const bDoc = await new MyenvStore(bSource).readWorkspaces()
+    const placement = bDoc.placements.find((p) => p.targetPath === '.scoped-file')
+    expect(placement?.scope).toEqual([otherOs])
+  })
+
+  it('a File can NARROW within its Folder but NEVER broaden past it, across the service (the invariant)', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+    const home = join(root, 'home')
+    const source = join(root, 'source')
+    await mkdir(home, { recursive: true })
+    await initSourceRepo(source, remote)
+    const env = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: source,
+      destinationDir: home,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+
+    await writeFile(join(home, '.zshrc'), 'export EDITOR=nvim\n')
+    await env.trackFile('.zshrc', 'trace-track')
+    await env.commitTracked(['.zshrc'], 'trace-commit')
+
+    // File it under a Folder (Group) scoped to mac+linux, then…
+    const desktop = await env.createGroup('personal', 'Desktop', null, 'trace-grp')
+    await env.moveFileToGroup('.zshrc', desktop.id, 'trace-move')
+    await env.setGroupScope('personal', desktop.id, ['darwin', 'linux'], 'trace-grp-scope')
+
+    // …narrow the File to linux only (WITHIN the Folder) → linux.
+    expect(await env.setFileScope('.zshrc', ['linux'], 'trace-narrow')).toEqual(['linux'])
+
+    // …try to BROADEN it to include win32 (NOT in the Folder) → win32 is clamped away.
+    const broadened = await env.setFileScope('.zshrc', ['linux', 'win32'], 'trace-broaden')
+    expect(broadened).toEqual(['linux'])
+    expect(broadened).not.toContain('win32')
+
+    // The effective Scope the tree surfaces reflects the clamp — never the broadened request.
+    const view = await env.fileTree()
+    expect(view.files.find((f) => f.targetPath === '.zshrc')?.scope).toEqual(['linux'])
   })
 })
 

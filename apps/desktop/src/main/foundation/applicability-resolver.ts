@@ -16,6 +16,7 @@
  * the unsafe state"), not merely "remembered to check".
  */
 import type { EnvironmentEntry, WorkspacesDoc } from './myenv-store.js'
+import { effectiveScope, narrowScope, scopeAppliesOn, type Os, type Scope } from './os-scope.js'
 
 /**
  * Module-private brand symbol. It is a REAL runtime symbol (so the witness can
@@ -50,8 +51,15 @@ export interface AppliesHere {
 export interface NotApplicable {
   /** The File that does not apply here. */
   readonly targetPath: string
-  /** Machine-readable reason, for UI copy and tests. */
-  readonly reason: 'not-subscribed' | 'unplaced'
+  /**
+   * Machine-readable reason, for UI copy and tests:
+   * - `unplaced` — the File has no `.myenv/` placement, so its Workspace is unknown;
+   * - `not-subscribed` — the File's Workspace is one this environment does not subscribe to
+   *   (the access axis, invariant #3);
+   * - `out-of-scope` — the File's **OS Scope** does not include this environment's OS (the
+   *   applicability axis, issue 1-15: `file.scope matches env.os` failed).
+   */
+  readonly reason: 'not-subscribed' | 'unplaced' | 'out-of-scope'
   /** The Workspace the File belongs to, when known (absent for `unplaced`). */
   readonly workspaceId?: string
 }
@@ -102,11 +110,54 @@ export class ApplicabilityResolver {
       // it cannot prove subscription — refuse rather than guess (never act blind).
       return { targetPath, reason: 'unplaced' }
     }
+    // Access axis (invariant #3): the File's Workspace must be one this environment subscribes to.
     if (!this.environment.subscribedWorkspaces.includes(placement.workspaceId)) {
       return { targetPath, reason: 'not-subscribed', workspaceId: placement.workspaceId }
+    }
+    // OS-applicability axis (issue 1-15): the File's EFFECTIVE Scope (its own declared Scope
+    // narrowed by every inherited Folder/Workspace Scope) must include THIS environment's OS.
+    // A File scoped to other OSes does not apply here — its `.chezmoiignore` rule already keeps
+    // chezmoi from writing it; refusing it here keeps the witness and the ignore in lock-step,
+    // so a non-applicable File is never planned for Apply (ADR 0008's `appliesHere` OS clause).
+    if (
+      !scopeAppliesOn(
+        this.effectiveScopeOf(placement.workspaceId, placement.groupId, placement.scope),
+        this.environment.os as Os,
+      )
+    ) {
+      return { targetPath, reason: 'out-of-scope', workspaceId: placement.workspaceId }
     }
     // Mint the witness. This object literal is the ONLY place an AppliesHere comes
     // into existence in the whole codebase — the brand key is unreachable elsewhere.
     return { targetPath, [AppliesHereBrand]: true }
+  }
+
+  /**
+   * Compute a File's EFFECTIVE OS Scope by folding the Workspace → Group chain → the File's
+   * own Scope (issue 1-15). Mirrors {@link import('./myenv-store.js').MyenvStore.effectiveScopeOf}
+   * but operates on the in-memory synced doc the resolver already holds, so the resolver stays
+   * a pure function (no I/O) and can be exercised in `SyncEngine`'s property tests.
+   *
+   * @param workspaceId The File's owning Workspace.
+   * @param groupId The File's Group, or `null` for the Workspace root.
+   * @param ownScope The File's own declared Scope.
+   * @returns The File's effective Scope (`null` = applies on every OS).
+   */
+  private effectiveScopeOf(workspaceId: string, groupId: string | null, ownScope: Scope): Scope {
+    const workspace = this.workspaces.workspaces.find((w) => w.id === workspaceId)
+    // Walk leaf Group → root, collecting Group Scopes, guarding against a malformed cycle.
+    const ancestors: Scope[] = []
+    const seen = new Set<string>()
+    let current = groupId
+    while (current !== null && !seen.has(current)) {
+      seen.add(current)
+      const group = workspace?.groups.find((g) => g.id === current)
+      if (!group) break
+      ancestors.push(group.scope)
+      current = group.parentId
+    }
+    // Outermost-first chain: Workspace Scope, then Group ancestors outer→inner, then the File's.
+    const chain: Scope[] = [workspace?.scope ?? null, ...ancestors.reverse()]
+    return narrowScope(effectiveScope(chain), ownScope)
   }
 }

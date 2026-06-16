@@ -26,10 +26,10 @@ import type { EnvironmentEntry, WorkspacesDoc } from '../myenv-store.js'
 
 /** A one-Workspace synced model the test environment subscribes to. */
 const WORKSPACES: WorkspacesDoc = {
-  workspaces: [{ id: 'personal', label: 'Personal', groups: [] }],
+  workspaces: [{ id: 'personal', label: 'Personal', groups: [], scope: null }],
   placements: [
-    { targetPath: '.zshrc', workspaceId: 'personal', groupId: null },
-    { targetPath: '.gitconfig', workspaceId: 'personal', groupId: null },
+    { targetPath: '.zshrc', workspaceId: 'personal', groupId: null, scope: null },
+    { targetPath: '.gitconfig', workspaceId: 'personal', groupId: null, scope: null },
   ],
 }
 const ENV: EnvironmentEntry = {

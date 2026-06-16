@@ -30,7 +30,7 @@ describe('MyenvStore', () => {
 
     const workspaces = await store.readWorkspaces()
     expect(workspaces.workspaces).toEqual([
-      { id: DEFAULT_WORKSPACE_ID, label: 'Personal', groups: [] },
+      { id: DEFAULT_WORKSPACE_ID, label: 'Personal', groups: [], scope: null },
     ])
 
     const registry = await store.readEnvironments()
@@ -57,8 +57,8 @@ describe('MyenvStore', () => {
 
     const { placements } = await store.readWorkspaces()
     expect(placements).toEqual([
-      { targetPath: '.zshrc', workspaceId: DEFAULT_WORKSPACE_ID, groupId: null },
-      { targetPath: '.gitconfig', workspaceId: DEFAULT_WORKSPACE_ID, groupId: null },
+      { targetPath: '.zshrc', workspaceId: DEFAULT_WORKSPACE_ID, groupId: null, scope: null },
+      { targetPath: '.gitconfig', workspaceId: DEFAULT_WORKSPACE_ID, groupId: null, scope: null },
     ])
   })
 
@@ -94,10 +94,12 @@ describe('MyenvStore', () => {
     expect(occurrences).toBe(1)
   })
 
-  it('forward-loads a legacy workspaces.json (no groups / no groupId) into the canonical shape', async () => {
-    // A `.myenv/` written by a dotden from before the 1-14 Group slice has neither
-    // `groups` on the Workspace nor `groupId` on placements. readWorkspaces must still
-    // load it cleanly, defaulting both — the synced metadata is forward-compatible.
+  it('forward-loads a legacy workspaces.json (no groups / no groupId / no scope) into the canonical shape', async () => {
+    // A `.myenv/` written by a dotden from before the 1-14 Group / 1-15 Scope slices has
+    // neither `groups`/`scope` on the Workspace nor `groupId`/`scope` on placements.
+    // readWorkspaces must still load it cleanly, defaulting all of them — the synced
+    // metadata is forward-compatible, and a missing Scope is the universal Scope (`null`,
+    // "applies everywhere") so an old File is never silently scoped out (issue 1-15).
     const store = new MyenvStore(source)
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
     const legacy = JSON.stringify({
@@ -107,9 +109,11 @@ describe('MyenvStore', () => {
     await writeFile(join(source, '.myenv', 'workspaces.json'), legacy, 'utf8')
 
     const doc = await store.readWorkspaces()
-    expect(doc.workspaces).toEqual([{ id: DEFAULT_WORKSPACE_ID, label: 'Personal', groups: [] }])
+    expect(doc.workspaces).toEqual([
+      { id: DEFAULT_WORKSPACE_ID, label: 'Personal', groups: [], scope: null },
+    ])
     expect(doc.placements).toEqual([
-      { targetPath: '.zshrc', workspaceId: DEFAULT_WORKSPACE_ID, groupId: null },
+      { targetPath: '.zshrc', workspaceId: DEFAULT_WORKSPACE_ID, groupId: null, scope: null },
     ])
   })
 })
@@ -235,5 +239,107 @@ describe('MyenvStore — Workspaces + nested Groups (1-14)', () => {
       (p) => p.targetPath === '.zshrc',
     )!
     expect(placement.groupId).toBe(shell.id)
+  })
+})
+
+/**
+ * OS Scope + inheritance (issue 1-15, CONTEXT.md "Scope").
+ *
+ * Scope is the OS-applicability axis stored in the synced `.myenv/` (intent) and realized
+ * as native `.chezmoiignore` by the adapter. These cover the store half: a File can declare
+ * an own Scope, a Folder (Group) Scope is inherited by its Files, and the load-bearing
+ * invariant — a child narrows but NEVER broadens past its parent's Scope (clamped by the
+ * store, not just the pure math).
+ */
+describe('MyenvStore — OS Scope + inheritance (1-15)', () => {
+  it('a freshly placed File is universally scoped (null = applies everywhere)', async () => {
+    const store = new MyenvStore(source)
+    await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
+    await store.placeFile('.zshrc')
+
+    const doc = await store.readWorkspaces()
+    // dotden never silently scopes a freshly Tracked File out.
+    expect(doc.placements[0]?.scope).toBeNull()
+    expect(store.effectiveScopeOf(doc, '.zshrc')).toBeNull()
+  })
+
+  it('setFileScope narrows a File to specific OSes', async () => {
+    const store = new MyenvStore(source)
+    await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
+    await store.placeFile('.config/powershell/profile.ps1')
+
+    const effective = await store.setFileScope('.config/powershell/profile.ps1', ['win32'])
+    expect(effective).toEqual(['win32'])
+
+    const doc = await store.readWorkspaces()
+    expect(store.effectiveScopeOf(doc, '.config/powershell/profile.ps1')).toEqual(['win32'])
+  })
+
+  it("a File inherits its Group's (Folder's) Scope", async () => {
+    const store = new MyenvStore(source)
+    await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
+    await store.placeFile('.zshrc')
+    const macOnly = await store.createGroup(DEFAULT_WORKSPACE_ID, 'macOS')
+    await store.moveFileToGroup('.zshrc', macOnly.id)
+    await store.setGroupScope(DEFAULT_WORKSPACE_ID, macOnly.id, ['darwin'])
+
+    // The File declares no own Scope, so its effective Scope is its Group's: mac-only.
+    const doc = await store.readWorkspaces()
+    expect(store.effectiveScopeOf(doc, '.zshrc')).toEqual(['darwin'])
+  })
+
+  it('a File can NARROW within its Group but can NEVER broaden past it (clamped by the store)', async () => {
+    const store = new MyenvStore(source)
+    await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
+    await store.placeFile('.zshrc')
+    const desktop = await store.createGroup(DEFAULT_WORKSPACE_ID, 'Desktop')
+    await store.moveFileToGroup('.zshrc', desktop.id)
+    // Folder applies on mac + linux.
+    await store.setGroupScope(DEFAULT_WORKSPACE_ID, desktop.id, ['darwin', 'linux'])
+
+    // Narrow the File to linux only (within the Folder) → linux.
+    expect(await store.setFileScope('.zshrc', ['linux'])).toEqual(['linux'])
+
+    // Try to BROADEN the File to include win32 (NOT in the Folder) → win32 is clamped away;
+    // the File can only end up with OSes the Folder already allows (the invariant).
+    const broadened = await store.setFileScope('.zshrc', ['linux', 'win32'])
+    expect(broadened).toEqual(['linux'])
+    expect(broadened).not.toContain('win32')
+  })
+
+  it('narrowing a Group narrows every File under it (Folder Scope inherited by children)', async () => {
+    const store = new MyenvStore(source)
+    await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
+    await store.placeFile('.a')
+    await store.placeFile('.b')
+    const grp = await store.createGroup(DEFAULT_WORKSPACE_ID, 'Folder')
+    await store.moveFileToGroup('.a', grp.id)
+    await store.moveFileToGroup('.b', grp.id)
+
+    // Narrow the Folder to mac-only AFTER the Files are in it.
+    await store.setGroupScope(DEFAULT_WORKSPACE_ID, grp.id, ['darwin'])
+
+    const doc = await store.readWorkspaces()
+    // Both Files (declaring no own Scope) now inherit the Folder's mac-only Scope.
+    expect(store.effectiveScopeOf(doc, '.a')).toEqual(['darwin'])
+    expect(store.effectiveScopeOf(doc, '.b')).toEqual(['darwin'])
+  })
+
+  it('a Group cannot broaden past its parent Group (deep inheritance is clamped)', async () => {
+    const store = new MyenvStore(source)
+    await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
+    const outer = await store.createGroup(DEFAULT_WORKSPACE_ID, 'Outer')
+    await store.setGroupScope(DEFAULT_WORKSPACE_ID, outer.id, ['darwin'])
+    const inner = await store.createGroup(DEFAULT_WORKSPACE_ID, 'Inner', outer.id)
+
+    // The inner Group "requests" mac + linux, but its parent is mac-only → linux is clamped.
+    const effective = await store.setGroupScope(DEFAULT_WORKSPACE_ID, inner.id, ['darwin', 'linux'])
+    expect(effective).toEqual(['darwin'])
+  })
+
+  it('setFileScope refuses an unplaced File (never fail silently)', async () => {
+    const store = new MyenvStore(source)
+    await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
+    await expect(store.setFileScope('.nope', ['linux'])).rejects.toThrow(/not placed/)
   })
 })

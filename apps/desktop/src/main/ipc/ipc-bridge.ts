@@ -20,6 +20,7 @@ import type { DiscoveryScanner } from '../foundation/discovery-scanner.js'
 import type { EnvironmentRegistry } from '../foundation/environment-registry.js'
 import type { RemoteClient } from '../foundation/remote-client.js'
 import type { AutomationLevel } from '../foundation/automation-policy.js'
+import type { Scope } from '../foundation/os-scope.js'
 
 /**
  * The minimal trace envelope every IPC payload carries.
@@ -238,6 +239,26 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
       workspaceId: string
     }
     return (await deps.denService()).setFileWorkspace(targetPath, workspaceId, traceId(payload))
+  })
+
+  // The OS Scope verbs (issue 1-15): scope a File / Folder (Group) to specific OSes. Each
+  // MUTATES the synced `.myenv/` intent AND re-compiles the native `.chezmoiignore`, so its
+  // `_trace` id IS forwarded so the organize Operation emits a correlated wide event. The
+  // bridge never re-checks the narrowing invariant — MyenvStore clamps the request.
+  registrar.handle('den:set-file-scope', async (_event, payload: TracedPayload) => {
+    const { targetPath, scope } = payload as TracedPayload & {
+      targetPath: string
+      scope: Scope
+    }
+    return (await deps.denService()).setFileScope(targetPath, scope, traceId(payload))
+  })
+  registrar.handle('den:set-group-scope', async (_event, payload: TracedPayload) => {
+    const { workspaceId, groupId, scope } = payload as TracedPayload & {
+      workspaceId: string
+      groupId: string
+      scope: Scope
+    }
+    return (await deps.denService()).setGroupScope(workspaceId, groupId, scope, traceId(payload))
   })
 
   // ── Discovery channels (issue 1-06): first-run tool-catalog scan + drag-in inspect ──
