@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { StatusTag, type FileStatus } from '@/components/StatusTag'
+import { EnvironmentBadge } from '@/components/EnvironmentBadge'
 import type { CommitResult, IncomingReviewItem } from '../../main/foundation/den-service'
 
 /**
@@ -182,9 +183,8 @@ export function Workspace({ role }: { role: Role }) {
               />
             )}
           </div>
-          <footer className="border-border text-muted-foreground border-t px-3 py-2 text-xs">
-            {role === 'a' ? 'env A · this-mac' : 'env B · work-laptop'}
-          </footer>
+          {/* This environment's editable label + git-log attribution (issue 1-05). */}
+          <EnvironmentBadge />
         </aside>
 
         {/* Center pane — selected File header + diff + verbs. */}

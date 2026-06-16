@@ -43,6 +43,7 @@ describe('IpcBridge', () => {
     registerIpcBridge(registrar, {
       remoteClient: async () => ({}) as never,
       denService: async () => den as never,
+      environmentRegistry: async () => ({}) as never,
     })
 
     await handlers.get('den:track')?.({}, {
@@ -77,6 +78,7 @@ describe('IpcBridge', () => {
     registerIpcBridge(registrar, {
       remoteClient: async () => remote as never,
       denService: async () => ({}) as never,
+      environmentRegistry: async () => ({}) as never,
     })
 
     await handlers.get('remote:preflight')?.({}, {
@@ -94,9 +96,50 @@ describe('IpcBridge', () => {
     registerIpcBridge(registrar, {
       remoteClient: async () => ({}) as never,
       denService: async () => ({ syncPush: async () => undefined }) as never,
+      environmentRegistry: async () => ({}) as never,
     })
 
     await expect(handlers.get('den:sync-push')?.({}, {} as never)).rejects.toThrow(
+      'without a _trace envelope',
+    )
+  })
+
+  it('routes env:* channels to the EnvironmentRegistry and asserts _trace', async () => {
+    const selfEntry = {
+      id: 'env-self',
+      label: 'renamed',
+      os: 'linux',
+      subscribedWorkspaces: ['personal'],
+      isSelf: true,
+      attribution: { commitCount: 0 },
+    }
+    const registry = {
+      setupIdentity: vi.fn(async () => ({ id: 'env-self', label: 'renamed' })),
+      list: vi.fn(async () => [selfEntry]),
+      renameLabel: vi.fn(async () => ({ id: 'env-self', label: 'renamed' })),
+      suggestClaims: vi.fn(async () => []),
+    }
+    const { registrar, handlers } = fakeRegistrar()
+    registerIpcBridge(registrar, {
+      remoteClient: async () => ({}) as never,
+      denService: async () => ({}) as never,
+      environmentRegistry: async () => registry as never,
+    })
+
+    await expect(
+      handlers.get('env:list')?.({}, { _trace: { traceId: 'e1' } } as never),
+    ).resolves.toBeDefined()
+    // rename returns the renamed self entry joined with attribution (one round-trip).
+    await expect(
+      handlers.get('env:rename')?.({}, { label: 'renamed', _trace: { traceId: 'e2' } } as never),
+    ).resolves.toMatchObject({ isSelf: true, label: 'renamed' })
+    expect(registry.renameLabel).toHaveBeenCalledWith('renamed')
+    await expect(
+      handlers.get('env:suggest-claims')?.({}, { _trace: { traceId: 'e3' } } as never),
+    ).resolves.toEqual([])
+
+    // Every env:* channel still hard-fails without a _trace envelope.
+    await expect(handlers.get('env:list')?.({}, {} as never)).rejects.toThrow(
       'without a _trace envelope',
     )
   })

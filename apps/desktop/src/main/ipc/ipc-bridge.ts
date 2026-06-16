@@ -15,6 +15,7 @@
  * `ipcMain`).
  */
 import type { DenService } from '../foundation/den-service.js'
+import type { EnvironmentRegistry } from '../foundation/environment-registry.js'
 import type { RemoteClient } from '../foundation/remote-client.js'
 
 /**
@@ -54,6 +55,8 @@ export interface IpcBridgeDeps {
   readonly remoteClient: () => Promise<RemoteClient>
   /** Lazily resolves the shared {@link DenService} bound to this environment. */
   readonly denService: () => Promise<DenService>
+  /** Lazily resolves the shared {@link EnvironmentRegistry} for identity/labels/attribution. */
+  readonly environmentRegistry: () => Promise<EnvironmentRegistry>
 }
 
 /**
@@ -111,6 +114,34 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   registrar.handle('den:apply', async (_event, payload: TracedPayload) => {
     const { targetPaths } = payload as TracedPayload & { targetPaths: readonly string[] }
     return (await deps.denService()).applyIncoming(targetPaths, traceId(payload))
+  })
+
+  // ── Environment channels (issue 1-05): identity, editable label, git-log attribution ──
+  // These still assert the `_trace` envelope (via traceId(payload)) so EVERY IPC call is
+  // uniformly correlated, even though the registry methods do not take a trace id today.
+  registrar.handle('env:list', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    const registry = await deps.environmentRegistry()
+    // Idempotently ensure THIS environment is registered + its id is mirrored into the
+    // local chezmoi config before listing, so the identity surface always has a self
+    // entry to show (and the subscription seam is in place) even before the first Track.
+    await registry.setupIdentity()
+    return registry.list()
+  })
+  registrar.handle('env:rename', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    const { label } = payload as TracedPayload & { label: string }
+    const registry = await deps.environmentRegistry()
+    await registry.renameLabel(label)
+    // Return the renamed entry joined with attribution so the UI re-renders in one round-trip.
+    const list = await registry.list()
+    const self = list.find((e) => e.isSelf)
+    if (!self) throw new Error('Renamed environment is not present in the registry')
+    return self
+  })
+  registrar.handle('env:suggest-claims', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    return (await deps.environmentRegistry()).suggestClaims()
   })
 }
 

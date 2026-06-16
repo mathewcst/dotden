@@ -85,6 +85,27 @@ const api: DotdenApi = {
       }) as ReturnType<DotdenApi['den']['apply']>
     },
   },
+  environment: {
+    // → IPC channel 'env:list'
+    list() {
+      return ipcRenderer.invoke('env:list', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['environment']['list']>
+    },
+    // → IPC channel 'env:rename'
+    rename(label) {
+      return ipcRenderer.invoke('env:rename', {
+        label,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['environment']['rename']>
+    },
+    // → IPC channel 'env:suggest-claims'
+    suggestClaims() {
+      return ipcRenderer.invoke('env:suggest-claims', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['environment']['suggestClaims']>
+    },
+  },
 }
 
 contextBridge.exposeInMainWorld('dotden', api)

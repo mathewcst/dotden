@@ -42,6 +42,13 @@ export interface DenServiceOptions {
   readonly sourceDir: string
   /** Destination/home dir where applied Files land (`~/.zshrc`, …). */
   readonly destinationDir: string
+  /**
+   * Optional environment-local chezmoi config path carrying `[data].dotden_env_id`
+   * (issue 1-05). Passed through to the {@link ChezmoiAdapter} so a per-environment
+   * `.chezmoiignore` template that self-identifies by `dotden_env_id` is honored
+   * during Apply. Omitted in tests that do not exercise subscription templates.
+   */
+  readonly configPath?: string
   /** This environment's identity, label and OS (its subscriptions live in `.myenv/`). */
   readonly environment: Pick<EnvironmentEntry, 'id' | 'label' | 'os'>
   /** Shared tracer so each Operation emits one wide event (ADR 0007); optional in tests. */
@@ -106,6 +113,7 @@ export class DenService {
       chezmoiBin: options.chezmoiBin,
       sourceDir: options.sourceDir,
       destinationDir: options.destinationDir,
+      configPath: options.configPath,
     })
     this.git = new GitTransport({ gitBin: options.gitBin, repoDir: options.sourceDir })
     this.store = new MyenvStore(options.sourceDir)

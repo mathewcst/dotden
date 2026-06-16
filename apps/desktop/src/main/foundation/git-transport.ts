@@ -7,7 +7,31 @@
  * forwards to the bundled `git` binary; it does not invent behavior.
  */
 import { mkdir } from 'node:fs/promises'
-import { runCommand } from './process.js'
+import { CommandFailedError, runCommand } from './process.js'
+
+/**
+ * Field separator for {@link GitTransport.log}'s machine-parsable output.
+ *
+ * ASCII Unit Separator (`\x1f`) — a control byte that cannot appear in a commit
+ * SHA, author name/email, ISO date, or (in practice) a one-line subject, so callers
+ * can split each log line on it without escaping. Newlines separate commits.
+ */
+const GIT_LOG_SEP = '\x1f'
+
+/**
+ * True when a git failure is the benign "the repository has no commits yet" case.
+ *
+ * A freshly `init`ed (or freshly cloned-empty) repo makes `git log` exit non-zero
+ * with this message rather than printing an empty history. For attribution that is
+ * "no activity yet", not a real error, so {@link GitTransport.log} swallows exactly
+ * this case and returns an empty string.
+ */
+function isNoCommitsYet(error: unknown): boolean {
+  if (!(error instanceof CommandFailedError)) return false
+  return /does not have any commits yet|bad default revision|unknown revision/i.test(
+    error.result.stderr,
+  )
+}
 
 /**
  * Configuration for a {@link GitTransport} instance.
@@ -139,6 +163,41 @@ export class GitTransport {
    */
   async diff(ref = 'HEAD'): Promise<string> {
     return (await this.git(['diff', ref])).stdout
+  }
+
+  /**
+   * Read the commit history, optionally scoped to a path, in a stable parsable form.
+   *
+   * Maps to `git log --pretty=<fmt> [--max-count=<n>] [-- <path>]`. This is the
+   * attribution source for the environment registry: "who changed this" / last-sync
+   * / activity are **derived from git log, never written to the registry** (ADR 0024),
+   * so the synced `.myenv/` registry stays small and merge-friendly.
+   *
+   * The format is `%H` (full SHA), `%an` (author name), `%ae` (author email),
+   * `%aI` (author date, strict ISO-8601), `%s` (subject) joined by an ASCII Unit
+   * Separator (`\x1f`), one commit per line — chosen over the porcelain because it
+   * is unambiguous to split even when a subject contains tabs or arbitrary text.
+   *
+   * @param options Optional `path` to scope history to and `maxCount` to cap entries.
+   * @returns Raw stdout (empty string when there are no commits, e.g. a fresh repo).
+   * @throws CommandFailedError if git exits non-zero for a reason other than "no commits".
+   */
+  async log(options: { readonly path?: string; readonly maxCount?: number } = {}): Promise<string> {
+    const args = [
+      'log',
+      `--pretty=format:%H${GIT_LOG_SEP}%an${GIT_LOG_SEP}%ae${GIT_LOG_SEP}%aI${GIT_LOG_SEP}%s`,
+    ]
+    if (typeof options.maxCount === 'number') args.push(`--max-count=${options.maxCount}`)
+    if (options.path) args.push('--', options.path)
+    try {
+      return (await this.git(args)).stdout
+    } catch (error) {
+      // A brand-new repo with zero commits makes `git log` exit non-zero
+      // ("does not have any commits yet"). That is not an error for attribution —
+      // it just means there is no activity yet, so surface an empty history.
+      if (isNoCommitsYet(error)) return ''
+      throw error
+    }
   }
 
   /**

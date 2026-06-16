@@ -26,6 +26,10 @@ import type {
   CommitResult,
   IncomingReviewItem,
 } from '../main/foundation/den-service.js'
+import type {
+  ClaimSuggestion,
+  EnvironmentWithAttribution,
+} from '../main/foundation/environment-registry.js'
 
 /**
  * Node's `process.platform` value set, declared locally so this shared contract
@@ -96,5 +100,30 @@ export interface DotdenApi {
     listIncoming(): Promise<readonly IncomingReviewItem[]>
     /** **Apply** reviewed incoming Files to disk (env B). Maps to `chezmoi apply`. */
     apply(targetPaths: readonly string[]): Promise<ApplyResult>
+  }
+  /**
+   * Environment registry & identity operations (issue 1-05), each forwarded to an
+   * `env:*` IPC channel. Identity is the stable id, never the hostname; the editable
+   * label defaults from the hostname; attribution is derived from git log on read and
+   * never persisted (ADR 0024).
+   */
+  readonly environment: {
+    /**
+     * List every environment in the synced registry, joined with git-log-derived
+     * attribution (last author/activity/subject + commit count). `isSelf` flags this
+     * running environment. Drives the Environments surface and "N incoming from <env>".
+     */
+    list(): Promise<readonly EnvironmentWithAttribution[]>
+    /**
+     * Rename THIS environment's friendly label (a one-line registry diff). The stable
+     * id is untouched, so identity and attribution survive — no churn (ADR 0024).
+     */
+    rename(label: string): Promise<EnvironmentWithAttribution>
+    /**
+     * Suggest the likely registry entries a fresh install is "returning" to, ranked by
+     * OS + setup-time hostname (issue 1-13). The user still explicitly claims one;
+     * dotden never auto-merges.
+     */
+    suggestClaims(): Promise<readonly ClaimSuggestion[]>
   }
 }

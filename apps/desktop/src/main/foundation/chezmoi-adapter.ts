@@ -16,7 +16,7 @@
  * dotfile path like `.zshrc`); {@link ChezmoiAdapter.destinationPath} resolves it
  * against the destination dir before handing it to chezmoi.
  */
-import { access, mkdir, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, relative, resolve } from 'node:path'
 import { runCommand } from './process.js'
 
@@ -31,6 +31,16 @@ export interface ChezmoiAdapterOptions {
   readonly sourceDir: string
   /** The destination/home dir where managed dotfiles actually live (`~/.zshrc`, …). */
   readonly destinationDir: string
+  /**
+   * Optional path to chezmoi's **environment-local** config file (TOML).
+   *
+   * When set, every chezmoi invocation passes `--config <path>` so the local
+   * `[data]` table — notably `dotden_env_id` (see {@link writeEnvId}) — is in scope
+   * for templates like a per-environment `.chezmoiignore`. The config file is
+   * environment-LOCAL state and is never synced (ADR 0024). Omitted in tests that
+   * do not exercise templated config data.
+   */
+  readonly configPath?: string
 }
 
 /**
@@ -232,11 +242,92 @@ export class ChezmoiAdapter {
       this.options.sourceDir,
       '--destination',
       this.options.destinationDir,
+      // Pin the environment-local config file (when provided) so `[data].dotden_env_id`
+      // is in scope for templated config like a per-environment `.chezmoiignore`.
+      ...(this.options.configPath ? ['--config', this.options.configPath] : []),
       '--no-tty',
       '--force',
       ...args,
     ])
   }
+
+  /**
+   * Mirror this environment's own stable `id` into the **environment-local** chezmoi
+   * config as `[data].dotden_env_id` (ADR 0024 — the per-environment subscription seam).
+   *
+   * This is what lets a templated `.chezmoiignore` self-identify and look up
+   * `registry[.dotden_env_id].subscribedWorkspaces`, so each environment applies only
+   * the Workspaces it subscribes to (issue 1-01/1-05; proven by the subscription
+   * `.chezmoiignore` spike). The value is written to {@link ChezmoiAdapterOptions.configPath}
+   * (TOML), which is environment-LOCAL and never synced — the id lives in the synced
+   * registry too, but the *config* copy is local so it cannot cause merge churn.
+   *
+   * The write is surgical: an existing `dotden_env_id` line under `[data]` is replaced
+   * in place, otherwise a `[data]` table (or just the key) is appended — so a
+   * user-authored chezmoi config is preserved rather than clobbered.
+   *
+   * @param envId This environment's stable id (from the local identity / registry).
+   * @returns Absolute path to the config file written.
+   * @throws Error when the adapter was constructed without a `configPath`.
+   */
+  async writeEnvId(envId: string): Promise<string> {
+    const path = this.options.configPath
+    if (!path) {
+      throw new Error('ChezmoiAdapter.writeEnvId requires a configPath')
+    }
+    await mkdir(dirname(path), { recursive: true })
+    let current = ''
+    try {
+      current = await readFile(path, 'utf8')
+    } catch {
+      // No config yet — we will create one carrying just the [data].dotden_env_id key.
+    }
+    await writeFile(path, upsertEnvIdInToml(current, envId), 'utf8')
+    return path
+  }
+}
+
+/**
+ * Insert or replace `dotden_env_id` inside a chezmoi config TOML's `[data]` table.
+ *
+ * Kept as a pure string transform (not a TOML library) so it is trivially testable
+ * and adds no dependency. It handles the three cases dotden cares about:
+ * - an existing `dotden_env_id = "…"` line → replaced in place;
+ * - an existing `[data]` table without the key → the key is inserted right after the
+ *   table header;
+ * - no `[data]` table at all → a fresh `[data]` table with the key is appended.
+ *
+ * @param existing Current config text (empty string when the file does not exist yet).
+ * @param envId The stable environment id to record.
+ * @returns The updated config text, newline-terminated.
+ */
+export function upsertEnvIdInToml(existing: string, envId: string): string {
+  const quoted = JSON.stringify(envId) // TOML basic strings share JSON's quoting/escaping.
+  const keyLine = `    dotden_env_id = ${quoted}`
+  const lines = existing.split('\n')
+
+  // Case 1: replace an existing dotden_env_id assignment wherever it sits.
+  const keyIndex = lines.findIndex((line) => /^\s*dotden_env_id\s*=/.test(line))
+  if (keyIndex !== -1) {
+    lines[keyIndex] = keyLine
+    return ensureTrailingNewline(lines.join('\n'))
+  }
+
+  // Case 2: a [data] table exists but lacks the key — insert right after its header.
+  const dataIndex = lines.findIndex((line) => /^\s*\[data\]\s*$/.test(line))
+  if (dataIndex !== -1) {
+    lines.splice(dataIndex + 1, 0, keyLine)
+    return ensureTrailingNewline(lines.join('\n'))
+  }
+
+  // Case 3: no [data] table — append one carrying just the id.
+  const base = existing.trim().length > 0 ? `${existing.replace(/\n*$/, '')}\n\n` : ''
+  return ensureTrailingNewline(`${base}[data]\n${keyLine}`)
+}
+
+/** Guarantee exactly one trailing newline so successive writes stay stable. */
+function ensureTrailingNewline(text: string): string {
+  return `${text.replace(/\n*$/, '')}\n`
 }
 
 /**

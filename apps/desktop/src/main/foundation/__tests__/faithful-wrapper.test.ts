@@ -13,7 +13,7 @@ import { existsSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ChezmoiAdapter, renderOsScopeIgnore } from '../chezmoi-adapter.js'
+import { ChezmoiAdapter, renderOsScopeIgnore, upsertEnvIdInToml } from '../chezmoi-adapter.js'
 import { cloneRepo } from '../git-transport.js'
 import { createTempDotdenRepo, type DotdenTestRepo } from './temp-git-repo.fixture.js'
 
@@ -117,5 +117,53 @@ describe('GitTransport Sync primitives', () => {
 
     await expect(clone.status()).resolves.toBe('')
     await expect(clone.diff()).resolves.toBe('')
+  })
+
+  it('log() returns parsable history and an empty string on a repo with no commits', async () => {
+    // A fresh repo has no commits — log() must not throw, it returns "" (no activity yet).
+    await expect(repo.git.log()).resolves.toBe('')
+
+    await writeFile(join(repo.home, '.zshrc'), 'logged bytes\n')
+    await repo.chezmoi.commit(['.zshrc'], 'first commit', repo.git)
+    const raw = await repo.git.log()
+    const [line = ''] = raw.split('\n')
+    const [sha, author, email, date, subject] = line.split('\x1f')
+    expect(sha).toMatch(/^[0-9a-f]{40}$/i)
+    expect(author).toBe('dotden tests')
+    expect(email).toBe('dotden@example.invalid')
+    expect(date).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+    expect(subject).toBe('first commit')
+  })
+})
+
+// The pure TOML transform that mirrors the env id into chezmoi's local [data] table.
+describe('upsertEnvIdInToml', () => {
+  it('creates a [data] table when the config is empty', () => {
+    const out = upsertEnvIdInToml('', 'env-1')
+    expect(out).toBe('[data]\n    dotden_env_id = "env-1"\n')
+  })
+
+  it('inserts the key into an existing [data] table without clobbering other keys', () => {
+    const existing = '[data]\n    email = "me@example.com"\n'
+    const out = upsertEnvIdInToml(existing, 'env-2')
+    expect(out).toContain('dotden_env_id = "env-2"')
+    expect(out).toContain('email = "me@example.com"')
+  })
+
+  it('replaces an existing dotden_env_id in place (idempotent re-writes)', () => {
+    const first = upsertEnvIdInToml('', 'old')
+    const second = upsertEnvIdInToml(first, 'new')
+    expect(second).toContain('dotden_env_id = "new"')
+    expect(second).not.toContain('"old"')
+    // Re-applying the same id is stable (exactly one occurrence, single trailing newline).
+    const third = upsertEnvIdInToml(second, 'new')
+    expect(third).toBe(second)
+  })
+
+  it('appends a [data] table after a user-authored top-level config', () => {
+    const existing = 'sourceDir = "~/.local/share/chezmoi"\n'
+    const out = upsertEnvIdInToml(existing, 'env-3')
+    expect(out).toContain('sourceDir = "~/.local/share/chezmoi"')
+    expect(out).toMatch(/\[data\]\n {4}dotden_env_id = "env-3"\n$/)
   })
 })

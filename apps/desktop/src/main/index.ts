@@ -10,6 +10,7 @@ import { autoUpdater } from 'electron-updater'
 import { join } from 'node:path'
 import { DenService } from './foundation/den-service.js'
 import { loadEnvironmentIdentity } from './foundation/environment-identity.js'
+import { EnvironmentRegistry } from './foundation/environment-registry.js'
 import { OperationTracer } from './foundation/operation-tracer.js'
 import { RemoteClient } from './foundation/remote-client.js'
 import { resolveBundledTools } from './foundation/tools.js'
@@ -63,6 +64,18 @@ function sourceDir(): string {
   return join(app.getPath('userData'), 'chezmoi-source')
 }
 
+/**
+ * The **environment-local** chezmoi config file for this Den (issue 1-05, ADR 0024).
+ *
+ * Lives under Electron `userData` (never synced) and carries `[data].dotden_env_id`
+ * so a per-environment `.chezmoiignore` template can self-identify and look up its
+ * subscribed Workspaces. Shared by the {@link DenService} (Apply honors it) and the
+ * {@link EnvironmentRegistry} (which writes the own id into it at setup).
+ */
+function chezmoiConfigPath(): string {
+  return join(app.getPath('userData'), 'chezmoi', 'chezmoi.toml')
+}
+
 /** Resolve bundled tools and construct a {@link RemoteClient} for this environment. */
 async function buildRemoteClient(): Promise<RemoteClient> {
   const tools = await resolveBundledTools()
@@ -101,8 +114,41 @@ async function buildDenService(): Promise<DenService> {
     gitBin: tools.git,
     sourceDir: sourceDir(),
     destinationDir: app.getPath('home'),
+    configPath: chezmoiConfigPath(),
     environment: { id: identity.id, label: identity.label, os: identity.os },
     tracer,
+  })
+}
+
+/**
+ * Lazily-built, process-wide {@link EnvironmentRegistry} (issue 1-05).
+ *
+ * Owns environment identity/labels and derives attribution from git log. Mirrors the
+ * other singletons' lazy-with-retry pattern so a transient build failure does not
+ * brick all `env:*` IPC for the app's lifetime.
+ */
+let environmentRegistry: Promise<EnvironmentRegistry> | undefined
+
+/** Get the shared {@link EnvironmentRegistry}, building it lazily on first use. */
+async function getEnvironmentRegistry(): Promise<EnvironmentRegistry> {
+  environmentRegistry ??= buildEnvironmentRegistry().catch((error: unknown) => {
+    environmentRegistry = undefined
+    throw error
+  })
+  return environmentRegistry
+}
+
+/** Resolve tools + this environment's identity, then build the EnvironmentRegistry. */
+async function buildEnvironmentRegistry(): Promise<EnvironmentRegistry> {
+  const tools = await resolveBundledTools()
+  const identity = await loadEnvironmentIdentity(app.getPath('userData'))
+  return new EnvironmentRegistry({
+    sourceDir: sourceDir(),
+    gitBin: tools.git,
+    chezmoiBin: tools.chezmoi,
+    destinationDir: app.getPath('home'),
+    configPath: chezmoiConfigPath(),
+    identity,
   })
 }
 
@@ -155,6 +201,7 @@ app.whenReady().then(() => {
   registerIpcBridge(ipcMain, {
     remoteClient: getRemoteClient,
     denService: getDenService,
+    environmentRegistry: getEnvironmentRegistry,
   })
   createWindow()
 
