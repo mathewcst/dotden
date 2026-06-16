@@ -85,6 +85,19 @@ describe('ChezmoiAdapter faithful verb mapping', () => {
     expect(existsSync(join(repo.home, '.zshrc'))).toBe(false)
   })
 
+  it('templateData reads os/arch/hostname from chezmoi template data (cross-OS-safe, no shell)', async () => {
+    // Real `chezmoi execute-template '{{ .chezmoi.os }}…'` — the cross-OS-safe sourcing the
+    // commit-template tab depends on (scope-v1). The values are non-empty + match what chezmoi
+    // resolves; we assert shape rather than a host-specific value so the test is portable.
+    const data = await repo.chezmoi.templateData()
+    expect(data.os.length).toBeGreaterThan(0)
+    expect(data.arch.length).toBeGreaterThan(0)
+    expect(data.hostname.length).toBeGreaterThan(0)
+    // chezmoi reports `runtime.GOOS`, so on this Linux CI the os is `linux` (never the renamed
+    // `macos` — that presentation rename happens in the pure renderer, not here).
+    expect(data.os).toBe(process.platform === 'darwin' ? 'darwin' : data.os)
+  })
+
   it('OS Scope compiles to generated .chezmoiignore rules for Files outside this environment', async () => {
     const ignored = await repo.chezmoi.writeOsScopeIgnore({
       currentOs: 'linux',

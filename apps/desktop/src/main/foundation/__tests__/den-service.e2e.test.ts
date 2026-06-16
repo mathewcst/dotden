@@ -769,6 +769,61 @@ describe('DenService Review & Apply surface (issue 1-09)', () => {
     const summary = await env.incomingSummary('trace-summary')
     expect(summary.fromEnvironmentLabel).toBe('another environment')
   })
+
+  it('commit-message template: defaults, persists, sources chezmoi data, and travels to a 2nd env (2-09)', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    // ── env A authors + saves a custom template ──
+    const aHome = join(root, 'a-home')
+    const aSource = join(root, 'a-source')
+    await mkdir(aHome, { recursive: true })
+    await initSourceRepo(aSource, remote)
+    const envA = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: aHome,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+
+    // Before any edit the tab shows the built-in default, plus the chezmoi-sourced preview
+    // facts (os/arch/hostname) — sourced from chezmoi template data, never a host shell.
+    const initial = await envA.commitTemplate('trace-ct-read')
+    expect(initial.template).toBe('[$os-sync-$year-$month-$day]')
+    expect(initial.environment).toBe('this-mac')
+    expect(initial.data.os.length).toBeGreaterThan(0)
+    expect(initial.data.arch.length).toBeGreaterThan(0)
+    expect(initial.data.hostname.length).toBeGreaterThan(0)
+
+    // Save a custom template; the returned state reflects the new source of truth.
+    const saved = await envA.setCommitTemplate('$environment synced $date', 'trace-ct-set')
+    expect(saved.template).toBe('$environment synced $date')
+    // It persisted to the synced `.myenv/` metadata…
+    expect(await new MyenvStore(aSource).readCommitTemplate()).toBe('$environment synced $date')
+
+    // Push the Commit that recorded the template change.
+    await envA.syncPush('trace-ct-push')
+
+    // ── env B clones the Den → the template TRAVELLED (it is a synced default, ADR 0024) ──
+    const bSource = join(root, 'b-source')
+    await cloneRepo(gitBin, remote, bSource)
+    const envB = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: bSource,
+      destinationDir: join(root, 'b-home'),
+      environment: { id: 'env-b', label: 'work-laptop', os: process.platform },
+    })
+    const onB = await envB.commitTemplate('trace-ct-read-b')
+    expect(onB.template).toBe('$environment synced $date')
+    // …but the preview's environment label is env B's own (it is local, not synced).
+    expect(onB.environment).toBe('work-laptop')
+
+    // Reset-to-default round-trips through the same write path (empty → default).
+    const reset = await envA.setCommitTemplate('', 'trace-ct-reset')
+    expect(reset.template).toBe('[$os-sync-$year-$month-$day]')
+  })
 })
 
 describe('DenService ApplyPlanner invariants end-to-end (issue 1-10, real chezmoi/git)', () => {

@@ -66,6 +66,10 @@ import {
 } from './secret-reference.js'
 import { readPmPreference, writePmPreference, type PmPreference } from './pm-preference.js'
 import { CommandFailedError } from './process.js'
+import {
+  DEFAULT_COMMIT_MESSAGE_TEMPLATE,
+  type CommitTemplateData,
+} from '../../shared/commit-template.js'
 
 /** Construction wiring for a {@link DenService}, bound to one environment's dirs. */
 export interface DenServiceOptions {
@@ -230,6 +234,21 @@ export interface ConvertSecretResult {
   readonly template: string
   /** The Commit result that recorded the reference into the Den (LOCAL until pushed, ADR 0006). */
   readonly commit: CommitResult
+}
+
+/**
+ * The Commit tab's state (issue 2-09): the synced template the user edits plus everything its
+ * **live preview** needs to render WITHOUT a shell. The renderer fetches this once, renders the
+ * preview itself via the shared {@link renderCommitTemplate} (the same function the real message
+ * uses), and re-renders as the user types — never round-tripping per keystroke.
+ */
+export interface CommitTemplateState {
+  /** The synced commit-message template (e.g. `[$os-sync-$year-$month-$day]`). */
+  readonly template: string
+  /** chezmoi-sourced os/arch/hostname for the preview (cross-OS-safe; never a host shell). */
+  readonly data: CommitTemplateData
+  /** This environment's dotden label, for the preview's `$environment`. */
+  readonly environment: string
 }
 
 /**
@@ -819,6 +838,66 @@ export class DenService {
       span?.setAttribute('secretAllowlistedCount', allowlist.entries.length)
       span?.end('ok')
       return allowlist
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  // ── Commit-message template (issue 2-09) ──
+  // The Settings → Commit tab reads/writes the synced template that names how each Commit's git
+  // message reads (mapping to chezmoi `git.commitMessageTemplate`). os/arch/hostname for the live
+  // preview come from chezmoi template data; the renderer supplies the app clock for date/time —
+  // so NO shell command is ever reachable from the renderer (the load-bearing privacy rule).
+
+  /**
+   * **Read the Commit tab's state** (issue 2-09): the synced template plus the cross-OS-safe
+   * facts its live preview needs (chezmoi `os`/`arch`/`hostname` + this environment's label). The
+   * renderer renders the preview itself with the shared {@link renderCommitTemplate} so the preview
+   * is byte-identical to the real message; date/time come from the app clock in the renderer.
+   *
+   * @param traceId Correlation id for the (read-only) Operation.
+   * @returns The current template + the preview's environment facts.
+   */
+  async commitTemplate(traceId: string): Promise<CommitTemplateState> {
+    const span = this.tracer?.startOperation('commit', traceId)
+    try {
+      // Sourced from chezmoi template data — never a host shell (cross-OS-safe, scope-v1).
+      const [template, data] = await Promise.all([
+        this.store.readCommitTemplate(),
+        this.chezmoi.templateData(),
+      ])
+      span?.end('ok')
+      return { template, data, environment: this.options.environment.label }
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * **Persist the Commit tab's template** (issue 2-09) — the editor's save and "Reset to default".
+   *
+   * Writes `.myenv/commit-template.json` then commits the `.myenv/` change LOCALLY (ADR 0006) so it
+   * travels to every environment on the next Sync (it is a synced default — user-authored
+   * presentation, ADR 0024). Idempotent: re-saving the same template records nothing (no git churn).
+   * An empty template falls back to the built-in default rather than persisting a blank message
+   * (never fail silently into a meaningless `git log`).
+   *
+   * @param template The template text the user authored (or the default, on reset).
+   * @param traceId Correlation id for the Operation.
+   * @returns The refreshed Commit tab state (so the tab re-renders from the source of truth).
+   */
+  async setCommitTemplate(template: string, traceId: string): Promise<CommitTemplateState> {
+    const span = this.tracer?.startOperation('commit', traceId)
+    try {
+      const next = template.length > 0 ? template : DEFAULT_COMMIT_MESSAGE_TEMPLATE
+      await this.store.writeCommitTemplate(next)
+      // `.myenv/`-only edit → commit just that (no-op when unchanged), exactly like the other
+      // synced-metadata writes; the next Sync carries the new default to other environments.
+      await this.commitMetadata('Update commit-message template')
+      span?.end('ok')
+      return this.commitTemplate(traceId)
     } catch (error) {
       span?.end('error')
       throw error

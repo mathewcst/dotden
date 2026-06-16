@@ -23,6 +23,7 @@ import { scopedOutPaths, type Os, type Scope } from './os-scope.js'
 import { renderSubscriptionIgnore } from './subscription-ignore.js'
 import { renderSecretReferenceTemplate, type SecretReferenceRequest } from './secret-reference.js'
 import { runCommand } from './process.js'
+import type { CommitTemplateData } from '../../shared/commit-template.js'
 
 /**
  * Thrown by {@link ChezmoiAdapter.applyGuarded} when the File it is about to apply has
@@ -280,6 +281,34 @@ export class ChezmoiAdapter {
    */
   async status(): Promise<string> {
     return (await this.chezmoi(['status'])).stdout
+  }
+
+  /**
+   * Read the cross-OS-safe environment facts a commit-message template needs (issue 2-09):
+   * `os` / `arch` / `hostname`, sourced from **chezmoi's own template data** — never a host shell.
+   *
+   * Maps to `chezmoi execute-template '{{ .chezmoi.os }}…'`: chezmoi resolves the `.chezmoi.*`
+   * variables identically on every OS (`runtime.GOOS`/`GOARCH` + the hostname), so the values are
+   * canonical regardless of which environment authored the template. This is the discipline
+   * scope-v1 names — `$os`/`$arch`/`$hostname` come from chezmoi template data, NOT from `uname` /
+   * `Get-Date` style shell commands that diverge across platforms. dotden applies one presentation
+   * rename downstream (chezmoi's `darwin` → `macos`) in the pure renderer ({@link normalizeOs}); this
+   * method returns chezmoi's raw token so the renderer owns that single, testable rename.
+   *
+   * The three values are emitted on one line separated by `\x1f` (ASCII Unit Separator) so a
+   * hostname containing spaces or other punctuation can never be mis-split.
+   *
+   * @returns The chezmoi-sourced `{ os, arch, hostname }` for the template renderer.
+   * @throws CommandFailedError if chezmoi exits non-zero.
+   */
+  async templateData(): Promise<CommitTemplateData> {
+    // One execute-template call returns all three, US-separated so any hostname is safe to split.
+    const { stdout } = await this.chezmoi([
+      'execute-template',
+      '{{ .chezmoi.os }}\x1f{{ .chezmoi.arch }}\x1f{{ .chezmoi.hostname }}',
+    ])
+    const [os = '', arch = '', hostname = ''] = stdout.trim().split('\x1f')
+    return { os, arch, hostname }
   }
 
   /**

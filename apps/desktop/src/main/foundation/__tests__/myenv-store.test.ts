@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DEFAULT_WORKSPACE_ID, MyenvStore } from '../myenv-store.js'
+import { DEFAULT_COMMIT_MESSAGE_TEMPLATE } from '../../../shared/commit-template.js'
 
 let source: string
 
@@ -442,5 +443,28 @@ describe('MyenvStore — OS Scope + inheritance (1-15)', () => {
     await store.addSecretAllowlistEntry(finding)
     const list = await store.addSecretAllowlistEntry(finding)
     expect(list.entries).toHaveLength(1)
+  })
+})
+
+describe('MyenvStore — commit-message template (2-09)', () => {
+  it('returns the built-in default before anything is written', async () => {
+    const store = new MyenvStore(source)
+    expect(await store.readCommitTemplate()).toBe(DEFAULT_COMMIT_MESSAGE_TEMPLATE)
+  })
+
+  it('round-trips a written template through the synced .myenv/ file', async () => {
+    const store = new MyenvStore(source)
+    await store.writeCommitTemplate('$environment · $date')
+    expect(await store.readCommitTemplate()).toBe('$environment · $date')
+    // It lives in the chezmoi-ignored synced metadata dir (so it travels with the Den).
+    const raw = await readFile(join(source, '.myenv', 'commit-template.json'), 'utf8')
+    expect(JSON.parse(raw)).toEqual({ template: '$environment · $date' })
+  })
+
+  it('falls back to the default for an empty or malformed file (never a blank message)', async () => {
+    const store = new MyenvStore(source)
+    // An empty string is meaningless as a commit message → default.
+    await store.writeCommitTemplate('')
+    expect(await store.readCommitTemplate()).toBe(DEFAULT_COMMIT_MESSAGE_TEMPLATE)
   })
 })

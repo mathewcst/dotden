@@ -152,6 +152,54 @@ describe('IpcBridge', () => {
     expect(den.incomingDiff).toHaveBeenCalledWith('.zshrc')
   })
 
+  it('routes the commit-template channels and asserts _trace (issue 2-09)', async () => {
+    const state = {
+      template: '[$os-sync-$year-$month-$day]',
+      data: { os: 'darwin', arch: 'arm64', hostname: 'work-laptop' },
+      environment: 'this-mac',
+    }
+    const den = {
+      // get-commit-template is a read Operation; set-commit-template MUTATES `.myenv/` + Commits.
+      commitTemplate: vi.fn(async () => state),
+      setCommitTemplate: vi.fn(async () => state),
+    }
+    const { registrar, handlers } = fakeRegistrar()
+    registerIpcBridge(registrar, {
+      remoteClient: async () => ({}) as never,
+      denService: async () => den as never,
+      discoveryScanner: async () => ({}) as never,
+      environmentRegistry: async () => ({}) as never,
+      getAutomationLevel: async () => 'manual' as const,
+      setAutomationLevel: async () => undefined,
+      claimEnvironment: async () => undefined,
+      getUnsubscribeDisposition: async () => 'keep' as const,
+      setUnsubscribeDisposition: async () => undefined,
+      getSyncSettings: async () => ({
+        pollerEnabled: true,
+        cadence: 'fast' as const,
+        startOnLogin: false,
+      }),
+      setSyncSettings: async (settings) => settings,
+    })
+
+    // get forwards the read Operation's trace id.
+    await expect(
+      handlers.get('den:get-commit-template')?.({}, { _trace: { traceId: 'ct1' } } as never),
+    ).resolves.toMatchObject({ template: '[$os-sync-$year-$month-$day]' })
+    expect(den.commitTemplate).toHaveBeenCalledWith('ct1')
+    // set forwards the new template + the trace id (it records a Commit).
+    await handlers.get('den:set-commit-template')?.({}, {
+      template: '$environment $date',
+      _trace: { traceId: 'ct2' },
+    } as never)
+    expect(den.setCommitTemplate).toHaveBeenCalledWith('$environment $date', 'ct2')
+
+    // Both channels still hard-fail without a _trace envelope.
+    await expect(
+      handlers.get('den:set-commit-template')?.({}, { template: 'x' } as never),
+    ).rejects.toThrow('without a _trace envelope')
+  })
+
   it('forwards the _trace id into the DenService on every conflict den:* channel (issue 1-11)', async () => {
     const den = {
       detectConflicts: vi.fn(async () => ({ conflicts: [], autoMerged: true })),

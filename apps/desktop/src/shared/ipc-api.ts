@@ -25,6 +25,7 @@ import type {
   AffectedEnvironment,
   ApplyResult,
   CommitResult,
+  CommitTemplateState,
   ConflictReview,
   FileTreeView,
   ConvertSecretRequest,
@@ -130,6 +131,21 @@ export interface DotdenApi {
      * is staged into the SAME Commit (which stages `.myenv/`) and travels with the next Sync.
      */
     allowlistSecret(finding: SecretFinding): Promise<SecretAllowlist>
+    /**
+     * **Read the Commit tab's state** (issue 2-09) — the synced commit-message template plus the
+     * cross-OS-safe facts (`os`/`arch`/`hostname` from chezmoi template data + this environment's
+     * label) the tab's live preview needs. The renderer renders the preview itself with the shared
+     * `renderCommitTemplate`, supplying the app runtime clock for the date/time fields, so NO shell
+     * command is reachable from the renderer (the load-bearing privacy rule, scope-v1).
+     */
+    commitTemplate(): Promise<CommitTemplateState>
+    /**
+     * **Save the Commit tab's template** (issue 2-09) — the editor's save + "Reset to default".
+     * Persists the synced default (`.myenv/commit-template.json`) and Commits the `.myenv/` change
+     * LOCALLY (ADR 0006) so it travels on the next Sync; maps to chezmoi `git.commitMessageTemplate`.
+     * Returns the refreshed state so the tab re-renders from the source of truth.
+     */
+    setCommitTemplate(template: string): Promise<CommitTemplateState>
     /**
      * **Detect installed password managers** for the convert picker (issue 2-05, step 2). Returns
      * the v1 catalog (1Password/Bitwarden/pass) annotated with whether each CLI (`op`/`bw`/`pass`)

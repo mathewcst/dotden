@@ -114,10 +114,10 @@ export interface IpcBridgeDeps {
  *
  * Channels (all payloads carry `_trace`):
  * - `remote:preflight` / `remote:connect` / `remote:latest-sha` → {@link RemoteClient}
- * - `den:track` / `den:scan-commit` / `den:allowlist-secret` / `den:commit` /
- *   `den:sync-push` / `den:list-incoming` / `den:incoming-summary` / `den:incoming-diff` /
- *   `den:apply` / `den:tree` / `den:diff` / `den:untrack` / `den:delete-everywhere` /
- *   `den:affected-environments` → {@link DenService}
+ * - `den:track` / `den:scan-commit` / `den:allowlist-secret` / `den:get-commit-template` /
+ *   `den:set-commit-template` / `den:commit` / `den:sync-push` / `den:list-incoming` /
+ *   `den:incoming-summary` / `den:incoming-diff` / `den:apply` / `den:tree` / `den:diff` /
+ *   `den:untrack` / `den:delete-everywhere` / `den:affected-environments` → {@link DenService}
  * - `discover:scan` / `discover:inspect-path` → {@link DiscoveryScanner} (issue 1-06)
  * - `automation:get-level` / `automation:set-level` → environment-local automation
  *   settings (issue 1-12); set-level re-arms the automation services via index.ts
@@ -169,6 +169,18 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   registrar.handle('den:allowlist-secret', async (_event, payload: TracedPayload) => {
     const { finding } = payload as TracedPayload & { finding: SecretFinding }
     return (await deps.denService()).allowlistSecret(finding, traceId(payload))
+  })
+  // Commit-message template (issue 2-09): the Settings → Commit tab. get-commit-template reads the
+  // synced template + the chezmoi-sourced os/arch/hostname the live preview needs (no shell ever
+  // reachable from the renderer). set-commit-template persists the synced default + Commits the
+  // `.myenv/` change LOCALLY (ADR 0006) so it travels on the next Sync; it returns the refreshed
+  // state so the tab re-renders from the source of truth.
+  registrar.handle('den:get-commit-template', async (_event, payload: TracedPayload) => {
+    return (await deps.denService()).commitTemplate(traceId(payload))
+  })
+  registrar.handle('den:set-commit-template', async (_event, payload: TracedPayload) => {
+    const { template } = payload as TracedPayload & { template: string }
+    return (await deps.denService()).setCommitTemplate(template, traceId(payload))
   })
   // PM picker + convert (issue 2-05). Detect is read-only feature-detection (env-local, never
   // synced) so its `_trace` is forwarded but it MUTATES nothing. pm-preference reads the env-local

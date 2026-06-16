@@ -28,6 +28,7 @@ import {
   type SecretAllowlist,
 } from './secret-allowlist.js'
 import type { SecretFinding } from './secret-scanner.js'
+import { DEFAULT_COMMIT_MESSAGE_TEMPLATE } from '../../shared/commit-template.js'
 
 /**
  * The default Workspace id every Den is seeded with.
@@ -174,6 +175,13 @@ const ENVIRONMENTS_FILE = join(MYENV_DIR, 'environments.json')
  * user-authored organization-of-trust, so it travels with the Den (never re-answered per machine).
  */
 const SECRET_ALLOWLIST_FILE = join(MYENV_DIR, 'secret-allowlist.json')
+/**
+ * The synced commit-message template (issue 2-09, ADR 0024). The template is **user-authored**
+ * organization-of-presentation (how the user wants their `git log` to read), so by ADR 0024 it
+ * syncs through `.myenv/` as a **default** — every environment shares it unless a later local
+ * override (PRD2#17) narrows it per machine. Maps to chezmoi's `git.commitMessageTemplate`.
+ */
+const COMMIT_TEMPLATE_FILE = join(MYENV_DIR, 'commit-template.json')
 
 /**
  * Reads/writes the synced `.myenv/` metadata inside a chezmoi source dir.
@@ -657,6 +665,40 @@ export class MyenvStore {
     // the write to avoid churning `.myenv/secret-allowlist.json`.
     if (next !== current) await this.writeJson(SECRET_ALLOWLIST_FILE, next)
     return next
+  }
+
+  // ── Commit-message template (issue 2-09) ──
+  // The synced default the user edits in Settings → Commit. Stored as `{ template }` so the file
+  // is self-describing + forward-extensible; maps to chezmoi `git.commitMessageTemplate`.
+
+  /**
+   * Read the synced commit-message template, falling back to the built-in default when absent or
+   * malformed (a fresh Den, or one synced by an older dotden that never wrote this file). Never
+   * throws and never returns an empty template — degrades to {@link DEFAULT_COMMIT_MESSAGE_TEMPLATE}
+   * so the Commit message is always coherent (never fail silently into a surprising state).
+   *
+   * @returns The synced template string (or the default).
+   */
+  async readCommitTemplate(): Promise<string> {
+    const doc = await this.readJson<{ template?: unknown }>(COMMIT_TEMPLATE_FILE)
+    return typeof doc?.template === 'string' && doc.template.length > 0
+      ? doc.template
+      : DEFAULT_COMMIT_MESSAGE_TEMPLATE
+  }
+
+  /**
+   * Persist the synced commit-message template — the write half of the Commit tab's editor +
+   * "Reset to default". Stores `.myenv/commit-template.json`; the Commit that stages `.myenv/`
+   * (DenService) carries it, so the choice travels to every environment on the next Sync.
+   *
+   * @param template The template text to store (e.g. `[$os-sync-$year-$month-$day]`).
+   */
+  async writeCommitTemplate(template: string): Promise<void> {
+    await this.writeJson(COMMIT_TEMPLATE_FILE, { template })
+    // Guarantee `.myenv/` is chezmoi-ignored (creating `.chezmoiignore` if this is the first
+    // `.myenv/` write on a never-seeded Den), so the metadata Commit can always stage it — and
+    // so the template file is never applied to the user's home (it is dotden metadata, ADR 0024).
+    await this.ensureIgnored()
   }
 
   /** Write the Workspace doc (pretty-printed JSON, for human-readable git diffs). */

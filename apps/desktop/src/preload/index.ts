@@ -72,6 +72,19 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['allowlistSecret']>
     },
+    // → IPC channel 'den:get-commit-template' (Settings → Commit tab: synced template + preview facts, issue 2-09)
+    commitTemplate() {
+      return ipcRenderer.invoke('den:get-commit-template', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['commitTemplate']>
+    },
+    // → IPC channel 'den:set-commit-template' (persist synced template + Commit `.myenv/`, issue 2-09)
+    setCommitTemplate(template) {
+      return ipcRenderer.invoke('den:set-commit-template', {
+        template,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['setCommitTemplate']>
+    },
     // → IPC channel 'den:detect-password-managers' (PM picker detection, issue 2-05; env-local)
     detectPasswordManagers() {
       return ipcRenderer.invoke('den:detect-password-managers', {

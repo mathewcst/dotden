@@ -26,6 +26,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { SyncTab } from './SyncTab'
+import { CommitTab } from './CommitTab'
 
 /** A tab's lifecycle: `live` = built + selectable; `placeholder` = inert until its slice ships. */
 export type SettingsTabStatus = 'live' | 'placeholder'
@@ -48,15 +49,15 @@ export interface SettingsTab {
 }
 
 /**
- * The seven v1 Settings tabs, in nav order (design: settings.md). Sync is the first `live` tab
- * (this issue, stories 37–39); every other tab is a `placeholder` whose slice flips it to `live`
- * later. Icons match the spec's per-tab nav glyphs exactly.
+ * The seven v1 Settings tabs, in nav order (design: settings.md). Sync (2-08) and Commit (2-09)
+ * are `live`; every remaining tab is a `placeholder` whose slice flips it to `live` later. Icons
+ * match the spec's per-tab nav glyphs exactly.
  */
 export const SETTINGS_TABS: readonly SettingsTab[] = [
   // Automation (2-12): the risk-graded ladder. Inert until that slice ships.
   { id: 'automation', label: 'Automation', icon: ArrowDownUp, status: 'placeholder' },
-  // Commit (2-09): the commit-message template editor. Inert until that slice ships.
-  { id: 'commit', label: 'Commit', icon: GitCommitHorizontal, status: 'placeholder' },
+  // Commit (2-09): the commit-message template editor — edit + variables + live preview + reset.
+  { id: 'commit', label: 'Commit', icon: GitCommitHorizontal, status: 'live', Content: CommitTab },
   // Sync (THIS issue, 2-08): the first real tab — poller on/off + cadence, start-on-login.
   { id: 'sync', label: 'Sync', icon: Cloud, status: 'live', Content: SyncTab },
   // Account / Remote (2-11): connected Remote + git-credential + detected PM CLI. Inert for now.
