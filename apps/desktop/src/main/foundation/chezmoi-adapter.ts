@@ -19,6 +19,7 @@
 import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, relative, resolve } from 'node:path'
 import { parseChezmoiStatus } from './chezmoi-status.js'
+import { resolveContainedPath } from './path-safety.js'
 import { scopedOutPaths, type Os, type Scope } from './os-scope.js'
 import { renderSubscriptionIgnore } from './subscription-ignore.js'
 import { renderSecretReferenceTemplate, type SecretReferenceRequest } from './secret-reference.js'
@@ -452,7 +453,7 @@ export class ChezmoiAdapter {
 
   /** Resolve a destination-relative target path into an absolute path under the destination dir. */
   private destinationPath(path: string): string {
-    return resolve(this.options.destinationDir, path)
+    return resolveContainedPath(this.options.destinationDir, path, 'destination path')
   }
 
   /**

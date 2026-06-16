@@ -22,6 +22,7 @@ import { access, readFile, rm, writeFile } from 'node:fs/promises'
 import { relative, resolve } from 'node:path'
 import { ChezmoiAdapter, UncommittedLocalEditError } from './chezmoi-adapter.js'
 import { GitTransport } from './git-transport.js'
+import { resolveContainedPath } from './path-safety.js'
 import {
   DEFAULT_COMMIT_TEMPLATE,
   renderCommitMessage,
@@ -2934,7 +2935,8 @@ export class DenService {
   /** Resolve a destination-relative File path under this environment's home dir. */
   private destinationPath(targetPath: string): string {
     // Mirror ChezmoiAdapter.destinationPath: resolve under the destination dir for
-    // the on-disk existence probe (handles nested paths + Windows separators).
-    return resolve(this.options.destinationDir, targetPath)
+    // the on-disk existence probe, but reject absolute/escaping paths before any
+    // privileged read/delete touches the filesystem.
+    return resolveContainedPath(this.options.destinationDir, targetPath, 'destination path')
   }
 }

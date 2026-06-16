@@ -206,6 +206,9 @@ let trayPoller: TrayPoller | null = null
 /** The system-tray icon that keeps the poller alive when the window is closed. */
 let tray: Tray | null = null
 
+/** Whether wake/unlock reconnect hooks have been registered on Electron's global powerMonitor. */
+let powerMonitorReconnectHandlersRegistered = false
+
 /**
  * Read this environment's automation level (Manual default), forwarded to the
  * `automation:get-level` IPC channel. Environment-local (ADR 0024).
@@ -458,8 +461,13 @@ async function armTrayPoller(): Promise<void> {
     // powerMonitor reconnect: on wake/unlock, re-check the Remote right away (issue 1-12)
     // AND flush any push queued while offline (issue 1-16) — a machine that slept while
     // offline likely reconnects on wake, so this is a natural "back online" retry trigger.
-    powerMonitor.on('resume', () => onReconnect())
-    powerMonitor.on('unlock-screen', () => onReconnect())
+    // These are global Electron listeners, so register them once: the Sync tab can re-arm the
+    // poller many times, and duplicate listeners would multiply reconnect flushes/ticks.
+    if (!powerMonitorReconnectHandlersRegistered) {
+      powerMonitor.on('resume', onReconnect)
+      powerMonitor.on('unlock-screen', onReconnect)
+      powerMonitorReconnectHandlersRegistered = true
+    }
   } catch (error) {
     // A failure to arm the watcher must never block app startup; the user can still work
     // and Sync manually. Surface it rather than swallow it (never fail silently).

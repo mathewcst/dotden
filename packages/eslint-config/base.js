@@ -5,7 +5,14 @@ import tseslint from 'typescript-eslint'
 
 export const config = tseslint.config(
   {
-    ignores: ['out/**', 'dist/**', '.astro/**', 'node_modules/**'],
+    ignores: [
+      'out/**',
+      'dist/**',
+      '.astro/**',
+      'node_modules/**',
+      'release/**',
+      'resources/bin/**',
+    ],
   },
   {
     // Point #5 teeth, zero extra package: a `// eslint-disable` that no longer

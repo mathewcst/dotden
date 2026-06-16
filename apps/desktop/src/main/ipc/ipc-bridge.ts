@@ -242,7 +242,8 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   registrar.handle('den:detect-password-managers', async (_event, payload: TracedPayload) => {
     return (await deps.denService()).detectPasswordManagers(traceId(payload))
   })
-  registrar.handle('den:pm-preference', async () => {
+  registrar.handle('den:pm-preference', async (_event, payload: TracedPayload) => {
+    traceId(payload) // Read-only env-local preference; assert the IPC contract still carries _trace.
     return (await deps.denService()).pmPreference()
   })
   registrar.handle('den:convert-secret', async (_event, payload: TracedPayload) => {

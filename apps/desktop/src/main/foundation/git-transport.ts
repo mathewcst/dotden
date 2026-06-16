@@ -7,8 +7,8 @@
  * forwards to the bundled `git` binary; it does not invent behavior.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
 import { CommandFailedError, runCommand } from './process.js'
+import { resolveContainedPath } from './path-safety.js'
 
 /**
  * Field separator for {@link GitTransport.log}'s machine-parsable output.
@@ -313,7 +313,7 @@ export class GitTransport {
    * @throws CommandFailedError if staging exits non-zero.
    */
   async writeResolved(path: string, bytes: string): Promise<void> {
-    await writeFile(resolve(this.options.repoDir, path), bytes, 'utf8')
+    await writeFile(this.repoPath(path), bytes, 'utf8')
     await this.git(['add', '--', path])
   }
 
@@ -349,10 +349,15 @@ export class GitTransport {
   /** Read a working-tree File's bytes, or `null` when it is absent (e.g. a delete conflict). */
   private async readWorkingTreeFile(path: string): Promise<string | null> {
     try {
-      return await readFile(resolve(this.options.repoDir, path), 'utf8')
+      return await readFile(this.repoPath(path), 'utf8')
     } catch {
       return null
     }
+  }
+
+  /** Resolve a repo-relative path under the source repo, rejecting absolute/escaping paths. */
+  private repoPath(path: string): string {
+    return resolveContainedPath(this.options.repoDir, path, 'repo path')
   }
 
   /**
