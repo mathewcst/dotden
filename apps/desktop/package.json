@@ -17,6 +17,8 @@
     "@base-ui/react": "catalog:desktop",
     "@fontsource-variable/geist": "catalog:desktop",
     "@fontsource-variable/geist-mono": "catalog:desktop",
+    "@pierre/diffs": "1.2.10",
+    "@pierre/trees": "1.0.0-beta.4",
     "class-variance-authority": "catalog:desktop",
     "clsx": "catalog:desktop",
     "electron-updater": "^6.6.2",

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { GitBranch, Loader2, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Workspace } from '@/components/Workspace'
 
 function hostFromRemote(url: string) {
   try {
@@ -16,6 +17,12 @@ export function App() {
     'idle' | 'checking' | 'reachable' | 'credential-error' | 'connecting'
   >('idle')
   const [message, setMessage] = useState('Paste an HTTPS or SSH git Remote URL to start.')
+  // Once the Den is connected, the app shows the three-pane Workspace. `role`
+  // toggles which environment's verbs the single MVP window drives (A = first
+  // environment Track/Commit/Sync; B = second environment detect/Apply) so the
+  // whole cross-environment thread is exercisable from one running app.
+  const [connected, setConnected] = useState(false)
+  const [role, setRole] = useState<'a' | 'b'>('a')
 
   async function checkRemote() {
     setStatus('checking')
@@ -50,10 +57,37 @@ export function App() {
       await window.dotden.remote.connect(remoteUrl)
       setStatus('reachable')
       setMessage('Connected. Your empty Remote is initialized as this environment’s Den.')
+      // Connected: leave the onboarding gate and show the three-pane Workspace.
+      setConnected(true)
     } catch (error) {
       setStatus('credential-error')
       setMessage(error instanceof Error ? error.message : 'Remote connection failed.')
     }
+  }
+
+  // Once connected, the three-pane Workspace IS the app. A small role switch lets
+  // the single MVP window drive both the first-environment and second-environment
+  // halves of the end-to-end thread.
+  if (connected) {
+    return (
+      <div className="relative">
+        <div className="bg-card border-border absolute top-1 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border px-1 py-1 text-xs shadow-sm">
+          <button
+            className={`rounded-full px-3 py-0.5 ${role === 'a' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+            onClick={() => setRole('a')}
+          >
+            Environment A
+          </button>
+          <button
+            className={`rounded-full px-3 py-0.5 ${role === 'b' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+            onClick={() => setRole('b')}
+          >
+            Environment B
+          </button>
+        </div>
+        <Workspace role={role} />
+      </div>
+    )
   }
 
   // True while any IPC operation is in flight. Used to disable Check so a user

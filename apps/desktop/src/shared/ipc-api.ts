@@ -21,6 +21,11 @@
  *   typechecks under both `tsconfig.node.json` and `tsconfig.web.json`.
  */
 import type { ConnectResult, PreflightResult } from '../main/foundation/remote-client.js'
+import type {
+  ApplyResult,
+  CommitResult,
+  IncomingReviewItem,
+} from '../main/foundation/den-service.js'
 
 /**
  * Node's `process.platform` value set, declared locally so this shared contract
@@ -63,5 +68,33 @@ export interface DotdenApi {
     connect(url: string): Promise<ConnectResult>
     /** Read the latest advertised SHA for a branch, or null when absent. */
     latestSha(url: string, branch?: string): Promise<string | null>
+  }
+  /**
+   * Den operations — the MVP sync loop (issue 1-04), each forwarded to a `den:*`
+   * IPC channel through the {@link DotdenApi}-typed preload bridge. Every method
+   * mints a fresh `_trace` correlation id so the Operation lines up across the
+   * boundary (ADR 0007). All paths are destination-relative File paths (e.g. `.zshrc`).
+   */
+  readonly den: {
+    /**
+     * **Track** a File and record its Workspace placement (env A).
+     * Maps to `chezmoi add` + a synced `.myenv/` placement.
+     */
+    track(targetPath: string): Promise<void>
+    /**
+     * **Commit** Tracked Files into the Den with a templated message — LOCAL only
+     * (a Commit is local until pushed, ADR 0006). The result carries the resolved
+     * message and which template produced it, for the Commit UI.
+     */
+    commit(targetPaths: readonly string[]): Promise<CommitResult>
+    /** **Sync now** push half: send already-Committed changes to the Remote (env A). */
+    syncPush(): Promise<void>
+    /**
+     * **env B** — fetch the Remote and list incoming Files for a reviewed Apply,
+     * restricted to the incoming-clean path (no local copy, no Conflict).
+     */
+    listIncoming(): Promise<readonly IncomingReviewItem[]>
+    /** **Apply** reviewed incoming Files to disk (env B). Maps to `chezmoi apply`. */
+    apply(targetPaths: readonly string[]): Promise<ApplyResult>
   }
 }

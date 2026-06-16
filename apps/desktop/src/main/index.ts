@@ -8,8 +8,19 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { join } from 'node:path'
+import { DenService } from './foundation/den-service.js'
+import { loadEnvironmentIdentity } from './foundation/environment-identity.js'
+import { OperationTracer } from './foundation/operation-tracer.js'
 import { RemoteClient } from './foundation/remote-client.js'
 import { resolveBundledTools } from './foundation/tools.js'
+import { registerIpcBridge } from './ipc/ipc-bridge.js'
+
+/**
+ * Process-wide observability core (ADR 0007): one wide event per Operation lands in
+ * its bounded local ring buffer. It is the only always-on sink and never egresses;
+ * the IpcBridge threads each call's `_trace` id into it via the DenService.
+ */
+const tracer = new OperationTracer()
 
 /**
  * Lazily-built, process-wide {@link RemoteClient}.
@@ -41,38 +52,58 @@ async function getRemoteClient(): Promise<RemoteClient> {
   return remoteClient
 }
 
+/**
+ * The chezmoi source-state dir for this environment's Den.
+ *
+ * Both the {@link RemoteClient} (which `chezmoi init`s into it) and the
+ * {@link DenService} (which Tracks/Commits/Applies against it) share this single
+ * dir, so the Den a user connects is the very Den every Den operation acts on.
+ */
+function sourceDir(): string {
+  return join(app.getPath('userData'), 'chezmoi-source')
+}
+
 /** Resolve bundled tools and construct a {@link RemoteClient} for this environment. */
 async function buildRemoteClient(): Promise<RemoteClient> {
   const tools = await resolveBundledTools()
   return new RemoteClient({
     chezmoiBin: tools.chezmoi,
     gitBin: tools.git,
-    sourceDir: join(app.getPath('userData'), 'chezmoi-source'),
+    sourceDir: sourceDir(),
     destinationDir: app.getPath('home'),
   })
 }
 
-function registerIpcBridge(): void {
-  // Per-operation cancellation (AbortSignal) is not yet wired across IPC — a
-  // signal cannot cross Electron's structured-clone boundary — so v1 relies on
-  // the RemoteClient's per-call timeout as the guarantee against a hung call.
-  ipcMain.handle(
-    'remote:preflight',
-    async (_event, payload: { url: string; _trace: { traceId: string } }) =>
-      (await getRemoteClient()).preflightRemote(payload.url, { _trace: payload._trace }),
-  )
-  ipcMain.handle(
-    'remote:connect',
-    async (_event, payload: { url: string; _trace: { traceId: string } }) =>
-      (await getRemoteClient()).connectExistingRemote(payload.url, { _trace: payload._trace }),
-  )
-  ipcMain.handle(
-    'remote:latest-sha',
-    async (_event, payload: { url: string; branch?: string; _trace: { traceId: string } }) =>
-      (await getRemoteClient()).latestRemoteSha(payload.url, payload.branch, {
-        _trace: payload._trace,
-      }),
-  )
+/**
+ * Lazily-built, process-wide {@link DenService} for the MVP sync loop (issue 1-04).
+ *
+ * Mirrors {@link getRemoteClient}'s lazy-singleton-with-retry: only a *resolved*
+ * promise is memoized, so a construction failure (missing binaries, identity I/O)
+ * does not brick all Den IPC for the app's lifetime.
+ */
+let denService: Promise<DenService> | undefined
+
+/** Get the shared {@link DenService}, building it lazily on first use. */
+async function getDenService(): Promise<DenService> {
+  denService ??= buildDenService().catch((error: unknown) => {
+    denService = undefined
+    throw error
+  })
+  return denService
+}
+
+/** Resolve tools + this environment's stable identity, then build the DenService. */
+async function buildDenService(): Promise<DenService> {
+  const tools = await resolveBundledTools()
+  const identity = await loadEnvironmentIdentity(app.getPath('userData'))
+  return new DenService({
+    chezmoiBin: tools.chezmoi,
+    gitBin: tools.git,
+    sourceDir: sourceDir(),
+    destinationDir: app.getPath('home'),
+    environment: { id: identity.id, label: identity.label, os: identity.os },
+    tracer,
+  })
 }
 
 /**
@@ -117,7 +148,14 @@ function createWindow(): void {
 // App bootstrap: spin up the window once Electron is ready, then arm the
 // updater and the macOS re-activation handler.
 app.whenReady().then(() => {
-  registerIpcBridge()
+  // The IpcBridge owns the renderer↔main surface: it forwards each call's `_trace`
+  // id into the foundation. AbortSignal-based cancellation is not yet wired across
+  // IPC (a signal cannot cross Electron's structured-clone boundary), so v1 relies
+  // on the foundation's per-call timeouts as the guarantee against a hung call.
+  registerIpcBridge(ipcMain, {
+    remoteClient: getRemoteClient,
+    denService: getDenService,
+  })
   createWindow()
 
   // Scaffold has no published update feed, so this resolves/rejects with nothing

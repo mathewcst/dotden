@@ -50,6 +50,41 @@ const api: DotdenApi = {
       }) as ReturnType<DotdenApi['remote']['latestSha']>
     },
   },
+  den: {
+    // → IPC channel 'den:track'
+    track(targetPath) {
+      return ipcRenderer.invoke('den:track', {
+        targetPath,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['track']>
+    },
+    // → IPC channel 'den:commit'
+    commit(targetPaths) {
+      return ipcRenderer.invoke('den:commit', {
+        targetPaths,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['commit']>
+    },
+    // → IPC channel 'den:sync-push'
+    syncPush() {
+      return ipcRenderer.invoke('den:sync-push', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['syncPush']>
+    },
+    // → IPC channel 'den:list-incoming'
+    listIncoming() {
+      return ipcRenderer.invoke('den:list-incoming', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['listIncoming']>
+    },
+    // → IPC channel 'den:apply'
+    apply(targetPaths) {
+      return ipcRenderer.invoke('den:apply', {
+        targetPaths,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['apply']>
+    },
+  },
 }
 
 contextBridge.exposeInMainWorld('dotden', api)
