@@ -12,7 +12,7 @@ import { SecretPicker } from '@/components/SecretPicker'
 import { SecretWarning } from '@/components/SecretWarning'
 import { StatusTag, type FileStatus } from '@/components/StatusTag'
 import { Button } from '@/components/ui/button'
-import { WorkspaceSidebar } from '@/components/WorkspaceSidebar'
+import { AddInline, WorkspaceSidebar } from '@/components/WorkspaceSidebar'
 import { remoteAxisDecoration } from '@/lib/remote-axis'
 import { PatchDiff } from '@pierre/diffs/react'
 import type {
@@ -30,7 +30,6 @@ import {
   GitCommitVertical,
   GitMerge,
   Loader2,
-  Plus,
   RefreshCw,
   Search,
   Settings,
@@ -856,19 +855,13 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
                   <span className="text-muted-foreground text-xs font-semibold tracking-wide">
                     WORKSPACES
                   </span>
-                  <button
-                    type="button"
+                  <AddInline
                     title="New Workspace"
-                    aria-label="New Workspace"
-                    className="text-muted-foreground hover:text-foreground"
+                    icon={<span className="text-muted-foreground hover:text-foreground text-xs">+</span>}
+                    placeholder="Workspace name…"
                     disabled={role !== 'a' || busy !== null}
-                    onClick={() => {
-                      const label = window.prompt('Name the new Workspace (e.g. Work):')?.trim()
-                      if (label) createWorkspace(label)
-                    }}
-                  >
-                    <Plus className="size-3.5" />
-                  </button>
+                    onSubmit={createWorkspace}
+                  />
                 </div>
                 {paths.length === 0 ? (
                   <p className="text-muted-foreground px-2 py-3 text-xs">
@@ -1308,7 +1301,7 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
           // Re-mount per warn session so the modal's choice/checkbox state starts fresh each
           // time (no reset effect — keeps state changes out of effects, react-patterns). The
           // session signature is this scan's exact paths, which differ per Commit attempt.
-          key={secretWarn.paths.join(' ')}
+          key={secretWarn.paths.join('\u001f')}
           open
           onOpenChange={(next) => {
             if (!next) setSecretWarn(null)

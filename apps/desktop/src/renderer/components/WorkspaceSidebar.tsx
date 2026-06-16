@@ -294,7 +294,7 @@ function GroupBranch({
  * Workspace and creating a Group. Keeps creation a one-field interaction rather than a
  * modal, and never fires with an empty name.
  */
-function AddInline({
+export function AddInline({
   title,
   icon,
   placeholder,
