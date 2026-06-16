@@ -118,6 +118,38 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['affectedEnvironments']>
     },
+    // → IPC channel 'den:create-workspace' (new access boundary, issue 1-14)
+    createWorkspace(label) {
+      return ipcRenderer.invoke('den:create-workspace', {
+        label,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['createWorkspace']>
+    },
+    // → IPC channel 'den:create-group' (nested organization Group, issue 1-14)
+    createGroup(workspaceId, label, parentId) {
+      return ipcRenderer.invoke('den:create-group', {
+        workspaceId,
+        label,
+        parentId,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['createGroup']>
+    },
+    // → IPC channel 'den:move-to-group' (organize-only: never changes access or path)
+    moveFileToGroup(targetPath, groupId) {
+      return ipcRenderer.invoke('den:move-to-group', {
+        targetPath,
+        groupId,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['moveFileToGroup']>
+    },
+    // → IPC channel 'den:set-file-workspace' (access-boundary move, issue 1-14)
+    setFileWorkspace(targetPath, workspaceId) {
+      return ipcRenderer.invoke('den:set-file-workspace', {
+        targetPath,
+        workspaceId,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['setFileWorkspace']>
+    },
   },
   discover: {
     // → IPC channel 'discover:scan'

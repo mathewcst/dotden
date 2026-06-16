@@ -13,12 +13,12 @@ import type { EnvironmentEntry, WorkspacesDoc } from '../myenv-store.js'
 
 const workspaces: WorkspacesDoc = {
   workspaces: [
-    { id: 'personal', label: 'Personal' },
-    { id: 'work', label: 'Work' },
+    { id: 'personal', label: 'Personal', groups: [] },
+    { id: 'work', label: 'Work', groups: [] },
   ],
   placements: [
-    { targetPath: '.zshrc', workspaceId: 'personal' },
-    { targetPath: '.work-only', workspaceId: 'work' },
+    { targetPath: '.zshrc', workspaceId: 'personal', groupId: null },
+    { targetPath: '.work-only', workspaceId: 'work', groupId: null },
   ],
 }
 

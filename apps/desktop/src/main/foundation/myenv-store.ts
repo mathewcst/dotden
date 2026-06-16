@@ -19,16 +19,42 @@
  * which Workspaces exist and which Files belong to them.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 
 /**
  * The default Workspace id every Den is seeded with.
  *
  * v1's MVP thread uses a single, subscribe-all Workspace; richer Workspace/Group
- * structure is a later slice (1-14). Kept as a constant so the seeding and the
+ * structure is this slice (1-14). Kept as a constant so the seeding and the
  * subscription default reference the same id.
  */
 export const DEFAULT_WORKSPACE_ID = 'personal'
+
+/**
+ * A nested **Group** node within a Workspace (issue 1-14, ADR 0005).
+ *
+ * Groups are **purely organizational**: they nest, carry NO access control and NO
+ * Scope, and — critically — **moving a File between Groups never changes its
+ * filesystem path or its access** (CONTEXT.md "Group"; ADR 0005). A Group therefore
+ * has no chezmoi equivalent and lives only here in the chezmoi-ignored `.myenv/`.
+ *
+ * Stored flat (each node naming its `parentId`) rather than as a recursive tree so a
+ * move is a one-field edit and produces a small, merge-friendly git diff in
+ * `.myenv/workspaces.json`. The tree shape is reconstructed by the renderer from the
+ * `parentId` links.
+ */
+export interface Group {
+  /** Stable Group id, referenced by File placements and child Groups. */
+  readonly id: string
+  /** User-facing Group label, e.g. "Shell" or "Editors". */
+  readonly label: string
+  /**
+   * The Group this Group nests under, or `null` for a top-level Group sitting
+   * directly under its Workspace. Nesting is expressed purely through this link.
+   */
+  readonly parentId: string | null
+}
 
 /**
  * A placement of a File (or Folder) inside the Workspace/Group tree.
@@ -36,12 +62,24 @@ export const DEFAULT_WORKSPACE_ID = 'personal'
  * This is dotden's organization metadata, NOT a chezmoi concept — Workspace/Group
  * has "no chezmoi equivalent" (CONTEXT.md mapping table), so it is stored here in
  * the chezmoi-ignored `.myenv/` directory rather than in chezmoi's source state.
+ *
+ * Two fields, two very different roles (ADR 0005):
+ * - **`workspaceId`** is the **access boundary** — an environment applies a File iff
+ *   it subscribes to this Workspace. Changing it changes access.
+ * - **`groupId`** is **pure organization** — which Group the File is filed under for
+ *   tidiness. It changes NEITHER access NOR the File's on-disk `targetPath`.
  */
 export interface FilePlacement {
   /** Destination-relative target path of the File, e.g. `.zshrc` (CONTEXT.md "File"). */
   readonly targetPath: string
   /** The Workspace this File belongs to (its access boundary, ADR 0005). */
   readonly workspaceId: string
+  /**
+   * The Group within {@link FilePlacement.workspaceId} the File is filed under, or
+   * `null` when it sits directly under the Workspace root. Organization only — it
+   * never affects access (which is `workspaceId`) or the File's path (`targetPath`).
+   */
+  readonly groupId: string | null
 }
 
 /** A top-level Workspace: the user-named container and environment-access boundary (ADR 0005). */
@@ -50,6 +88,12 @@ export interface Workspace {
   readonly id: string
   /** User-facing Workspace label, e.g. "Personal". */
   readonly label: string
+  /**
+   * The nested Groups inside this Workspace (issue 1-14). Empty for a Workspace with
+   * no organization yet. Groups are organization only — they do not widen or narrow
+   * the Workspace's access boundary (ADR 0005).
+   */
+  readonly groups: readonly Group[]
 }
 
 /** The synced Workspace tree + File placements (`workspaces.json`). */
@@ -120,7 +164,9 @@ export class MyenvStore {
     const existing = await this.readWorkspaces()
     if (existing.workspaces.length === 0) {
       await this.writeWorkspaces({
-        workspaces: [{ id: DEFAULT_WORKSPACE_ID, label: 'Personal' }],
+        // The single default Workspace seeds with no Groups; the UI keeps the whole
+        // Workspace concept invisible while only this one exists (issue 1-14).
+        workspaces: [{ id: DEFAULT_WORKSPACE_ID, label: 'Personal', groups: [] }],
         placements: [],
       })
     }
@@ -134,18 +180,150 @@ export class MyenvStore {
    * Record a File placement into a Workspace (defaulting to the default Workspace).
    *
    * Called when a File is Tracked so a second environment knows which Workspace the
-   * File belongs to. De-duplicates on `targetPath` so re-Tracking is idempotent.
+   * File belongs to. De-duplicates on `targetPath` so re-Tracking is idempotent — and
+   * preserves any existing Group the File was already filed under, so re-Tracking a
+   * File never silently shuffles it out of its Group (organization is sticky).
    *
    * @param targetPath Destination-relative File path (e.g. `.zshrc`).
    * @param workspaceId Owning Workspace; defaults to {@link DEFAULT_WORKSPACE_ID}.
    */
   async placeFile(targetPath: string, workspaceId = DEFAULT_WORKSPACE_ID): Promise<void> {
     const doc = await this.readWorkspaces()
+    const previous = doc.placements.find((p) => p.targetPath === targetPath)
     const placements = doc.placements.filter((p) => p.targetPath !== targetPath)
     await this.writeWorkspaces({
       ...doc,
-      placements: [...placements, { targetPath, workspaceId }],
+      placements: [
+        ...placements,
+        // Keep the File in the same Group only when its Workspace is unchanged; a
+        // Workspace change resets the Group (a Group belongs to ONE Workspace).
+        {
+          targetPath,
+          workspaceId,
+          groupId: previous?.workspaceId === workspaceId ? (previous?.groupId ?? null) : null,
+        },
+      ],
     })
+  }
+
+  /**
+   * Create a new **Workspace** — the second-and-onward Workspace the user adds to
+   * separate access (e.g. "Work" alongside "Personal"). Creating the *second*
+   * Workspace is what reveals the Workspace concept in the UI (issue 1-14): with only
+   * the default one, the concept stays invisible.
+   *
+   * A new Workspace starts with NO subscribers other than environments the user later
+   * opts in (subscription is exercised in issue 1-13) and no Groups. This is the
+   * access-boundary creation step (ADR 0005); placing Files into it uses
+   * {@link MyenvStore.setFileWorkspace}.
+   *
+   * @param label User-facing Workspace label (e.g. "Work").
+   * @returns The created Workspace (with its freshly minted stable id).
+   */
+  async createWorkspace(label: string): Promise<Workspace> {
+    const doc = await this.readWorkspaces()
+    const workspace: Workspace = { id: `ws-${randomUUID()}`, label, groups: [] }
+    await this.writeWorkspaces({ ...doc, workspaces: [...doc.workspaces, workspace] })
+    return workspace
+  }
+
+  /**
+   * Create a nested **Group** inside a Workspace to organize Files (issue 1-14).
+   *
+   * Groups are pure organization (ADR 0005): this adds a node to the Workspace's
+   * `groups` list and changes NEITHER any environment's access NOR any File's on-disk
+   * path. `parentId` nests the Group under another Group in the same Workspace, or is
+   * `null` for a top-level Group directly under the Workspace.
+   *
+   * @param workspaceId The Workspace the Group lives in (its access is unchanged).
+   * @param label User-facing Group label (e.g. "Shell").
+   * @param parentId Parent Group id for nesting, or `null` for a top-level Group.
+   * @returns The created Group (with its freshly minted stable id).
+   * @throws Error when the Workspace does not exist (never fail silently).
+   */
+  async createGroup(
+    workspaceId: string,
+    label: string,
+    parentId: string | null = null,
+  ): Promise<Group> {
+    const doc = await this.readWorkspaces()
+    const workspace = doc.workspaces.find((w) => w.id === workspaceId)
+    if (!workspace) {
+      throw new Error(`Cannot create a Group: Workspace "${workspaceId}" does not exist.`)
+    }
+    // A parent, if given, must be an existing Group in the SAME Workspace — Groups
+    // never span Workspaces (a Group belongs to exactly one access boundary).
+    if (parentId !== null && !workspace.groups.some((g) => g.id === parentId)) {
+      throw new Error(
+        `Cannot nest under Group "${parentId}": it is not a Group of Workspace "${workspaceId}".`,
+      )
+    }
+    const group: Group = { id: `grp-${randomUUID()}`, label, parentId }
+    const workspaces = doc.workspaces.map((w) =>
+      w.id === workspaceId ? { ...w, groups: [...w.groups, group] } : w,
+    )
+    await this.writeWorkspaces({ ...doc, workspaces })
+    return group
+  }
+
+  /**
+   * File a managed File under a Group (or back to the Workspace root) — the
+   * **organize-only** move (issue 1-14).
+   *
+   * This edits ONLY the placement's `groupId`. It is the load-bearing proof of the
+   * Group invariant (ADR 0005): the File's `workspaceId` (its access) and its
+   * `targetPath` (its on-disk location) are left byte-for-byte unchanged, so moving a
+   * File between Groups never alters where it lands or which environments apply it.
+   *
+   * @param targetPath The managed File to re-file (must already be placed).
+   * @param groupId Target Group id, or `null` to move it to the Workspace root.
+   * @throws Error when the File is not placed, or the Group is not in the File's Workspace.
+   */
+  async moveFileToGroup(targetPath: string, groupId: string | null): Promise<void> {
+    const doc = await this.readWorkspaces()
+    const placement = doc.placements.find((p) => p.targetPath === targetPath)
+    if (!placement) {
+      throw new Error(`Cannot move "${targetPath}": it is not placed in any Workspace.`)
+    }
+    if (groupId !== null) {
+      const workspace = doc.workspaces.find((w) => w.id === placement.workspaceId)
+      if (!workspace?.groups.some((g) => g.id === groupId)) {
+        throw new Error(
+          `Cannot file "${targetPath}" under Group "${groupId}": it is not a Group of the File's Workspace.`,
+        )
+      }
+    }
+    const placements = doc.placements.map((p) =>
+      // ONLY groupId changes — workspaceId (access) and targetPath (path) are preserved.
+      p.targetPath === targetPath ? { ...p, groupId } : p,
+    )
+    await this.writeWorkspaces({ ...doc, placements })
+  }
+
+  /**
+   * Move a managed File into a different **Workspace** — the access-boundary move
+   * (issue 1-14). DISTINCT from {@link MyenvStore.moveFileToGroup}: changing the
+   * Workspace DOES change which environments apply the File (ADR 0005), so it resets
+   * the File's Group (a Group belongs to one Workspace) back to the Workspace root.
+   *
+   * @param targetPath The managed File to move (must already be placed).
+   * @param workspaceId Target Workspace id (its access boundary).
+   * @throws Error when the File is not placed, or the Workspace does not exist.
+   */
+  async setFileWorkspace(targetPath: string, workspaceId: string): Promise<void> {
+    const doc = await this.readWorkspaces()
+    const placement = doc.placements.find((p) => p.targetPath === targetPath)
+    if (!placement) {
+      throw new Error(`Cannot move "${targetPath}": it is not placed in any Workspace.`)
+    }
+    if (!doc.workspaces.some((w) => w.id === workspaceId)) {
+      throw new Error(`Cannot move "${targetPath}": Workspace "${workspaceId}" does not exist.`)
+    }
+    const placements = doc.placements.map((p) =>
+      // Workspace change resets the Group, since Groups never span Workspaces.
+      p.targetPath === targetPath ? { ...p, workspaceId, groupId: null } : p,
+    )
+    await this.writeWorkspaces({ ...doc, placements })
   }
 
   /**
@@ -180,11 +358,22 @@ export class MyenvStore {
     await this.writeEnvironments({ environments: [...others, env] })
   }
 
-  /** Read the Workspace tree + placements, returning an empty doc when absent. */
+  /**
+   * Read the Workspace tree + placements, returning an empty doc when absent.
+   *
+   * Normalizes the on-disk shape so callers always see the canonical model regardless
+   * of when the `.myenv/` file was written: a Workspace from before the 1-14 Group
+   * slice has no `groups`, and a placement from before it has no `groupId`. Defaulting
+   * them here (to `[]` / `null`) means a Den synced by an older dotden still loads
+   * cleanly — the metadata is forward-compatible (never fail silently on old data).
+   */
   async readWorkspaces(): Promise<WorkspacesDoc> {
-    return (
-      (await this.readJson<WorkspacesDoc>(WORKSPACES_FILE)) ?? { workspaces: [], placements: [] }
-    )
+    const raw = await this.readJson<WorkspacesDoc>(WORKSPACES_FILE)
+    if (!raw) return { workspaces: [], placements: [] }
+    return {
+      workspaces: raw.workspaces.map((w) => ({ ...w, groups: w.groups ?? [] })),
+      placements: raw.placements.map((p) => ({ ...p, groupId: p.groupId ?? null })),
+    }
   }
 
   /** Read the environment registry, returning an empty doc when absent. */

@@ -23,11 +23,14 @@ import { StatusTag, type FileStatus } from '@/components/StatusTag'
 import { EnvironmentBadge } from '@/components/EnvironmentBadge'
 import { RowContextMenu, type RowVerb } from '@/components/RowContextMenu'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { WorkspaceSidebar } from '@/components/WorkspaceSidebar'
+import { FileRow } from '@/components/FileRow'
 import type {
   AffectedEnvironment,
   FileTreeEntry,
   IncomingReviewItem,
 } from '../../main/foundation/den-service'
+import type { Workspace as WorkspaceModel } from '../../main/foundation/myenv-store'
 
 /** Discriminates which environment's role this shell is driving (A vs B copy/actions). */
 type Role = 'a' | 'b'
@@ -69,14 +72,27 @@ function toGitStatus(file: FileTreeEntry): GitStatusEntry | null {
 export function Workspace({ role }: { role: Role }) {
   // env A: the managed File tree read from the main process (the real chezmoi view).
   const [files, setFiles] = useState<readonly FileTreeEntry[]>([])
-  const [workspaceLabel, setWorkspaceLabel] = useState('Personal')
+  // The Workspace/Group tree (issue 1-14), read from the synced `.myenv/` over `den:tree`.
+  // The Workspace concept stays invisible while exactly one Workspace exists.
+  const [workspaces, setWorkspaces] = useState<readonly WorkspaceModel[]>([])
+  const workspaceLabel = workspaces[0]?.label ?? 'Personal'
   // env B: incoming Files for a reviewed Apply (the 1-04 detect→apply half).
   const [incoming, setIncoming] = useState<readonly IncomingReviewItem[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [diff, setDiff] = useState<string | null>(null)
   const [lastCommitMessage, setLastCommitMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState<
-    null | 'load' | 'track' | 'commit' | 'push' | 'list' | 'apply' | 'diff' | 'untrack' | 'delete'
+    | null
+    | 'load'
+    | 'track'
+    | 'commit'
+    | 'push'
+    | 'list'
+    | 'apply'
+    | 'diff'
+    | 'untrack'
+    | 'delete'
+    | 'organize'
   >(null)
   const [error, setError] = useState<string | null>(null)
   const [newPath, setNewPath] = useState('')
@@ -198,7 +214,7 @@ export function Workspace({ role }: { role: Role }) {
       run('load', async () => {
         const view = await window.dotden.den.tree()
         setFiles(view.files)
-        setWorkspaceLabel(view.workspaces[0]?.label ?? 'Personal')
+        setWorkspaces(view.workspaces)
       }),
     [run],
   )
@@ -217,7 +233,7 @@ export function Workspace({ role }: { role: Role }) {
         const view = await window.dotden.den.tree()
         if (active) {
           setFiles(view.files)
-          setWorkspaceLabel(view.workspaces[0]?.label ?? 'Personal')
+          setWorkspaces(view.workspaces)
         }
       } catch (caught) {
         if (active) {
@@ -324,6 +340,44 @@ export function Workspace({ role }: { role: Role }) {
     })
   }, [confirm, run, reloadTree, selectFile, selected])
 
+  // ── Organization verbs (issue 1-14) — each mutates only the synced `.myenv/` and
+  // refreshes the tree so the new Workspace/Group (and any re-filed File) shows up. ──
+
+  // Create a Workspace (the access boundary). Creating the SECOND one is what reveals
+  // the Workspace concept in the sidebar — until then the whole concept stays hidden.
+  const createWorkspace = useCallback(
+    (label: string) =>
+      run('organize', async () => {
+        await window.dotden.den.createWorkspace(label)
+        await reloadTree()
+      }),
+    [run, reloadTree],
+  )
+
+  // Create a nested Group inside a Workspace (pure organization — never changes access
+  // or any File's on-disk path; that invariant is owned in the main process).
+  const createGroup = useCallback(
+    (workspaceId: string, label: string, parentId: string | null) =>
+      run('organize', async () => {
+        await window.dotden.den.createGroup(workspaceId, label, parentId)
+        await reloadTree()
+      }),
+    [run, reloadTree],
+  )
+
+  // File the selected File under a Group (or back to its Workspace root). Organization
+  // only: the File's Workspace (access) and on-disk path are untouched.
+  const moveSelectedToGroup = useCallback(
+    (groupId: string | null) => {
+      if (!selected) return
+      void run('organize', async () => {
+        await window.dotden.den.moveFileToGroup(selected, groupId)
+        await reloadTree()
+      })
+    },
+    [run, reloadTree, selected],
+  )
+
   // The header/inspector status pill for the selected File (the honest dotden state).
   const selectedFile = files.find((f) => f.targetPath === selected)
   const selectedIncoming = incoming.find((i) => i.targetPath === selected)
@@ -333,6 +387,19 @@ export function Workspace({ role }: { role: Role }) {
       ? 'tracked'
       : null
   const changedCount = files.filter((f) => !f.muted && f.status !== null).length
+
+  // Switch the left pane to the grouped Workspace/Group sidebar (issue 1-14) once the
+  // organization layer is in play: a SECOND Workspace exists (the concept is now
+  // visible) OR the user has created any Group to organize Files. Until then the flat
+  // `@pierre/trees` tree is shown and the Workspace concept stays invisible. env B (the
+  // incoming-review role) always uses the flat incoming list.
+  const useGroupedSidebar =
+    role === 'a' && (workspaces.length > 1 || workspaces.some((w) => w.groups.length > 0))
+
+  // The Groups available for filing the selected File — those of its OWN Workspace, since
+  // a Group belongs to exactly one Workspace (its access boundary, ADR 0005).
+  const selectedFileGroups =
+    workspaces.find((w) => w.id === selectedFile?.workspaceId)?.groups ?? []
 
   return (
     <div className="bg-background text-foreground grid h-screen grid-rows-[auto_1fr]">
@@ -365,29 +432,74 @@ export function Workspace({ role }: { role: Role }) {
       <div className="grid grid-cols-[260px_1fr_300px] overflow-hidden">
         {/* Left pane — Workspace tree. */}
         <aside className="border-border bg-sidebar flex flex-col overflow-hidden border-r">
-          <div className="flex items-center justify-between px-3 pt-3 pb-1">
-            <span className="text-muted-foreground text-xs font-semibold tracking-wide">
-              WORKSPACES
-            </span>
-            <Plus className="text-muted-foreground size-3.5" aria-label="add workspace" />
-          </div>
           <div className="min-h-0 flex-1 overflow-auto px-1">
-            {busy === 'load' && paths.length === 0 ? (
+            {busy === 'load' && paths.length === 0 && !useGroupedSidebar ? (
               <p className="text-muted-foreground flex items-center gap-2 px-2 py-3 text-xs">
                 <Loader2 className="size-3.5 animate-spin" /> Reading your managed Files…
               </p>
-            ) : paths.length === 0 ? (
-              <p className="text-muted-foreground px-2 py-3 text-xs">
-                {role === 'a'
-                  ? 'No Files yet. Track a File below to start managing it.'
-                  : 'No incoming Files. Detect the Remote, then refresh.'}
-              </p>
-            ) : (
-              // Right-click any row for the verbs (Commit · Apply · Untrack · Delete
-              // everywhere); the menu resolves which File from the row's data-item-path.
+            ) : useGroupedSidebar ? (
+              // Organization layer (issue 1-14): the Workspace concept is visible (a 2nd
+              // Workspace exists) OR the user has organized Files into Groups, so render
+              // the Workspace sections + nested Group tree instead of the flat tree. The
+              // File rows still carry `data-item-path`, so the same right-click verbs work.
               <RowContextMenu onVerb={onRowVerb}>
-                <FileTree model={model} className="text-sm" />
+                <WorkspaceSidebar
+                  workspaces={workspaces}
+                  files={files}
+                  busy={busy === 'organize'}
+                  onCreateWorkspace={createWorkspace}
+                  onCreateGroup={createGroup}
+                  renderFiles={(workspaceId, groupId) =>
+                    files
+                      .filter((f) => f.workspaceId === workspaceId && f.groupId === groupId)
+                      .map((f) => (
+                        <FileRow
+                          key={f.targetPath}
+                          file={f}
+                          selected={selected === f.targetPath}
+                          onSelect={(path) => void selectFile(path)}
+                        />
+                      ))
+                  }
+                />
               </RowContextMenu>
+            ) : (
+              // Simple case: exactly one Workspace, no Groups → the Workspace concept is
+              // INVISIBLE (issue 1-14). Just the `WORKSPACES` header (the `+` creates the
+              // first extra Workspace, which reveals the concept) over the flat tree.
+              <>
+                <div className="flex items-center justify-between px-3 pt-3 pb-1">
+                  <span className="text-muted-foreground text-xs font-semibold tracking-wide">
+                    WORKSPACES
+                  </span>
+                  <button
+                    type="button"
+                    title="New Workspace"
+                    aria-label="New Workspace"
+                    className="text-muted-foreground hover:text-foreground"
+                    disabled={role !== 'a' || busy !== null}
+                    onClick={() => {
+                      const label = window.prompt('Name the new Workspace (e.g. Work):')?.trim()
+                      if (label) createWorkspace(label)
+                    }}
+                  >
+                    <Plus className="size-3.5" />
+                  </button>
+                </div>
+                {paths.length === 0 ? (
+                  <p className="text-muted-foreground px-2 py-3 text-xs">
+                    {role === 'a'
+                      ? 'No Files yet. Track a File below to start managing it.'
+                      : 'No incoming Files. Detect the Remote, then refresh.'}
+                  </p>
+                ) : (
+                  // Right-click any row for the verbs (Commit · Apply · Untrack · Delete
+                  // everywhere); the menu resolves which File from the row's data-item-path.
+                  <RowContextMenu onVerb={onRowVerb}>
+                    <FileTree model={model} className="text-sm" />
+                  </RowContextMenu>
+                )}
+              </>
             )}
           </div>
           {/* This environment's editable label + git-log attribution (issue 1-05). */}
@@ -548,7 +660,11 @@ export function Workspace({ role }: { role: Role }) {
             <h2 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide">FILE</h2>
             <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2 text-xs">
               <dt className="text-muted-foreground">Workspace</dt>
-              <dd className="text-right">{selectedIncoming?.workspaceId ?? workspaceLabel}</dd>
+              <dd className="text-right">
+                {selectedIncoming?.workspaceId ??
+                  workspaces.find((w) => w.id === selectedFile?.workspaceId)?.label ??
+                  workspaceLabel}
+              </dd>
               <dt className="text-muted-foreground">Scope</dt>
               <dd className="text-right">
                 {selectedFile?.muted ? (
@@ -567,6 +683,38 @@ export function Workspace({ role }: { role: Role }) {
               </dd>
             </dl>
           </section>
+
+          {/* ORGANIZE — file the selected File into a Group within its Workspace (issue
+              1-14). Pure organization: this never changes the File's access (Workspace)
+              or its on-disk path. Only shown for a managed File on env A once Groups
+              exist; the Workspace owns the Groups, so the menu lists only its own. */}
+          {role === 'a' && selectedFile ? (
+            <section className="border-border bg-card rounded-md border p-3">
+              <h2 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide">
+                GROUP
+              </h2>
+              {selectedFileGroups.length === 0 ? (
+                <p className="text-muted-foreground text-xs">
+                  No Groups yet in this Workspace. Add one in the sidebar to organize Files — Groups
+                  never change where a File lands or which environments apply it.
+                </p>
+              ) : (
+                <select
+                  className="border-input bg-background w-full rounded-md border px-2 py-1 text-xs"
+                  value={selectedFile.groupId ?? ''}
+                  disabled={busy !== null}
+                  onChange={(event) => moveSelectedToGroup(event.target.value || null)}
+                >
+                  <option value="">— No Group (Workspace root) —</option>
+                  {selectedFileGroups.map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </section>
+          ) : null}
 
           {role === 'a' && lastCommitMessage ? (
             <section className="border-border bg-card rounded-md border p-3">

@@ -76,6 +76,8 @@ describe('DenService end-to-end thread (real chezmoi/git)', () => {
     expect((await aStore.readWorkspaces()).placements).toContainEqual({
       targetPath: '.zshrc',
       workspaceId: 'personal',
+      // A freshly Tracked File sits directly under its Workspace (no Group yet, 1-14).
+      groupId: null,
     })
 
     // Sync now: push the local Commit to the Remote — now it is shared.
@@ -248,6 +250,7 @@ describe('DenService Untrack / Delete everywhere verbs (issue 1-08)', () => {
     expect((await store.readWorkspaces()).placements).toContainEqual({
       targetPath: '.zshrc',
       workspaceId: 'personal',
+      groupId: null,
     })
 
     await env.untrackFile('.zshrc', 'trace-untrack')
@@ -381,6 +384,112 @@ describe('DenService Untrack / Delete everywhere verbs (issue 1-08)', () => {
     // The environment the user is acting from is surfaced first AND flagged isSelf.
     expect(affected[0]).toMatchObject({ id: 'env-a', label: 'this-mac', isSelf: true })
     expect(affected.filter((a) => a.isSelf)).toHaveLength(1)
+  })
+})
+
+// Workspaces (access boundary) + nested Groups (organization), issue 1-14. Proves the
+// user-authored organization layer is real end to end: a created Workspace/Group is
+// persisted in the synced `.myenv/`, travels through the Remote to a second
+// environment, and — the load-bearing invariant — filing a File into a Group changes
+// NEITHER its access (Workspace) NOR its on-disk path.
+describe('DenService Workspaces + nested Groups (issue 1-14)', () => {
+  it('creates a Workspace + nested Groups, files a File into a Group, and it all travels through Sync', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const aHome = join(root, 'a-home')
+    const aSource = join(root, 'a-source')
+    await mkdir(aHome, { recursive: true })
+    await initSourceRepo(aSource, remote)
+    const envA = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: aHome,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+
+    // Track a File (auto-placed in the default 'personal' Workspace, no Group).
+    await writeFile(join(aHome, '.zshrc'), 'export EDITOR=nvim\n')
+    await envA.trackFile('.zshrc', 'trace-track')
+
+    // Capture the File's on-disk path + access BEFORE any organization.
+    const store = new MyenvStore(aSource)
+    const before = (await store.readWorkspaces()).placements.find((p) => p.targetPath === '.zshrc')!
+    expect(before).toMatchObject({ workspaceId: 'personal', groupId: null })
+
+    // Create a nested Group ("Shell" → "zsh") inside the default Workspace, then file
+    // the File under the child Group — a pure organization move.
+    const shell = await envA.createGroup('personal', 'Shell', null, 'trace-grp-1')
+    const zsh = await envA.createGroup('personal', 'zsh', shell.id, 'trace-grp-2')
+    await envA.moveFileToGroup('.zshrc', zsh.id, 'trace-move')
+
+    const after = (await store.readWorkspaces()).placements.find((p) => p.targetPath === '.zshrc')!
+    // Only the Group changed — access boundary + on-disk path are byte-for-byte the same.
+    expect(after.groupId).toBe(zsh.id)
+    expect(after.workspaceId).toBe(before.workspaceId) // access UNCHANGED
+    expect(after.targetPath).toBe(before.targetPath) // path UNCHANGED
+
+    // The File's source-state file (its real on-disk encoding) is exactly where it was:
+    // a Group is metadata, so `dot_zshrc` never moved.
+    expect(existsSync(join(aSource, 'dot_zshrc'))).toBe(true)
+
+    // Create a second Workspace too (this is what reveals the concept in the UI).
+    const work = await envA.createWorkspace('Work', 'trace-ws')
+    expect(work.id).not.toBe('personal')
+
+    // Commit the File + Sync so the whole organization tree travels to a second env.
+    await envA.commitTracked(['.zshrc'], 'trace-commit')
+    await envA.syncPush('trace-push')
+
+    // ── env B clones and reconstructs the SAME Workspace/Group tree from `.myenv/`. ──
+    const bSource = join(root, 'b-source')
+    await cloneRepo(gitBin, remote, bSource)
+    const bDoc = await new MyenvStore(bSource).readWorkspaces()
+
+    // Both Workspaces travelled…
+    expect(bDoc.workspaces.map((w) => w.label).sort()).toEqual(['Personal', 'Work'])
+    // …the nested Groups travelled with their parent links intact…
+    const personal = bDoc.workspaces.find((w) => w.id === 'personal')!
+    expect(personal.groups.map((g) => g.label)).toEqual(['Shell', 'zsh'])
+    expect(personal.groups.find((g) => g.label === 'zsh')?.parentId).toBe(shell.id)
+    // …and the File is still filed under the child Group, with unchanged access + path.
+    expect(bDoc.placements).toContainEqual({
+      targetPath: '.zshrc',
+      workspaceId: 'personal',
+      groupId: zsh.id,
+    })
+  })
+
+  it('the fileTree view carries each File’s Group + the Workspaces’ Group trees (issue 1-14)', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const home = join(root, 'home')
+    const source = join(root, 'source')
+    await mkdir(home, { recursive: true })
+    await initSourceRepo(source, remote)
+    const env = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: source,
+      destinationDir: home,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+
+    await writeFile(join(home, '.zshrc'), 'export EDITOR=nvim\n')
+    await env.trackFile('.zshrc', 'trace-track')
+    await env.commitTracked(['.zshrc'], 'trace-commit')
+    const shell = await env.createGroup('personal', 'Shell', null, 'trace-grp')
+    await env.moveFileToGroup('.zshrc', shell.id, 'trace-move')
+
+    const view = await env.fileTree()
+    // The tree row knows its Group so the renderer can nest it under "Shell".
+    expect(view.files.find((f) => f.targetPath === '.zshrc')?.groupId).toBe(shell.id)
+    // The Workspace carries its Group tree so the renderer can render the sections.
+    expect(view.workspaces.find((w) => w.id === 'personal')?.groups.map((g) => g.label)).toEqual([
+      'Shell',
+    ])
   })
 })
 

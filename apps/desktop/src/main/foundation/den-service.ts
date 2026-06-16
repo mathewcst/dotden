@@ -32,6 +32,8 @@ import {
   DEFAULT_WORKSPACE_ID,
   MyenvStore,
   type EnvironmentEntry,
+  type Group,
+  type Workspace,
   type WorkspacesDoc,
 } from './myenv-store.js'
 import type { OperationTracer } from './operation-tracer.js'
@@ -124,6 +126,12 @@ export interface FileTreeEntry {
   readonly targetPath: string
   /** The Workspace this File belongs to, from the synced `.myenv/` placements. */
   readonly workspaceId: string
+  /**
+   * The Group within {@link FileTreeEntry.workspaceId} this File is filed under, or
+   * `null` when it sits directly under the Workspace root (issue 1-14). Pure
+   * organization — it never affects access or the File's `targetPath`.
+   */
+  readonly groupId: string | null
   /**
    * The File's local-axis git status (M/A/D/R/U → modified/added/deleted/…), or `null`
    * when chezmoi reports no change for it. The renderer maps these onto `setGitStatus`
@@ -530,14 +538,19 @@ export class DenService {
     // Index the local-axis status + the muted set + placements for O(1) per-File joins.
     const statusByPath = new Map(parseChezmoiStatus(statusRaw).map((s) => [s.path, s.status]))
     const ignoredSet = new Set(ignored)
-    const placementOf = new Map(workspacesDoc.placements.map((p) => [p.targetPath, p.workspaceId]))
-    const files: FileTreeEntry[] = managed.map((targetPath) => ({
-      targetPath,
-      // Default an unplaced managed File to the default Workspace rather than dropping it.
-      workspaceId: placementOf.get(targetPath) ?? DEFAULT_WORKSPACE_ID,
-      status: statusByPath.get(targetPath) ?? null,
-      muted: ignoredSet.has(targetPath),
-    }))
+    const placementOf = new Map(workspacesDoc.placements.map((p) => [p.targetPath, p]))
+    const files: FileTreeEntry[] = managed.map((targetPath) => {
+      const placement = placementOf.get(targetPath)
+      return {
+        targetPath,
+        // Default an unplaced managed File to the default Workspace rather than dropping it.
+        workspaceId: placement?.workspaceId ?? DEFAULT_WORKSPACE_ID,
+        // An unplaced/ungrouped File sits at its Workspace root (null).
+        groupId: placement?.groupId ?? null,
+        status: statusByPath.get(targetPath) ?? null,
+        muted: ignoredSet.has(targetPath),
+      }
+    })
     return { files, workspaces: workspacesDoc.workspaces }
   }
 
@@ -555,6 +568,138 @@ export class DenService {
    */
   async fileDiff(targetPath: string): Promise<string> {
     return this.chezmoi.diff([targetPath])
+  }
+
+  // ── Workspaces + nested Groups (issue 1-14) ──
+  // The user-authored organization layer chezmoi has no notion of, persisted in the
+  // synced `.myenv/` (ADR 0024, "no chezmoi equivalent"). Creating/moving here mutates
+  // ONLY `.myenv/workspaces.json`; it never touches chezmoi source state or any file on
+  // disk. So these commit the metadata edit LOCALLY (ADR 0006) — like the other verbs,
+  // the change travels only on the next Sync, which is what lets a second environment
+  // reconstruct the same Workspace/Group tree.
+
+  /**
+   * **Create a Workspace** — a new top-level access boundary (e.g. "Work"), issue 1-14.
+   *
+   * Creating the SECOND Workspace is the moment the Workspace concept becomes visible
+   * in the UI; with only the default one it stays hidden (so simple setups stay
+   * simple). A new Workspace is created with no Groups and no subscribers — subscribing
+   * an environment to it is the access step exercised in issue 1-13. The new Workspace
+   * tree is committed LOCALLY so it travels on the next Sync (ADR 0006).
+   *
+   * @param label User-facing Workspace label (e.g. "Work").
+   * @param traceId Correlation id for the wide event.
+   * @returns The created Workspace (id + label + empty Groups).
+   */
+  async createWorkspace(label: string, traceId: string): Promise<Workspace> {
+    const span = this.tracer?.startOperation('organize', traceId)
+    try {
+      const workspace = await this.store.createWorkspace(label)
+      await this.commitMetadata(`Create Workspace ${label}`)
+      span?.setAttribute('workspaceCount', (await this.store.readWorkspaces()).workspaces.length)
+      span?.end('ok')
+      return workspace
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * **Create a Group** inside a Workspace to organize Files (issue 1-14).
+   *
+   * Groups are PURE organization (ADR 0005): this writes a node into the Workspace's
+   * `groups` tree and changes NEITHER any environment's access NOR any File's on-disk
+   * path. `parentId` nests it under another Group in the same Workspace, or `null` for
+   * a top-level Group. Committed LOCALLY so the tidy-up travels on the next Sync.
+   *
+   * @param workspaceId The Workspace the Group lives in (access unchanged).
+   * @param label User-facing Group label (e.g. "Shell").
+   * @param parentId Parent Group id for nesting, or `null` for a top-level Group.
+   * @param traceId Correlation id for the wide event.
+   * @returns The created Group (id + label + parentId).
+   */
+  async createGroup(
+    workspaceId: string,
+    label: string,
+    parentId: string | null,
+    traceId: string,
+  ): Promise<Group> {
+    const span = this.tracer?.startOperation('organize', traceId)
+    try {
+      const group = await this.store.createGroup(workspaceId, label, parentId)
+      await this.commitMetadata(`Create Group ${label}`)
+      span?.end('ok')
+      return group
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * **File a managed File under a Group** (or back to the Workspace root) — the
+   * organize-only move (issue 1-14). This edits ONLY the placement's `groupId`; the
+   * File's `workspaceId` (access) and `targetPath` (on-disk path) are left unchanged
+   * (the ADR 0005 invariant, owned and enforced in {@link MyenvStore.moveFileToGroup}).
+   *
+   * @param targetPath The managed File to re-file (must already be placed).
+   * @param groupId Target Group id, or `null` to move it to the Workspace root.
+   * @param traceId Correlation id for the wide event.
+   */
+  async moveFileToGroup(
+    targetPath: string,
+    groupId: string | null,
+    traceId: string,
+  ): Promise<void> {
+    const span = this.tracer?.startOperation('organize', traceId)
+    try {
+      await this.store.moveFileToGroup(targetPath, groupId)
+      await this.commitMetadata(`Organize ${targetPath}`)
+      span?.setAttribute('fileCount', 1)
+      span?.end('ok')
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * **Move a managed File into a different Workspace** — the access-boundary move
+   * (issue 1-14). Unlike {@link moveFileToGroup}, changing the Workspace DOES change
+   * which environments apply the File (ADR 0005), so the File's Group resets to the new
+   * Workspace's root. The on-disk `targetPath` is still untouched. Committed LOCALLY.
+   *
+   * @param targetPath The managed File to move (must already be placed).
+   * @param workspaceId Target Workspace id (its access boundary).
+   * @param traceId Correlation id for the wide event.
+   */
+  async setFileWorkspace(targetPath: string, workspaceId: string, traceId: string): Promise<void> {
+    const span = this.tracer?.startOperation('organize', traceId)
+    try {
+      await this.store.setFileWorkspace(targetPath, workspaceId)
+      await this.commitMetadata(`Move ${targetPath} to another Workspace`)
+      span?.setAttribute('fileCount', 1)
+      span?.end('ok')
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * Commit a `.myenv/`-only metadata edit LOCALLY (ADR 0006).
+   *
+   * The Workspace/Group operations touch only `.myenv/workspaces.json` (and the
+   * `.chezmoiignore` that keeps `.myenv/` out of chezmoi's managed set) — never chezmoi
+   * source state or any file on disk. Staging just those paths keeps the commit scoped
+   * to the organization change. Local until the next Sync, which is what carries the
+   * tree to a second environment (ADR 0024).
+   *
+   * @param message The git commit subject (e.g. "Create Workspace Work").
+   */
+  private async commitMetadata(message: string): Promise<void> {
+    await this.git.commit(['.myenv', '.chezmoiignore'], message)
   }
 
   /** Read the synced model (this environment's registry entry + the Workspace doc). */

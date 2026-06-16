@@ -150,6 +150,37 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     return (await deps.denService()).affectedEnvironments(targetPath)
   })
 
+  // The Workspaces + nested Groups organization layer (issue 1-14): create a Workspace
+  // (access boundary) / Group (organization), and re-file a File between Groups or
+  // Workspaces. Each MUTATES the synced `.myenv/` metadata, so its `_trace` id IS
+  // forwarded so the organize Operation emits a correlated wide event.
+  registrar.handle('den:create-workspace', async (_event, payload: TracedPayload) => {
+    const { label } = payload as TracedPayload & { label: string }
+    return (await deps.denService()).createWorkspace(label, traceId(payload))
+  })
+  registrar.handle('den:create-group', async (_event, payload: TracedPayload) => {
+    const { workspaceId, label, parentId } = payload as TracedPayload & {
+      workspaceId: string
+      label: string
+      parentId: string | null
+    }
+    return (await deps.denService()).createGroup(workspaceId, label, parentId, traceId(payload))
+  })
+  registrar.handle('den:move-to-group', async (_event, payload: TracedPayload) => {
+    const { targetPath, groupId } = payload as TracedPayload & {
+      targetPath: string
+      groupId: string | null
+    }
+    return (await deps.denService()).moveFileToGroup(targetPath, groupId, traceId(payload))
+  })
+  registrar.handle('den:set-file-workspace', async (_event, payload: TracedPayload) => {
+    const { targetPath, workspaceId } = payload as TracedPayload & {
+      targetPath: string
+      workspaceId: string
+    }
+    return (await deps.denService()).setFileWorkspace(targetPath, workspaceId, traceId(payload))
+  })
+
   // ── Discovery channels (issue 1-06): first-run tool-catalog scan + drag-in inspect ──
   // Read-only: discovery only FINDS candidate Files; Tracking a pick is the den:track path.
   // Each still asserts the `_trace` envelope so EVERY IPC call is uniformly correlated.

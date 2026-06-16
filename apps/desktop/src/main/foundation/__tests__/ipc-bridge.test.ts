@@ -80,6 +80,54 @@ describe('IpcBridge', () => {
     expect(den.fileDiff).toHaveBeenCalledWith('.zshrc')
   })
 
+  it('forwards the _trace id into the DenService on every organize den:* channel (issue 1-14)', async () => {
+    const den = {
+      createWorkspace: vi.fn(async () => ({ id: 'ws-1', label: 'Work', groups: [] })),
+      createGroup: vi.fn(async () => ({ id: 'grp-1', label: 'Shell', parentId: null })),
+      moveFileToGroup: vi.fn(async () => undefined),
+      setFileWorkspace: vi.fn(async () => undefined),
+    }
+    const { registrar, handlers } = fakeRegistrar()
+    registerIpcBridge(registrar, {
+      remoteClient: async () => ({}) as never,
+      denService: async () => den as never,
+      discoveryScanner: async () => ({}) as never,
+      environmentRegistry: async () => ({}) as never,
+    })
+
+    await handlers.get('den:create-workspace')?.({}, {
+      label: 'Work',
+      _trace: { traceId: 'o1' },
+    } as never)
+    await handlers.get('den:create-group')?.({}, {
+      workspaceId: 'personal',
+      label: 'Shell',
+      parentId: null,
+      _trace: { traceId: 'o2' },
+    } as never)
+    await handlers.get('den:move-to-group')?.({}, {
+      targetPath: '.zshrc',
+      groupId: 'grp-1',
+      _trace: { traceId: 'o3' },
+    } as never)
+    await handlers.get('den:set-file-workspace')?.({}, {
+      targetPath: '.zshrc',
+      workspaceId: 'ws-1',
+      _trace: { traceId: 'o4' },
+    } as never)
+
+    // Each organize verb MUTATES `.myenv/`, so the bridge forwards its trace id.
+    expect(den.createWorkspace).toHaveBeenCalledWith('Work', 'o1')
+    expect(den.createGroup).toHaveBeenCalledWith('personal', 'Shell', null, 'o2')
+    expect(den.moveFileToGroup).toHaveBeenCalledWith('.zshrc', 'grp-1', 'o3')
+    expect(den.setFileWorkspace).toHaveBeenCalledWith('.zshrc', 'ws-1', 'o4')
+
+    // …and each still hard-fails without a _trace envelope (never an uncorrelated mutation).
+    await expect(
+      handlers.get('den:create-workspace')?.({}, { label: 'X' } as never),
+    ).rejects.toThrow('without a _trace envelope')
+  })
+
   it('forwards the _trace envelope into the RemoteClient on every remote:* channel', async () => {
     const remote = {
       preflightRemote: vi.fn(async () => ({ reachable: true, gitCommand: 'git' })),

@@ -28,6 +28,7 @@ import type {
   FileTreeView,
   IncomingReviewItem,
 } from '../main/foundation/den-service.js'
+import type { Group, Workspace } from '../main/foundation/myenv-store.js'
 import type {
   ClaimSuggestion,
   EnvironmentWithAttribution,
@@ -139,6 +140,34 @@ export interface DotdenApi {
      * lose the real path before confirming.
      */
     affectedEnvironments(targetPath: string): Promise<readonly AffectedEnvironment[]>
+    /**
+     * **Create a Workspace** (issue 1-14) — a new top-level access boundary the user
+     * adds to separate access (e.g. "Work"). Maps to a synced `.myenv/` write committed
+     * LOCALLY (ADR 0006); has no chezmoi equivalent. Creating the *second* Workspace is
+     * what reveals the Workspace concept in the UI (it stays invisible while only the
+     * default one exists).
+     */
+    createWorkspace(label: string): Promise<Workspace>
+    /**
+     * **Create a Group** inside a Workspace (issue 1-14) — a nested, user-named node
+     * that organizes Files. Groups are PURE organization (ADR 0005): they change
+     * neither access (subscription) nor any File's on-disk path. `parentId` nests the
+     * Group under another Group in the same Workspace, or is `null` for a top-level one.
+     */
+    createGroup(workspaceId: string, label: string, parentId: string | null): Promise<Group>
+    /**
+     * **File a managed File under a Group** (or back to the Workspace root, `null`)
+     * — the organize-only move (issue 1-14). Changes ONLY the placement's Group; the
+     * File's access (Workspace) and on-disk path are untouched (the ADR 0005 invariant).
+     */
+    moveFileToGroup(targetPath: string, groupId: string | null): Promise<void>
+    /**
+     * **Move a managed File into a different Workspace** (issue 1-14). Unlike
+     * {@link DotdenApi.den.moveFileToGroup}, this DOES change which environments apply
+     * the File (ADR 0005), so the File's Group resets to the new Workspace's root. The
+     * File's on-disk path is still untouched.
+     */
+    setFileWorkspace(targetPath: string, workspaceId: string): Promise<void>
   }
   /**
    * First-run **discovery** operations (issue 1-06), forwarded to `discover:*` IPC

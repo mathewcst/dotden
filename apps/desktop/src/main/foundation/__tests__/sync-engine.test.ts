@@ -29,12 +29,12 @@ describe('SyncEngine incoming-clean routing (ADR 0008 load-bearing)', () => {
   it('plans Apply only for incoming-clean Files in a subscribed Workspace', () => {
     const workspaces: WorkspacesDoc = {
       workspaces: [
-        { id: 'personal', label: 'Personal' },
-        { id: 'work', label: 'Work' },
+        { id: 'personal', label: 'Personal', groups: [] },
+        { id: 'work', label: 'Work', groups: [] },
       ],
       placements: [
-        { targetPath: '.zshrc', workspaceId: 'personal' },
-        { targetPath: '.work-only', workspaceId: 'work' },
+        { targetPath: '.zshrc', workspaceId: 'personal', groupId: null },
+        { targetPath: '.work-only', workspaceId: 'work', groupId: null },
       ],
     }
     // Subscribed to 'personal' only — '.work-only' must never be applied here.
@@ -54,8 +54,8 @@ describe('SyncEngine incoming-clean routing (ADR 0008 load-bearing)', () => {
 
   it('never auto-resolves a Conflict: a conflicting File is deferred, never planned', () => {
     const workspaces: WorkspacesDoc = {
-      workspaces: [{ id: 'personal', label: 'Personal' }],
-      placements: [{ targetPath: '.zshrc', workspaceId: 'personal' }],
+      workspaces: [{ id: 'personal', label: 'Personal', groups: [] }],
+      placements: [{ targetPath: '.zshrc', workspaceId: 'personal', groupId: null }],
     }
     const engine = new SyncEngine({ environment: env(['personal']), workspaces })
 
@@ -82,10 +82,10 @@ describe('SyncEngine incoming-clean routing (ADR 0008 load-bearing)', () => {
       const subscribed = workspaceIds.filter(() => rng() < 0.5)
       const placements = workspaceIds.flatMap((workspaceId, index) => {
         if (rng() < 0.4) return []
-        return [{ targetPath: `.file-${index}`, workspaceId }]
+        return [{ targetPath: `.file-${index}`, workspaceId, groupId: null }]
       })
       const workspaces: WorkspacesDoc = {
-        workspaces: workspaceIds.map((id) => ({ id, label: id })),
+        workspaces: workspaceIds.map((id) => ({ id, label: id, groups: [] })),
         placements,
       }
       const engine = new SyncEngine({ environment: env(subscribed), workspaces })
