@@ -21,11 +21,22 @@ files:
   - out/**
   - package.json
 
+# The bundled, pinned chezmoi + git binaries (issue 3-19). `beforePack` (below) fetches
+# the build target's binaries into resources/bin/<platform>/<arch>/ first, then this copies
+# them to <resources>/bin/, exactly where src/main/foundation/tools.ts resolves them.
+# Build-time-only files (the lock + README) are excluded — they are not needed at runtime.
 extraResources:
   - from: resources/bin
     to: bin
     filter:
       - '**/*'
+      - '!tools.lock.json'
+      - '!README.md'
+
+# Populate resources/bin/<platform>/<arch>/ with the pinned chezmoi + git for the target
+# being packaged, before electron-builder copies extraResources. A clean checkout ships
+# only the lock, so without this the installer would carry no tools (ADR 0010).
+beforePack: scripts/before-pack.mjs
 
 asar: true
 compression: maximum

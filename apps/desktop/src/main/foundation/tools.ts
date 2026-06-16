@@ -64,8 +64,14 @@ async function firstExecutable(paths: readonly string[]): Promise<string | undef
  *  1. The `DOTDEN_CHEZMOI_BIN` / `DOTDEN_GIT_BIN` env override (dev/tests). Unset
  *     overrides become `''`, which {@link executable} treats as not-executable and skips.
  *  2. The platform/arch-specific path `bin/<platform>/<arch>/<name>` — what packaged
- *     builds ship, so the correct native binary is selected per host.
- *  3. The flat fallback `bin/<name>` — a single-binary layout (e.g. simpler dev setups).
+ *     builds ship for chezmoi (a single static binary), so the correct native binary
+ *     is selected per host.
+ *  3. The dugite git distribution tree `bin/<platform>/<arch>/git-dist/...` (git only) —
+ *     git is bundled as the full relocatable `desktop/dugite-native` tree (a bare git
+ *     launcher can't find its `libexec`/templates), so its real launcher lives at
+ *     `git-dist/bin/git` (POSIX) or `git-dist/cmd/git.exe` (Windows). See
+ *     `scripts/fetch-binaries.mjs` + `resources/bin/tools.lock.json` (issue 3-19).
+ *  4. The flat fallback `bin/<name>` — a single-binary layout (e.g. simpler dev setups).
  * On Windows the binary name carries the `.exe` suffix.
  *
  * @param resourcesPath - Root of the app's bundled resources. Defaults to Electron's
@@ -91,6 +97,17 @@ export async function resolveBundledTools(
   const git = await firstExecutable([
     process.env.DOTDEN_GIT_BIN ?? '',
     join(binDir, process.platform, process.arch, process.platform === 'win32' ? 'git.exe' : 'git'),
+    // The bundled dugite-native git: a full relocatable tree whose launcher resolves its
+    // own support files (libexec/git-core, templates) relative to the binary, so it must
+    // be run from inside the extracted `git-dist/` tree, not copied out as a bare binary.
+    join(
+      binDir,
+      process.platform,
+      process.arch,
+      'git-dist',
+      process.platform === 'win32' ? 'cmd' : 'bin',
+      process.platform === 'win32' ? 'git.exe' : 'git',
+    ),
     join(binDir, process.platform === 'win32' ? 'git.exe' : 'git'),
   ])
 

@@ -9,6 +9,9 @@
     "src/main/**/*.ts",
     "src/preload/**/*.ts",
     "src/shared/**/*.ts",
+    // Packaging-script tests (issue 3-19) so the gate type-checks them too; the scripts
+    // themselves are plain `.mjs` Node and need no compilation.
+    "scripts/**/*.ts",
     "electron.vite.config.ts"
   ]
 }

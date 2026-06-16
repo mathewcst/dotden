@@ -1,0 +1,108 @@
+{
+  "$comment": [
+    "PINNED tool manifest for a dotden release (issue 3-19). This file is the SINGLE",
+    "source of truth that makes bundled binaries reproducible per release: bump a",
+    "version + its per-target sha256 here, never anywhere else. `scripts/fetch-binaries.mjs`",
+    "reads it to download, checksum-verify, and lay chezmoi + git into resources/bin/",
+    "<platform>/<arch>/ exactly where src/main/foundation/tools.ts resolves them.",
+    "",
+    "Why pin: two environments on the same dotden version MUST behave identically, so the",
+    "chezmoi (the dotfile engine dotden wraps) and git (the Sync transport) bytes are frozen",
+    "per release rather than 'whatever the build host had'. Checksums make a swapped/corrupted",
+    "download fail loud instead of silently shipping the wrong tool (never fail silently).",
+    "",
+    "`platform`/`arch` keys are Node's process.platform / process.arch values — the same ones",
+    "tools.ts joins into bin/<platform>/<arch>/. `member` is the path INSIDE the downloaded",
+    "archive to extract; the chezmoi windows asset is a bare .exe (no archive), marked raw."
+  ],
+  "chezmoi": {
+    "version": "2.70.5",
+    "repo": "twpayne/chezmoi",
+    "releaseTag": "v2.70.5",
+    "urlTemplate": "https://github.com/twpayne/chezmoi/releases/download/v2.70.5/${asset}",
+    "extract": "file",
+    "targets": {
+      "linux/x64": {
+        "asset": "chezmoi_2.70.5_linux-glibc_amd64.tar.gz",
+        "archive": "tar.gz",
+        "member": "chezmoi",
+        "sha256": "6a76a0ac3718f0d45b34b4b57067f9556f8f6042e3da710a3c496838362aca14"
+      },
+      "linux/arm64": {
+        "asset": "chezmoi_2.70.5_linux_arm64.tar.gz",
+        "archive": "tar.gz",
+        "member": "chezmoi",
+        "sha256": "4f4f31d0a10ed3b955e814a5ae20075426e27c9d3a09f536bfa4a6c8718353f2"
+      },
+      "darwin/x64": {
+        "asset": "chezmoi_2.70.5_darwin_amd64.tar.gz",
+        "archive": "tar.gz",
+        "member": "chezmoi",
+        "sha256": "6676e06f094e5b0860bd3642d203b71869b5cbeb8089155886bc54c1096b9d3c"
+      },
+      "darwin/arm64": {
+        "asset": "chezmoi_2.70.5_darwin_arm64.tar.gz",
+        "archive": "tar.gz",
+        "member": "chezmoi",
+        "sha256": "c3531896769175089b9b2e9cf99b15a2357427f776289b66583a2432d69cd3cc"
+      },
+      "win32/x64": {
+        "asset": "chezmoi-windows-amd64.exe",
+        "archive": "raw",
+        "member": "chezmoi.exe",
+        "sha256": "181796d024bfc1bf6fd10ae096a8387d99997ea819ddf9644fe99f842b500fb0"
+      }
+    }
+  },
+  "git": {
+    "$comment": [
+      "git is bundled via desktop/dugite-native — the portable, self-contained git GitHub",
+      "Desktop ships (Apache-2.0). dotden's GitTransport (src/main/foundation/git-transport.ts)",
+      "shells out to a real `git`, so a relocatable distribution with its own libexec/templates",
+      "is required, not a bare binary. `extract: tree` unpacks the archive (whose root IS the",
+      "git distribution: ./bin, ./cmd, ./libexec/git-core, ./templates, …) directly into",
+      "bin/<platform>/<arch>/git-dist/, preserving structure; tools.ts then finds the launcher",
+      "at git-dist/bin/git (POSIX) or git-dist/cmd/git.exe (Windows), where it can resolve its",
+      "own support files. `launcher` is the post-extraction relative path asserted executable",
+      "by the fetch script (a smoke that the tree landed runnable)."
+    ],
+    "version": "2.53.0",
+    "repo": "desktop/dugite-native",
+    "releaseTag": "v2.53.0-3",
+    "urlTemplate": "https://github.com/desktop/dugite-native/releases/download/v2.53.0-3/${asset}",
+    "extract": "tree",
+    "treeDest": "git-dist",
+    "targets": {
+      "linux/x64": {
+        "asset": "dugite-native-v2.53.0-f49d009-ubuntu-x64.tar.gz",
+        "archive": "tar.gz",
+        "launcher": "git-dist/bin/git",
+        "sha256": "b3a85433c8dfde76d21b90938ad2f971653deff4340b1b4d347258c63250eafc"
+      },
+      "linux/arm64": {
+        "asset": "dugite-native-v2.53.0-f49d009-ubuntu-arm64.tar.gz",
+        "archive": "tar.gz",
+        "launcher": "git-dist/bin/git",
+        "sha256": "d562ad433ed0dc1907f44a92fc701597bc577c48d07fe69ee7adddfee836ef4c"
+      },
+      "darwin/x64": {
+        "asset": "dugite-native-v2.53.0-f49d009-macOS-x64.tar.gz",
+        "archive": "tar.gz",
+        "launcher": "git-dist/bin/git",
+        "sha256": "caf27c36b8834969550535bcd5e58186f970e080d1e175e76d9c1de3aac409ed"
+      },
+      "darwin/arm64": {
+        "asset": "dugite-native-v2.53.0-f49d009-macOS-arm64.tar.gz",
+        "archive": "tar.gz",
+        "launcher": "git-dist/bin/git",
+        "sha256": "e561cfc80c755e6f3e938653e81efcd025c9827a5b76dd42778b1159b3fab437"
+      },
+      "win32/x64": {
+        "asset": "dugite-native-v2.53.0-f49d009-windows-x64.tar.gz",
+        "archive": "tar.gz",
+        "launcher": "git-dist/cmd/git.exe",
+        "sha256": "f843a87a693bfdabed83b8492bca59db6f64d1168c74d23e2c8dfb7388a97142"
+      }
+    }
+  }
+}

@@ -11,6 +11,7 @@
     "check:types": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "check:lint": "eslint .",
     "test": "vitest run --testTimeout=30000",
+    "fetch:binaries": "node scripts/fetch-binaries.mjs",
     "package": "electron-vite build && electron-builder"
   },
   "dependencies": {

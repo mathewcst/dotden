@@ -1,0 +1,10 @@
+# The bundled chezmoi + git binaries are FETCHED per build (issue 3-19), not committed:
+# scripts/fetch-binaries.mjs lays them under <platform>/<arch>/ from tools.lock.json, and
+# electron-builder's beforePack hook does it for the packaged target. Only the lock (the
+# pinned source of truth) + this dir's README are tracked.
+/*/
+
+# ...but keep the tracked build-time files visible to git.
+!.gitignore
+!README.md
+!tools.lock.json
