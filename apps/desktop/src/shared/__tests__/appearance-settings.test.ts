@@ -11,9 +11,12 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_APPEARANCE_SETTINGS,
   DEFAULT_THEME_ID,
+  EMPTY_APPEARANCE_OVERRIDE,
   isDefaultApplyBehavior,
   isThemeId,
+  normalizeAppearanceOverride,
   normalizeAppearanceSettings,
+  resolveAppearanceSettings,
   themeClassName,
   THEMES,
 } from '../appearance-settings'
@@ -106,5 +109,83 @@ describe('appearance-settings — normalization (never fail silently)', () => {
       notifyOn: { incoming: false, conflict: true, applied: true },
     }
     expect(normalizeAppearanceSettings(full)).toEqual(full)
+  })
+})
+
+// ── Synced-vs-local override + precedence (issue 2-17, ADR 0024) ──
+// The load-bearing rule of the whole synced-vs-local model: a present LOCAL field beats the synced
+// default; an absent local field inherits the synced value. Resolution must never mutate an input
+// (so reading the effective settings can never change the synced `.myenv/` value others read).
+
+describe('appearance override — sparse normalization (only validly-pinned fields kept)', () => {
+  it('keeps the empty override empty (follow synced defaults for everything)', () => {
+    expect(normalizeAppearanceOverride(undefined)).toEqual({})
+    expect(normalizeAppearanceOverride(null)).toEqual({})
+    expect(normalizeAppearanceOverride('nope')).toEqual({})
+    expect(normalizeAppearanceOverride({})).toEqual(EMPTY_APPEARANCE_OVERRIDE)
+  })
+
+  it('keeps ONLY the fields that are present AND valid (absent ≠ defaulted)', () => {
+    // Unlike normalizeAppearanceSettings, an absent field is OMITTED (inherit), not filled.
+    expect(normalizeAppearanceOverride({ theme: 'blue' })).toEqual({ theme: 'blue' })
+    expect(normalizeAppearanceOverride({ defaultApply: 'apply-all' })).toEqual({
+      defaultApply: 'apply-all',
+    })
+    // A garbage field is dropped (falls through to the synced default), not throwing.
+    expect(normalizeAppearanceOverride({ theme: 'rainbow', defaultApply: 'review' })).toEqual({
+      defaultApply: 'review',
+    })
+  })
+
+  it('pins notifyOn only when ALL three flags are present (no half-shadow)', () => {
+    expect(normalizeAppearanceOverride({ notifyOn: { applied: true } })).toEqual({})
+    expect(
+      normalizeAppearanceOverride({
+        notifyOn: { incoming: false, conflict: false, applied: true },
+      }),
+    ).toEqual({ notifyOn: { incoming: false, conflict: false, applied: true } })
+  })
+})
+
+describe('appearance resolution — local beats synced (the precedence)', () => {
+  const synced = {
+    theme: 'ember' as const,
+    defaultApply: 'review' as const,
+    notifyOn: { incoming: true, conflict: true, applied: false },
+  }
+
+  it('an empty override yields the synced defaults exactly (fresh env inherits everything)', () => {
+    expect(resolveAppearanceSettings(synced, EMPTY_APPEARANCE_OVERRIDE)).toEqual(synced)
+  })
+
+  it('a present local field beats the synced default; absent fields inherit', () => {
+    const resolved = resolveAppearanceSettings(synced, { theme: 'blue' })
+    expect(resolved.theme).toBe('blue') // local wins
+    expect(resolved.defaultApply).toBe('review') // inherited from synced
+    expect(resolved.notifyOn).toEqual(synced.notifyOn) // inherited from synced
+  })
+
+  it('every field can be overridden independently', () => {
+    expect(
+      resolveAppearanceSettings(synced, {
+        theme: 'green',
+        defaultApply: 'apply-all',
+        notifyOn: { incoming: false, conflict: false, applied: true },
+      }),
+    ).toEqual({
+      theme: 'green',
+      defaultApply: 'apply-all',
+      notifyOn: { incoming: false, conflict: false, applied: true },
+    })
+  })
+
+  it('NEVER mutates its inputs (an override shadows the default without changing it)', () => {
+    const syncedCopy = structuredClone(synced)
+    const override = { theme: 'blue' as const }
+    const overrideCopy = structuredClone(override)
+    resolveAppearanceSettings(synced, override)
+    // The synced default is untouched — reading the effective value changed nothing shared.
+    expect(synced).toEqual(syncedCopy)
+    expect(override).toEqual(overrideCopy)
   })
 })

@@ -85,18 +85,31 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['setCommitTemplate']>
     },
-    // → IPC channel 'den:get-appearance' (Settings → Appearance tab: synced theme + Apply/notify defaults, issue 2-10)
+    // → IPC channel 'den:get-appearance' (EFFECTIVE theme + Apply/notify, synced overlaid by local override, issues 2-10/2-17)
     appearanceSettings() {
       return ipcRenderer.invoke('den:get-appearance', {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['appearanceSettings']>
     },
-    // → IPC channel 'den:set-appearance' (persist synced appearance settings + Commit `.myenv/`, issue 2-10)
+    // → IPC channel 'den:get-appearance-state' (synced · override · effective triple for the tab, issue 2-17)
+    appearanceState() {
+      return ipcRenderer.invoke('den:get-appearance-state', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['appearanceState']>
+    },
+    // → IPC channel 'den:set-appearance' (persist SYNCED appearance defaults + Commit `.myenv/`, issue 2-10)
     setAppearanceSettings(settings) {
       return ipcRenderer.invoke('den:set-appearance', {
         settings,
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['setAppearanceSettings']>
+    },
+    // → IPC channel 'den:set-appearance-override' (pin/clear this env's LOCAL override in userData only, issue 2-17)
+    setAppearanceOverride(override) {
+      return ipcRenderer.invoke('den:set-appearance-override', {
+        override,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['setAppearanceOverride']>
     },
     // → IPC channel 'den:detect-password-managers' (PM picker detection, issue 2-05; env-local)
     detectPasswordManagers() {

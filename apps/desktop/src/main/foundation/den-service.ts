@@ -71,7 +71,12 @@ import {
   DEFAULT_COMMIT_MESSAGE_TEMPLATE,
   type CommitTemplateData,
 } from '../../shared/commit-template.js'
-import type { AppearanceSettings } from '../../shared/appearance-settings.js'
+import {
+  resolveAppearanceSettings,
+  type AppearanceOverride,
+  type AppearanceSettings,
+} from '../../shared/appearance-settings.js'
+import { readAppearanceOverride, writeAppearanceOverride } from './appearance-override.js'
 
 /** Construction wiring for a {@link DenService}, bound to one environment's dirs. */
 export interface DenServiceOptions {
@@ -274,6 +279,32 @@ export interface CommitTemplateState {
   readonly data: CommitTemplateData
   /** This environment's dotden label, for the preview's `$environment`. */
   readonly environment: string
+}
+
+/**
+ * The Appearance tab's settings state (issue 2-17, ADR 0024) — the synced-vs-local split made
+ * legible to the renderer in one read.
+ *
+ * Three pieces, so the tab can render the EFFECTIVE value AND show clearly what is shared vs. pinned:
+ *
+ * - **`effective`** — what this environment actually renders/uses: the synced defaults overlaid by
+ *   this environment's local override ({@link resolveAppearanceSettings} — local field beats synced).
+ *   This is what the tab binds its controls to.
+ * - **`synced`** — the shared defaults from `.myenv/` (what a fresh environment inherits, what
+ *   editing "for everyone" changes). Carried so the tab can show "synced default: X" next to a
+ *   pinned field and offer "reset to the synced default".
+ * - **`override`** — this environment's sparse LOCAL override (only the fields it pinned). Carried so
+ *   the tab can mark which fields are currently overridden-here vs. inherited.
+ *
+ * The synced default is never mutated by reading or by pinning a local override (ADR 0024).
+ */
+export interface AppearanceState {
+  /** The resolved settings this environment renders (synced overlaid by the local override). */
+  readonly effective: AppearanceSettings
+  /** The shared synced defaults from `.myenv/` (what a fresh environment inherits). */
+  readonly synced: AppearanceSettings
+  /** This environment's sparse local override (only the fields pinned here; `{}` = follow synced). */
+  readonly override: AppearanceOverride
 }
 
 /**
@@ -1036,27 +1067,52 @@ export class DenService {
     }
   }
 
-  // ── Appearance + default Apply/notification preferences (issue 2-10) ──
-  // The Settings → Appearance tab reads/writes the synced defaults that name the app theme + the
-  // user's preferred default Apply behaviour + which cross-environment events notify. These are
-  // synced presentation/preference (ADR 0024) — a value-authoring slice only: setting them sends
-  // nothing across environments by itself (the sync-as-default plumbing is issue 2-17) and gates
-  // no invariant (the AutomationPolicy/ApplyPlanner owners still own the real Apply, ADR 0008).
+  // ── Appearance: synced defaults overlaid by a per-environment local override (issues 2-10 + 2-17) ──
+  // The Settings → Appearance tab's three settings — app theme · preferred default Apply behaviour ·
+  // which cross-environment events notify — follow ADR 0024's synced-vs-local split: each value SYNCS
+  // through `.myenv/` as a SHARED DEFAULT (issue 2-10), and an environment MAY OVERRIDE it LOCALLY
+  // (issue 2-17) in `userData` without changing it everywhere. The effective value an environment
+  // renders is the synced default overlaid by its local override (local field beats synced —
+  // `resolveAppearanceSettings`). None of these gates an invariant: the AutomationPolicy/ApplyPlanner
+  // owners still own the real Apply (ADR 0008), whichever default-Apply preference is effective here.
 
   /**
-   * **Read the Appearance tab's settings** (issue 2-10) — the synced app theme + default Apply
-   * behaviour + notification-event flags. Pure read of the synced `.myenv/` file (normalized to
-   * safe defaults when absent/older).
+   * Read this environment's LOCAL appearance override (issue 2-17, ADR 0024).
+   *
+   * The override is **environment-local** — it lives in Electron `userData`, never the synced
+   * `.myenv/`. When the service was constructed without a `userDataDir` (tests/contexts that don't
+   * exercise the per-environment override), there is no override store to read, so the environment
+   * simply follows the synced defaults (the EMPTY override) — never an error.
+   *
+   * @returns This environment's sparse local override (or `{}` when none / no userData dir).
+   */
+  private async readAppearanceOverride(): Promise<AppearanceOverride> {
+    if (!this.options.userDataDir) return {}
+    return readAppearanceOverride(this.options.userDataDir)
+  }
+
+  /**
+   * **Read the Appearance tab's full state** (issue 2-17) — the synced defaults, this environment's
+   * local override, AND the resolved EFFECTIVE settings, in one read.
+   *
+   * The tab binds its controls to `effective`, shows what is shared vs. pinned from `synced`/
+   * `override`, and offers "reset to the synced default" per field. Reading never mutates the synced
+   * value (ADR 0024) — an override only SHADOWS the default.
    *
    * @param traceId Correlation id for the (read-only) Operation.
-   * @returns The current appearance settings.
+   * @returns The synced default, local override, and resolved effective appearance settings.
    */
-  async appearanceSettings(traceId: string): Promise<AppearanceSettings> {
+  async appearanceState(traceId: string): Promise<AppearanceState> {
     const span = this.tracer?.startOperation('commit', traceId)
     try {
-      const settings = await this.store.readAppearanceSettings()
+      const [synced, override] = await Promise.all([
+        this.store.readAppearanceSettings(),
+        this.readAppearanceOverride(),
+      ])
       span?.end('ok')
-      return settings
+      // The precedence rule (local beats synced) is owned by the shared pure resolver — DenService
+      // depends on it, never re-implements it.
+      return { effective: resolveAppearanceSettings(synced, override), synced, override }
     } catch (error) {
       span?.end('error')
       throw error
@@ -1064,22 +1120,35 @@ export class DenService {
   }
 
   /**
-   * **Persist the Appearance tab's settings** (issue 2-10) — the theme picker + default-Apply +
-   * notification toggles.
+   * **Read the EFFECTIVE appearance settings** for this environment — the synced defaults overlaid by
+   * this environment's local override (issues 2-10 + 2-17). This is what App.tsx paints the live
+   * theme from and what consumers that only need the resolved value use.
    *
-   * Writes `.myenv/appearance-settings.json` then commits the `.myenv/` change LOCALLY (ADR 0006)
-   * so it travels to every environment on the next Sync (a synced default, ADR 0024). Idempotent:
-   * re-saving the same settings records nothing (the metadata Commit is a no-op when unchanged).
-   * Setting these sends nothing across environments by itself (issue 2-17 wires sync-as-default).
+   * @param traceId Correlation id for the (read-only) Operation.
+   * @returns The resolved effective appearance settings (local override wins, then synced default).
+   */
+  async appearanceSettings(traceId: string): Promise<AppearanceSettings> {
+    return (await this.appearanceState(traceId)).effective
+  }
+
+  /**
+   * **Persist the SYNCED appearance defaults** (issue 2-10) — the theme picker + default-Apply +
+   * notification toggles, edited "for every environment".
    *
-   * @param settings The complete next appearance settings.
+   * Writes `.myenv/appearance-settings.json` then commits the `.myenv/` change LOCALLY (ADR 0006) so
+   * it travels to every environment on the next Sync (a synced default, ADR 0024). Idempotent. This
+   * changes the SHARED default; it does NOT touch this environment's local override — so a field this
+   * environment has pinned locally still resolves to the pin (local beats synced). The returned state
+   * reflects that resolution, so the tab re-renders from the true source of truth.
+   *
+   * @param settings The complete next SYNCED appearance defaults.
    * @param traceId Correlation id for the Operation.
-   * @returns The refreshed settings (so the tab re-renders from the source of truth).
+   * @returns The refreshed appearance state (synced · override · effective).
    */
   async setAppearanceSettings(
     settings: AppearanceSettings,
     traceId: string,
-  ): Promise<AppearanceSettings> {
+  ): Promise<AppearanceState> {
     const span = this.tracer?.startOperation('commit', traceId)
     try {
       await this.store.writeAppearanceSettings(settings)
@@ -1087,7 +1156,44 @@ export class DenService {
       // metadata writes; the next Sync carries the new defaults to other environments.
       await this.commitMetadata('Update appearance + default Apply/notification preferences')
       span?.end('ok')
-      return this.appearanceSettings(traceId)
+      return this.appearanceState(traceId)
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * **Persist this environment's LOCAL appearance override** (issue 2-17, ADR 0024) — the per-field
+   * pins that SHADOW the synced defaults on THIS environment only.
+   *
+   * Writes the sparse override to Electron `userData` (NEVER the synced `.myenv/`), so it never
+   * mutates the synced value other environments read — the load-bearing guarantee: an override
+   * shadows a default without changing it everywhere. Writing the EMPTY override clears all local
+   * pins (this environment follows the synced defaults again). No git Commit, no Sync — a local
+   * override does not travel. The returned state shows the new resolution (local beats synced).
+   *
+   * @param override The sparse local override to persist (`{}` clears all pins).
+   * @param traceId Correlation id for the Operation.
+   * @returns The refreshed appearance state (synced · override · effective).
+   * @throws Error when this service has no `userDataDir` (there is nowhere environment-local to pin).
+   */
+  async setAppearanceOverride(
+    override: AppearanceOverride,
+    traceId: string,
+  ): Promise<AppearanceState> {
+    const span = this.tracer?.startOperation('commit', traceId)
+    try {
+      if (!this.options.userDataDir) {
+        // Surface the missing local store rather than silently no-op'ing the pin (never fail silently).
+        throw new Error(
+          'Cannot pin a local appearance override without an environment userData dir',
+        )
+      }
+      await writeAppearanceOverride(this.options.userDataDir, override)
+      // Environment-local only — NO `.myenv/` write, NO Commit, NO Sync: a local override never travels.
+      span?.end('ok')
+      return this.appearanceState(traceId)
     } catch (error) {
       span?.end('error')
       throw error

@@ -237,16 +237,21 @@ describe('IpcBridge', () => {
     ).rejects.toThrow('without a _trace envelope')
   })
 
-  it('routes the appearance channels, forwards the settings + _trace (issue 2-10)', async () => {
+  it('routes the appearance channels, forwards the settings/override + _trace (issues 2-10 + 2-17)', async () => {
     const settings = {
       theme: 'blue' as const,
       defaultApply: 'apply-all' as const,
       notifyOn: { incoming: false, conflict: true, applied: true },
     }
+    const state = { effective: settings, synced: settings, override: { theme: 'blue' as const } }
     const den = {
-      // get-appearance is a read Operation; set-appearance MUTATES `.myenv/` + Commits.
+      // get-appearance reads the EFFECTIVE value; get-appearance-state reads the synced·override·
+      // effective triple. set-appearance MUTATES `.myenv/` (+ Commits); set-appearance-override
+      // pins this env's LOCAL override in userData only (no Commit, never travels — issue 2-17).
       appearanceSettings: vi.fn(async () => settings),
-      setAppearanceSettings: vi.fn(async () => settings),
+      appearanceState: vi.fn(async () => state),
+      setAppearanceSettings: vi.fn(async () => state),
+      setAppearanceOverride: vi.fn(async () => state),
     }
     const { registrar, handlers } = fakeRegistrar()
     registerIpcBridge(registrar, {
@@ -285,17 +290,31 @@ describe('IpcBridge', () => {
       handlers.get('den:get-appearance')?.({}, { _trace: { traceId: 'ap1' } } as never),
     ).resolves.toMatchObject({ theme: 'blue' })
     expect(den.appearanceSettings).toHaveBeenCalledWith('ap1')
+    // get-appearance-state forwards the read trace id + returns the synced·override·effective triple.
+    await expect(
+      handlers.get('den:get-appearance-state')?.({}, { _trace: { traceId: 'ap1s' } } as never),
+    ).resolves.toMatchObject({ override: { theme: 'blue' } })
+    expect(den.appearanceState).toHaveBeenCalledWith('ap1s')
     // set forwards the whole settings object + the trace id (it records a Commit).
     await handlers.get('den:set-appearance')?.({}, {
       settings,
       _trace: { traceId: 'ap2' },
     } as never)
     expect(den.setAppearanceSettings).toHaveBeenCalledWith(settings, 'ap2')
+    // set-appearance-override forwards the sparse override + the trace id (env-local pin, no Commit).
+    await handlers.get('den:set-appearance-override')?.({}, {
+      override: { theme: 'green' },
+      _trace: { traceId: 'ap3' },
+    } as never)
+    expect(den.setAppearanceOverride).toHaveBeenCalledWith({ theme: 'green' }, 'ap3')
 
-    // The mutating channel still hard-fails without a _trace envelope.
+    // The mutating channels still hard-fail without a _trace envelope.
     await expect(handlers.get('den:set-appearance')?.({}, { settings } as never)).rejects.toThrow(
       'without a _trace envelope',
     )
+    await expect(
+      handlers.get('den:set-appearance-override')?.({}, { override: {} } as never),
+    ).rejects.toThrow('without a _trace envelope')
   })
 
   it('forwards the _trace id into the DenService on every conflict den:* channel (issue 1-11)', async () => {

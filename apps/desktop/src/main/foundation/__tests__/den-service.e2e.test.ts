@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { cloneRepo, GitTransport } from '../git-transport.js'
 import { DenService } from '../den-service.js'
 import { MyenvStore } from '../myenv-store.js'
+import { readAppearanceOverride } from '../appearance-override.js'
 import { OperationTracer } from '../operation-tracer.js'
 import { parseIncomingDeletions } from '../chezmoi-status.js'
 import { runCommand } from '../process.js'
@@ -1085,7 +1086,10 @@ describe('DenService appearance + Apply/notification preferences (issue 2-10, re
       notifyOn: { incoming: false, conflict: true, applied: true },
     }
     const saved = await envA.setAppearanceSettings(next, 'trace-ap-set')
-    expect(saved).toEqual(next)
+    // With no local override, the synced default IS the effective value (issue 2-17).
+    expect(saved.synced).toEqual(next)
+    expect(saved.effective).toEqual(next)
+    expect(saved.override).toEqual({})
     // It persisted to the synced `.myenv/` metadata…
     expect(await new MyenvStore(aSource).readAppearanceSettings()).toEqual(next)
 
@@ -1103,6 +1107,73 @@ describe('DenService appearance + Apply/notification preferences (issue 2-10, re
       environment: { id: 'env-b', label: 'work-laptop', os: process.platform },
     })
     expect(await envB.appearanceSettings('trace-ap-read-b')).toEqual(next)
+  })
+
+  it('issue 2-17: a LOCAL override shadows the synced default WITHOUT mutating it (and never travels)', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    // ── env A: set a custom SYNCED default + push it ──
+    const aHome = join(root, 'a-home')
+    const aSource = join(root, 'a-source')
+    const aUserData = join(root, 'a-userdata')
+    await mkdir(aHome, { recursive: true })
+    await mkdir(aUserData, { recursive: true })
+    await initSourceRepo(aSource, remote)
+    const envA = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: aHome,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+      userDataDir: aUserData,
+    })
+
+    const syncedDefault = {
+      theme: 'amber' as const,
+      defaultApply: 'review' as const,
+      notifyOn: { incoming: true, conflict: true, applied: false },
+    }
+    await envA.setAppearanceSettings(syncedDefault, 'trace-ap-synced')
+    await envA.syncPush('trace-ap-push')
+
+    // env A pins a LOCAL override of just the theme — local beats synced on THIS environment.
+    const stateAfterPin = await envA.setAppearanceOverride({ theme: 'blue' }, 'trace-ap-override')
+    // The effective theme is the local pin; the other fields still inherit the synced default.
+    expect(stateAfterPin.effective).toEqual({ ...syncedDefault, theme: 'blue' })
+    expect(stateAfterPin.synced).toEqual(syncedDefault)
+    expect(stateAfterPin.override).toEqual({ theme: 'blue' })
+
+    // The synced `.myenv/` value is UNCHANGED — the override only shadowed it, never mutated it.
+    expect(await new MyenvStore(aSource).readAppearanceSettings()).toEqual(syncedDefault)
+    // The override lives ONLY in env A's local userData (never the synced source tree).
+    expect(await readAppearanceOverride(aUserData)).toEqual({ theme: 'blue' })
+    expect(existsSync(join(aSource, '.myenv', 'appearance-override.json'))).toBe(false)
+
+    // ── env B clones: it inherits the SYNCED default, NOT env A's local override (it never travels) ──
+    const bSource = join(root, 'b-source')
+    const bUserData = join(root, 'b-userdata')
+    await mkdir(bUserData, { recursive: true })
+    await cloneRepo(gitBin, remote, bSource)
+    const envB = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: bSource,
+      destinationDir: join(root, 'b-home'),
+      environment: { id: 'env-b', label: 'work-laptop', os: process.platform },
+      userDataDir: bUserData,
+    })
+    // env B sees the synced default (amber), with NO local override (env A's blue pin stayed local).
+    const stateB = await envB.appearanceState('trace-ap-read-b')
+    expect(stateB.synced).toEqual(syncedDefault)
+    expect(stateB.override).toEqual({})
+    expect(stateB.effective).toEqual(syncedDefault)
+
+    // ── clearing env A's override falls back to the synced default again ──
+    const cleared = await envA.setAppearanceOverride({}, 'trace-ap-clear')
+    expect(cleared.override).toEqual({})
+    expect(cleared.effective).toEqual(syncedDefault)
+    expect(await readAppearanceOverride(aUserData)).toEqual({})
   })
 })
 

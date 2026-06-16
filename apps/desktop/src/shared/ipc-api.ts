@@ -23,6 +23,7 @@
 import type { ConnectResult, PreflightResult } from '../main/foundation/remote-client.js'
 import type {
   AffectedEnvironment,
+  AppearanceState,
   ApplyResult,
   AutoApplyResult,
   CommitResult,
@@ -56,7 +57,7 @@ import type { DiscoverySuggestion } from '../main/foundation/discovery-scanner.j
 import type { AutomationLevel } from '../main/foundation/automation-policy.js'
 import type { SyncSettings } from '../main/foundation/sync-settings.js'
 import type { PrivacySettings } from '../main/foundation/privacy-settings.js'
-import type { AppearanceSettings } from './appearance-settings.js'
+import type { AppearanceOverride, AppearanceSettings } from './appearance-settings.js'
 import type { AppInfo, UpdateCheckResult } from './app-info.js'
 
 /**
@@ -153,21 +154,39 @@ export interface DotdenApi {
      */
     setCommitTemplate(template: string): Promise<CommitTemplateState>
     /**
-     * **Read the Appearance tab's settings** (issue 2-10, story 54) — the synced app theme +
-     * preferred default Apply behaviour + which cross-environment events notify. These are synced
-     * DEFAULTS via `.myenv/` (ADR 0024); the renderer applies the theme class itself from the
-     * returned `theme`, so swapping themes is a single class toggle (no per-keystroke round-trip).
+     * **Read the EFFECTIVE appearance settings** (issues 2-10 + 2-17, story 54) — the synced app
+     * theme + preferred default Apply behaviour + which cross-environment events notify, with this
+     * environment's LOCAL override overlaid (local field beats synced — ADR 0024). The renderer
+     * applies the theme class itself from the returned `theme`, so swapping themes is a single class
+     * toggle (no per-keystroke round-trip). App.tsx uses this to paint the live theme on launch.
      */
     appearanceSettings(): Promise<AppearanceSettings>
     /**
-     * **Save the Appearance tab's settings** (issue 2-10) — the theme picker + default-Apply +
-     * notification toggles. Persists `.myenv/appearance-settings.json` and Commits the change
-     * LOCALLY (ADR 0006) so it travels on the next Sync. Authoring only: it sends nothing across
-     * environments by itself (the sync-as-default wiring is issue 2-17) and gates no invariant
-     * (the AutomationPolicy/ApplyPlanner owners still own the real Apply, ADR 0008). Returns the
-     * refreshed settings so the tab re-renders from the source of truth.
+     * **Read the Appearance tab's full synced-vs-local state** (issue 2-17, story 54) — the synced
+     * defaults (`.myenv/`), this environment's sparse local override (`userData`), and the resolved
+     * effective settings, in one read. The tab binds its controls to `effective` and uses
+     * `synced`/`override` to mark which fields are pinned-here vs. inherited and to offer "reset to
+     * the synced default". Reading never mutates the synced value (ADR 0024).
      */
-    setAppearanceSettings(settings: AppearanceSettings): Promise<AppearanceSettings>
+    appearanceState(): Promise<AppearanceState>
+    /**
+     * **Save the SYNCED appearance defaults** (issue 2-10) — the theme picker + default-Apply +
+     * notification toggles edited "for every environment". Persists `.myenv/appearance-settings.json`
+     * and Commits the change LOCALLY (ADR 0006) so it travels on the next Sync. Gates no invariant
+     * (the AutomationPolicy/ApplyPlanner owners still own the real Apply, ADR 0008). Does NOT touch
+     * this environment's local override, so a field pinned here still resolves to the pin. Returns the
+     * refreshed synced-vs-local state so the tab re-renders from the source of truth.
+     */
+    setAppearanceSettings(settings: AppearanceSettings): Promise<AppearanceState>
+    /**
+     * **Pin (or clear) this environment's LOCAL appearance override** (issue 2-17, ADR 0024) — the
+     * per-field pins that shadow the synced defaults on THIS environment only. Persists to `userData`
+     * (NEVER the synced `.myenv/`), so it never changes the value other environments read — a local
+     * override shadows a default without changing it everywhere. The empty override `{}` clears all
+     * pins (follow the synced defaults again). No Commit, no Sync — a local override never travels.
+     * Returns the refreshed synced-vs-local state.
+     */
+    setAppearanceOverride(override: AppearanceOverride): Promise<AppearanceState>
     /**
      * **Detect installed password managers** for the convert picker (issue 2-05, step 2). Returns
      * the v1 catalog (1Password/Bitwarden/pass) annotated with whether each CLI (`op`/`bw`/`pass`)

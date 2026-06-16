@@ -213,3 +213,101 @@ export function normalizeAppearanceSettings(value: unknown): AppearanceSettings 
     },
   }
 }
+
+// ── Synced-vs-local override (issue 2-17, ADR 0024) ──────────────────────────────────────────
+// ADR 0024's governing rule for these three settings: each SYNCED value is a **shared default**;
+// an environment **may override it locally** without changing it everywhere. This section owns the
+// PRECEDENCE — `resolveAppearanceSettings(synced, override)` — which is the load-bearing logic this
+// issue TDDs: a present local field beats the synced default; an absent local field falls through
+// to the synced value. The override is a per-environment PARTIAL (only the fields the user pinned
+// locally), stored in Electron `userData` (issue 2-17's store), so shadowing a default never
+// mutates the synced `.myenv/` value other environments read.
+
+/**
+ * A per-environment LOCAL override of the synced appearance defaults (issue 2-17, ADR 0024).
+ *
+ * Every field is **optional**: only the settings this environment has deliberately pinned locally
+ * are present. An absent field means "use whatever the synced default is" — so a later change to a
+ * synced default still flows through for the fields this environment hasn't overridden. The empty
+ * override `{}` therefore means "follow the synced defaults for everything" (the common case).
+ *
+ * `notifyOn` is overridden as a whole object (not per-flag) to keep the model simple and the override
+ * file self-describing — an environment that wants different notification behaviour pins the full set.
+ *
+ * Mirrors the synced {@link AppearanceSettings} field-for-field, but partial — so the override never
+ * carries a field the synced default doesn't, and the two compose unambiguously in
+ * {@link resolveAppearanceSettings}.
+ */
+export interface AppearanceOverride {
+  /** Locally-pinned theme; absent ⇒ inherit the synced default. */
+  readonly theme?: ThemeId
+  /** Locally-pinned default Apply behaviour; absent ⇒ inherit the synced default. */
+  readonly defaultApply?: DefaultApplyBehavior
+  /** Locally-pinned notification flags (the full set); absent ⇒ inherit the synced default. */
+  readonly notifyOn?: NotifyOn
+}
+
+/** The empty override — "follow the synced defaults for everything" (a fresh environment). */
+export const EMPTY_APPEARANCE_OVERRIDE: AppearanceOverride = {}
+
+/**
+ * Normalize an arbitrary parsed value into a coherent {@link AppearanceOverride}, keeping ONLY the
+ * fields that are present AND valid and dropping everything else.
+ *
+ * Unlike {@link normalizeAppearanceSettings} (which fills every field from the defaults), this keeps
+ * the override **sparse**: an absent or malformed field is simply omitted, NOT defaulted — because a
+ * present field means "pin this locally" and an absent field means "inherit the synced default". A
+ * garbage value for a field is treated as "not pinned" (it falls through to the synced default)
+ * rather than throwing (never fail silently into a surprising local pin).
+ *
+ * @param value The raw parsed JSON (or anything), possibly partial or wrong-typed.
+ * @returns A sparse, coherent override carrying only the validly-pinned fields.
+ */
+export function normalizeAppearanceOverride(value: unknown): AppearanceOverride {
+  const raw = (typeof value === 'object' && value !== null ? value : {}) as Partial<
+    Record<keyof AppearanceOverride, unknown>
+  >
+  const override: { -readonly [K in keyof AppearanceOverride]: AppearanceOverride[K] } = {}
+  if (isThemeId(raw.theme)) override.theme = raw.theme
+  if (isDefaultApplyBehavior(raw.defaultApply)) override.defaultApply = raw.defaultApply
+  // notifyOn is pinned as a whole: keep it only when it is an object with all three boolean flags,
+  // so a half-written notifyOn never partially shadows the synced default in a confusing way.
+  if (typeof raw.notifyOn === 'object' && raw.notifyOn !== null) {
+    const n = raw.notifyOn as Partial<Record<keyof NotifyOn, unknown>>
+    if (
+      typeof n.incoming === 'boolean' &&
+      typeof n.conflict === 'boolean' &&
+      typeof n.applied === 'boolean'
+    ) {
+      override.notifyOn = { incoming: n.incoming, conflict: n.conflict, applied: n.applied }
+    }
+  }
+  return override
+}
+
+/**
+ * Resolve the EFFECTIVE appearance settings for an environment: the synced defaults overlaid by this
+ * environment's local override (issue 2-17, ADR 0024). **This is the precedence rule** the whole
+ * synced-vs-local model rests on — and it is one-directional:
+ *
+ * > a present local field beats the synced default; an absent local field inherits the synced value.
+ *
+ * Resolution NEVER mutates either input — it returns a fresh object — so reading the effective
+ * settings can never change the synced `.myenv/` value (the load-bearing guarantee: an override
+ * shadows a default without changing it everywhere). With an empty override, the result equals the
+ * synced defaults exactly (a fresh environment inherits everything).
+ *
+ * @param synced The shared synced defaults (from `.myenv/`, already normalized).
+ * @param override This environment's local override (from `userData`, already normalized/sparse).
+ * @returns The effective settings to render/use on this environment (local-wins, then synced).
+ */
+export function resolveAppearanceSettings(
+  synced: AppearanceSettings,
+  override: AppearanceOverride,
+): AppearanceSettings {
+  return {
+    theme: override.theme ?? synced.theme,
+    defaultApply: override.defaultApply ?? synced.defaultApply,
+    notifyOn: override.notifyOn ?? synced.notifyOn,
+  }
+}

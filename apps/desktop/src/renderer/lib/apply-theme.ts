@@ -29,9 +29,10 @@ export function applyTheme(id: ThemeId): void {
 // Re-export the settings types/values the tab also needs, so callers import one renderer module
 // for the theme concern rather than reaching across to `shared/` for everything.
 export type {
+  AppearanceOverride,
   AppearanceSettings,
   DefaultApplyBehavior,
   NotifyOn,
   ThemeId,
 } from '../../shared/appearance-settings'
-export { THEMES } from '../../shared/appearance-settings'
+export { resolveAppearanceSettings, THEMES } from '../../shared/appearance-settings'

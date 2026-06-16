@@ -26,7 +26,7 @@ import type { Scope } from '../foundation/os-scope.js'
 import type { UnsubscribeDisposition } from '../foundation/subscription-settings.js'
 import type { SecretFinding } from '../foundation/secret-scanner.js'
 import type { ConvertSecretRequest } from '../foundation/den-service.js'
-import type { AppearanceSettings } from '../../shared/appearance-settings.js'
+import type { AppearanceOverride, AppearanceSettings } from '../../shared/appearance-settings.js'
 import type { AppInfo, UpdateCheckResult } from '../../shared/app-info.js'
 
 /**
@@ -210,17 +210,30 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     const { template } = payload as TracedPayload & { template: string }
     return (await deps.denService()).setCommitTemplate(template, traceId(payload))
   })
-  // Appearance + default Apply/notification preferences (issue 2-10): the Settings → Appearance
-  // tab. get-appearance reads the synced theme + default-Apply + notify flags; set-appearance
-  // persists them + Commits the `.myenv/` change LOCALLY (ADR 0006) so they travel on the next
-  // Sync. Authoring only — it sends nothing across environments by itself (issue 2-17 wires
-  // sync-as-default) and gates no invariant.
+  // Appearance: synced defaults overlaid by a per-environment local override (issues 2-10 + 2-17,
+  // ADR 0024): the Settings → Appearance tab.
+  // - get-appearance returns the EFFECTIVE settings (synced overlaid by the local override) — what
+  //   App.tsx paints the live theme from.
+  // - get-appearance-state returns the full synced-vs-local triple (synced · override · effective)
+  //   the tab uses to mark pinned-here vs. inherited and offer "reset to the synced default".
+  // - set-appearance persists the SYNCED defaults + Commits the `.myenv/` change LOCALLY (ADR 0006)
+  //   so they travel on the next Sync (edits "for everyone").
+  // - set-appearance-override pins/clears this environment's LOCAL override in `userData` only — NO
+  //   `.myenv/` write, NO Commit, NO Sync: a local override shadows a default without changing it
+  //   everywhere (the load-bearing ADR 0024 guarantee). None of these gates an invariant.
   registrar.handle('den:get-appearance', async (_event, payload: TracedPayload) => {
     return (await deps.denService()).appearanceSettings(traceId(payload))
+  })
+  registrar.handle('den:get-appearance-state', async (_event, payload: TracedPayload) => {
+    return (await deps.denService()).appearanceState(traceId(payload))
   })
   registrar.handle('den:set-appearance', async (_event, payload: TracedPayload) => {
     const { settings } = payload as TracedPayload & { settings: AppearanceSettings }
     return (await deps.denService()).setAppearanceSettings(settings, traceId(payload))
+  })
+  registrar.handle('den:set-appearance-override', async (_event, payload: TracedPayload) => {
+    const { override } = payload as TracedPayload & { override: AppearanceOverride }
+    return (await deps.denService()).setAppearanceOverride(override, traceId(payload))
   })
   // PM picker + convert (issue 2-05). Detect is read-only feature-detection (env-local, never
   // synced) so its `_trace` is forwarded but it MUTATES nothing. pm-preference reads the env-local
