@@ -30,6 +30,7 @@ import {
 import { SyncTab } from './SyncTab'
 import { CommitTab } from './CommitTab'
 import { AppearanceTab } from './AppearanceTab'
+import { AutomationTab } from './AutomationTab'
 import { PrivacyTab } from './PrivacyTab'
 import { AboutTab } from './AboutTab'
 
@@ -54,13 +55,20 @@ export interface SettingsTab {
 }
 
 /**
- * The seven v1 Settings tabs, in nav order (design: settings.md). Sync (2-08), Commit (2-09),
- * Appearance (2-10), Privacy (2-14), and About (2-16) are `live`; every remaining tab is a
- * `placeholder` whose slice flips it to `live` later. Icons match the spec's per-tab nav glyphs.
+ * The seven v1 Settings tabs, in nav order (design: settings.md). Automation (2-12), Sync
+ * (2-08), Commit (2-09), Appearance (2-10), Privacy (2-14), and About (2-16) are `live`; every
+ * remaining tab is a `placeholder` whose slice flips it to `live` later. Icons match the spec's
+ * per-tab nav glyphs.
  */
 export const SETTINGS_TABS: readonly SettingsTab[] = [
-  // Automation (2-12): the risk-graded ladder. Inert until that slice ships.
-  { id: 'automation', label: 'Automation', icon: ArrowDownUp, status: 'placeholder' },
+  // Automation (2-12): the risk-graded ladder (Manual → Auto-sync → Auto-apply → YOLO).
+  {
+    id: 'automation',
+    label: 'Automation',
+    icon: ArrowDownUp,
+    status: 'live',
+    Content: AutomationTab,
+  },
   // Commit (2-09): the commit-message template editor — edit + variables + live preview + reset.
   { id: 'commit', label: 'Commit', icon: GitCommitHorizontal, status: 'live', Content: CommitTab },
   // Appearance (2-10): theme + default Apply/notification preferences (story 54's two remaining

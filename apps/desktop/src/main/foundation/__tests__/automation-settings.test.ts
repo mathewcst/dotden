@@ -33,9 +33,14 @@ describe('automation-settings (environment-local, ADR 0024)', () => {
     expect(await readAutomationLevel(dir)).toBe('manual')
   })
 
-  it('refuses to persist a level the MVP does not expose', async () => {
-    // auto-apply / yolo are valid AutomationLevels but NOT built yet (issue 2-12); writing
-    // one must throw, never leave an unbuilt level on disk that a later read might act on.
+  it('round-trips the Auto-apply opt-in (issue 2-12)', async () => {
+    await writeAutomationLevel(dir, 'auto-apply')
+    expect(await readAutomationLevel(dir)).toBe('auto-apply')
+  })
+
+  it('refuses to persist a non-selectable level (yolo, issue 2-13)', async () => {
+    // yolo is a valid AutomationLevel but NOT built yet; writing it must throw, never leave
+    // an unbuilt level on disk that a later read might act on.
     await expect(writeAutomationLevel(dir, 'yolo')).rejects.toThrow(/unsupported/)
   })
 

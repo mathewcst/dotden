@@ -16,7 +16,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import {
   DEFAULT_AUTOMATION_LEVEL,
-  isMvpAutomationLevel,
+  isSelectableAutomationLevel,
   type AutomationLevel,
 } from './automation-policy.js'
 
@@ -45,10 +45,10 @@ export async function readAutomationLevel(userDataDir: string): Promise<Automati
     const parsed = JSON.parse(
       await readFile(join(userDataDir, AUTOMATION_FILE), 'utf8'),
     ) as PersistedAutomation
-    // Only honor a rung the MVP actually exposes (Manual/Auto-sync). An `auto-apply`/`yolo`
-    // value written by a future build is NOT silently respected by this MVP — it falls back
-    // to Manual rather than enabling behavior this version does not implement.
-    return isMvpAutomationLevel(parsed.level) ? parsed.level : DEFAULT_AUTOMATION_LEVEL
+    // Only honor a selectable rung (Manual/Auto-sync/Auto-apply). A `yolo` value written by
+    // a future build is NOT silently respected — it falls back to Manual rather than
+    // enabling behavior this version does not implement (fail safe, never fail silently).
+    return isSelectableAutomationLevel(parsed.level) ? parsed.level : DEFAULT_AUTOMATION_LEVEL
   } catch {
     return DEFAULT_AUTOMATION_LEVEL
   }
@@ -57,20 +57,22 @@ export async function readAutomationLevel(userDataDir: string): Promise<Automati
 /**
  * Persist this environment's automation level (the onboarding opt-in + the Settings toggle).
  *
- * Rejects any level the MVP does not expose, so the only states that can be written are
- * Manual and Auto-sync — the engine can therefore trust a read value without re-validating
- * against unbuilt behavior.
+ * Rejects any non-selectable level, so the only states that can be written are Manual,
+ * Auto-sync, and Auto-apply — the engine can therefore trust a read value without
+ * re-validating against unbuilt behavior (`yolo` arrives in issue 2-13).
  *
  * @param userDataDir Electron's `app.getPath('userData')`; a tempdir in tests.
- * @param level The MVP-selectable level to persist (`manual` or `auto-sync`).
- * @throws Error when `level` is not an MVP-selectable rung (never persist an unbuilt level).
+ * @param level The selectable level to persist (`manual` | `auto-sync` | `auto-apply`).
+ * @throws Error when `level` is not a selectable rung (never persist an unbuilt level).
  */
 export async function writeAutomationLevel(
   userDataDir: string,
   level: AutomationLevel,
 ): Promise<void> {
-  if (!isMvpAutomationLevel(level)) {
-    throw new Error(`Cannot set unsupported automation level "${level}" (MVP = manual | auto-sync)`)
+  if (!isSelectableAutomationLevel(level)) {
+    throw new Error(
+      `Cannot set unsupported automation level "${level}" (selectable = manual | auto-sync | auto-apply)`,
+    )
   }
   const file = join(userDataDir, AUTOMATION_FILE)
   await mkdir(dirname(file), { recursive: true })

@@ -24,6 +24,7 @@ import type { ConnectResult, PreflightResult } from '../main/foundation/remote-c
 import type {
   AffectedEnvironment,
   ApplyResult,
+  AutoApplyResult,
   CommitResult,
   CommitTemplateState,
   ConflictReview,
@@ -250,6 +251,19 @@ export interface DotdenApi {
       targetPaths: readonly string[],
       confirmedDeletions?: readonly string[],
     ): Promise<ApplyResult>
+    /**
+     * **Auto-apply** Sync (issue 2-12) — fetch the Remote and, when this environment's
+     * automation level is **Auto-apply** (or YOLO), apply the *clean* incoming changes
+     * automatically while still holding Conflicts, the uncommitted-edit guard, and incoming
+     * deletions for manual review. At Manual/Auto-sync nothing is auto-applied
+     * (`autoApplyEnabled: false`) and every incoming File is returned in `needsReview`.
+     *
+     * The LEVEL is gated by `AutomationPolicy` and the per-File safety by the same owners a
+     * manual Apply uses (`ConflictModel`/`ApplyPlanner`/`ApplicabilityResolver`, ADR 0008) —
+     * an Auto-apply Sync never silently overwrites, auto-resolves a Conflict, or lands an
+     * unconfirmed deletion. Returns what landed plus what was held back (with the reason).
+     */
+    autoApply(): Promise<AutoApplyResult>
     /**
      * **Conflict** — fetch + merge the Remote in the source repo and surface the true
      * Conflicts for resolution (issue 1-11). git auto-merges non-overlapping hunks, so

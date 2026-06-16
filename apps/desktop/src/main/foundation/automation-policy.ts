@@ -17,14 +17,16 @@
  *   *unrepresentable*, exactly as for a manual Apply — the policy gates the LEVEL, the
  *   owners gate the SAFETY.
  *
- * **MVP scope (this issue):** only **Manual** (the default) and **Auto-sync** exist
- * here. `Auto-apply` and `YOLO` are named in the level type so the ladder's shape is
- * fixed, but their auto-apply behavior is **deferred** (issue 2-12) — at the MVP rungs
- * `mayAutoApply()` is always `false`, so **Apply always stays a manual review** (the
- * Auto-sync contract, CONTEXT.md). And **Commit is never automatic at any level** — the
- * policy exposes no "auto-commit" decision at all, because nothing syncs that you didn't
- * Commit (transport-not-commit, ADR 0006); even the auto-push decision only ever moves
- * an *already-Committed* change.
+ * **Selectable scope (through issue 2-12):** **Manual** (default), **Auto-sync**, and
+ * **Auto-apply** are selectable rungs. `YOLO` is named in the level type so the ladder's
+ * shape is fixed, but its full hands-off behavior (auto-Commit-before-merge) is **deferred**
+ * (issue 2-13). At Manual/Auto-sync `mayAutoApply()` is always `false`, so **Apply stays a
+ * manual review** (the Auto-sync contract, CONTEXT.md); at **Auto-apply** a *clean, ready,
+ * witness-backed* item auto-applies while Conflicts, the uncommitted-edit guard, and
+ * incoming deletions still require the user (issue 2-12). **Commit is never automatic at
+ * any selectable level** — the policy exposes no "auto-commit" decision at all, because
+ * nothing syncs that you didn't Commit (transport-not-commit, ADR 0006); even the auto-push
+ * decision only ever moves an *already-Committed* change.
  */
 import type { AppliesHere } from './applicability-resolver.js'
 import type { ApplyPlanItem } from './apply-planner.js'
@@ -37,21 +39,28 @@ import type { ApplyPlanItem } from './apply-planner.js'
  * - `auto-sync` — low-risk, environment-local: Committed changes **push automatically**
  *   and incoming changes **notify**, but **Apply stays manual** (CONTEXT.md "Auto-sync").
  * - `auto-apply` — clean incoming changes apply without review (Conflicts/risky changes
- *   still ask). **Deferred to issue 2-12**; present here only to fix the ladder's shape.
- * - `yolo` — full hands-off (auto-Commit, Sync, Apply except Conflicts). **Deferred**;
- *   present here only to fix the ladder's shape. Even YOLO can never auto-resolve a
- *   Conflict — that is `ConflictModel`'s job, not the policy's (invariant #1).
+ *   still ask). **Selectable as of issue 2-12** (Warned in the ladder UI).
+ * - `yolo` — full hands-off (auto-Commit, Sync, Apply except Conflicts). Its auto-apply
+ *   verdict already routes through {@link mayAutoApply} like Auto-apply, but its
+ *   auto-Commit-before-merge path is **deferred to issue 2-13**; not selectable yet. Even
+ *   YOLO can never auto-resolve a Conflict — that is `ConflictModel`'s job, not the
+ *   policy's (invariant #1).
  */
 export type AutomationLevel = 'manual' | 'auto-sync' | 'auto-apply' | 'yolo'
 
 /**
- * The levels the MVP actually exposes (issue 1-12): **Manual + Auto-sync only**.
+ * The levels the app actually exposes for selection (through issue 2-12): **Manual,
+ * Auto-sync, Auto-apply**.
  *
- * `auto-apply`/`yolo` exist in {@link AutomationLevel} to fix the ladder's shape but are
- * not selectable yet (their auto-apply path is issue 2-12). A settings UI iterates THIS
- * list, so it can never offer a level whose behavior is not built (never fail silently).
+ * `yolo` exists in {@link AutomationLevel} to fix the ladder's shape but is not selectable
+ * yet (its auto-Commit-before-merge path is issue 2-13). A settings UI iterates THIS list,
+ * so it can never offer a level whose behavior is not built (never fail silently).
  */
-export const MVP_AUTOMATION_LEVELS: readonly AutomationLevel[] = ['manual', 'auto-sync']
+export const SELECTABLE_AUTOMATION_LEVELS: readonly AutomationLevel[] = [
+  'manual',
+  'auto-sync',
+  'auto-apply',
+]
 
 /**
  * The default automation level for a fresh environment: **Manual**.
@@ -61,9 +70,15 @@ export const MVP_AUTOMATION_LEVELS: readonly AutomationLevel[] = ['manual', 'aut
  */
 export const DEFAULT_AUTOMATION_LEVEL: AutomationLevel = 'manual'
 
-/** True when `value` is one of the MVP-selectable levels (Manual or Auto-sync). */
-export function isMvpAutomationLevel(value: unknown): value is AutomationLevel {
-  return value === 'manual' || value === 'auto-sync'
+/**
+ * True when `value` is one of the **selectable** rungs (Manual / Auto-sync / Auto-apply).
+ *
+ * The persistence layer ({@link import('./automation-settings.js')}) gates reads + writes
+ * through this so a corrupt/forward-incompatible file (or a future `yolo`) can never
+ * silently enable an unbuilt rung — it falls back to the safe Manual default instead.
+ */
+export function isSelectableAutomationLevel(value: unknown): value is AutomationLevel {
+  return value === 'manual' || value === 'auto-sync' || value === 'auto-apply'
 }
 
 /**
@@ -128,30 +143,47 @@ export class AutomationPolicy {
   }
 
   /**
+   * Whether this LEVEL auto-applies clean incoming changes at all (issue 2-12) — the
+   * level-only predicate, taking no candidate.
+   *
+   * `true` at `auto-apply` and above (`yolo`); `false` at `manual`/`auto-sync`, where Apply
+   * stays a manual review. Callers use it to decide whether to run the Auto-apply path or
+   * fall straight back to the reviewed-Apply surface, WITHOUT needing a candidate in hand.
+   * It is purely the level gate — the per-item safety still flows through {@link mayAutoApply}.
+   *
+   * @returns Whether the current rung auto-applies clean incoming changes.
+   */
+  autoAppliesIncoming(): boolean {
+    return this.level === 'auto-apply' || this.level === 'yolo'
+  }
+
+  /**
    * Whether incoming change(s) may be **applied automatically** at this level.
    *
-   * **MVP: always `false`.** Manual and Auto-sync both leave Apply a manual review
-   * (CONTEXT.md "Auto-sync": Apply stays a manual review), so at every MVP rung this is
-   * `false`. The richer auto-apply path (clean changes apply without review; Conflicts
-   * still ask) is `auto-apply`/`yolo`, deferred to issue 2-12.
+   * **Manual / Auto-sync: always `false`.** Both leave Apply a manual review (CONTEXT.md
+   * "Auto-sync": Apply stays a manual review), so at those rungs this is `false`. The
+   * richer auto-apply path (clean changes apply without review; Conflicts/risky changes
+   * still ask) is `auto-apply` (issue 2-12) and `yolo` (issue 2-13).
    *
-   * Crucially, the gate is BY-CONSTRUCTION even when 2-12 turns it on: it can only return
-   * `true` for a candidate whose owner verdicts already clear it — never blocked
-   * (invariant #2), never an unconfirmed deletion (invariant #4), always witness-backed
-   * (invariant #3). The policy reads those verdicts; it does not re-decide them.
+   * Crucially, the gate is BY-CONSTRUCTION: it can only return `true` for a candidate
+   * whose owner verdicts already clear it — never blocked (invariant #2), never an
+   * unconfirmed deletion (invariant #4), always witness-backed (invariant #3). The policy
+   * reads those verdicts; it does not re-decide them. (A `conflict` never even produces a
+   * candidate — `SyncEngine` defers it before the planner, invariant #1 — so there is
+   * nothing here to re-check for Conflicts either.)
    *
    * @param candidate The reviewed item to auto-apply, expressed via owner outputs.
    * @returns Whether this level permits auto-applying THIS candidate without review.
    */
   mayAutoApply(candidate: AutoApplyCandidate): boolean {
-    // The MVP rungs never auto-apply — short-circuit so the safety reasoning below is
-    // only exercised by the (deferred) auto-apply/yolo rungs in issue 2-12.
+    // Manual/Auto-sync never auto-apply — short-circuit so the safety reasoning below is
+    // only exercised by the auto-applying rungs (Auto-apply 2-12 / YOLO 2-13).
     if (this.level === 'manual' || this.level === 'auto-sync') return false
-    // Auto-apply/YOLO (2-12): even then, defer entirely to the planner's verdicts. A
-    // blocked item (invariant #2) or an item that still needs confirmation — every
-    // deletion does (invariant #4) — is NEVER auto-applied. We consume the owner's
-    // verdict; we do not re-derive it (ADR 0008). The witness presence is the structural
-    // proof of invariant #3 — holding the candidate at all means it was minted.
+    // Auto-apply/YOLO: even then, defer entirely to the planner's verdicts. A blocked item
+    // (invariant #2) or an item that still needs confirmation — every deletion does
+    // (invariant #4) — is NEVER auto-applied. We consume the owner's verdict; we do not
+    // re-derive it (ADR 0008). The witness presence is the structural proof of invariant #3
+    // — holding the candidate at all means the resolver minted it.
     return candidate.item.blockedReason === null && !candidate.item.requiresConfirmation
   }
 

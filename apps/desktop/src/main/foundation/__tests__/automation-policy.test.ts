@@ -15,8 +15,8 @@ import { describe, expect, it } from 'vitest'
 import {
   AutomationPolicy,
   DEFAULT_AUTOMATION_LEVEL,
-  MVP_AUTOMATION_LEVELS,
-  isMvpAutomationLevel,
+  SELECTABLE_AUTOMATION_LEVELS,
+  isSelectableAutomationLevel,
   type AutoApplyCandidate,
   type AutomationLevel,
 } from '../automation-policy.js'
@@ -55,21 +55,21 @@ function candidateFor(
   return { witness: result, item: plan.items[0]! }
 }
 
-describe('AutomationPolicy gates LEVELS (ADR 0008, MVP = Manual + Auto-sync)', () => {
-  it('exposes Manual + Auto-sync only and defaults to Manual', () => {
-    expect(MVP_AUTOMATION_LEVELS).toEqual(['manual', 'auto-sync'])
+describe('AutomationPolicy gates LEVELS (ADR 0008, selectable = Manual + Auto-sync + Auto-apply)', () => {
+  it('exposes Manual + Auto-sync + Auto-apply and defaults to Manual', () => {
+    expect(SELECTABLE_AUTOMATION_LEVELS).toEqual(['manual', 'auto-sync', 'auto-apply'])
     expect(DEFAULT_AUTOMATION_LEVEL).toBe('manual')
     // An unset level constructs as the safest, fully-manual rung.
     expect(new AutomationPolicy().automationLevel).toBe('manual')
   })
 
-  it('only accepts the MVP levels through the guard (no auto-apply/yolo yet)', () => {
-    expect(isMvpAutomationLevel('manual')).toBe(true)
-    expect(isMvpAutomationLevel('auto-sync')).toBe(true)
-    // auto-apply / yolo exist in the type to fix the ladder shape, but are NOT selectable.
-    expect(isMvpAutomationLevel('auto-apply')).toBe(false)
-    expect(isMvpAutomationLevel('yolo')).toBe(false)
-    expect(isMvpAutomationLevel('nonsense')).toBe(false)
+  it('accepts the selectable levels through the guard but NOT yolo (issue 2-13)', () => {
+    expect(isSelectableAutomationLevel('manual')).toBe(true)
+    expect(isSelectableAutomationLevel('auto-sync')).toBe(true)
+    expect(isSelectableAutomationLevel('auto-apply')).toBe(true)
+    // yolo exists in the type to fix the ladder shape, but is NOT selectable yet.
+    expect(isSelectableAutomationLevel('yolo')).toBe(false)
+    expect(isSelectableAutomationLevel('nonsense')).toBe(false)
   })
 
   it('Manual auto-pushes nothing; Auto-sync auto-pushes Commits', () => {
@@ -77,14 +77,23 @@ describe('AutomationPolicy gates LEVELS (ADR 0008, MVP = Manual + Auto-sync)', (
     expect(new AutomationPolicy('auto-sync').mayAutoPush()).toBe(true)
   })
 
-  it('leaves Apply MANUAL at every MVP rung (Auto-sync still reviews incoming)', () => {
+  it('leaves Apply MANUAL at Manual + Auto-sync, but Auto-apply auto-applies a clean item', () => {
     const clean = candidateFor('.zshrc', 'create')
-    // Both MVP rungs: Apply is a manual review — never auto-applied (CONTEXT.md Auto-sync).
+    // Manual/Auto-sync: Apply is a manual review — never auto-applied (CONTEXT.md Auto-sync).
     expect(new AutomationPolicy('manual').mayAutoApply(clean)).toBe(false)
     expect(new AutomationPolicy('auto-sync').mayAutoApply(clean)).toBe(false)
+    // Auto-apply (issue 2-12): a clean, ready item applies on its own.
+    expect(new AutomationPolicy('auto-apply').mayAutoApply(clean)).toBe(true)
   })
 
-  it('notifies about incoming at both MVP rungs (incoming never lands unseen)', () => {
+  it('autoAppliesIncoming() is the level-only gate: false ≤ Auto-sync, true ≥ Auto-apply', () => {
+    expect(new AutomationPolicy('manual').autoAppliesIncoming()).toBe(false)
+    expect(new AutomationPolicy('auto-sync').autoAppliesIncoming()).toBe(false)
+    expect(new AutomationPolicy('auto-apply').autoAppliesIncoming()).toBe(true)
+    expect(new AutomationPolicy('yolo').autoAppliesIncoming()).toBe(true)
+  })
+
+  it('notifies about incoming at the manual rungs (incoming never lands unseen)', () => {
     expect(new AutomationPolicy('manual').shouldNotifyIncoming()).toBe(true)
     expect(new AutomationPolicy('auto-sync').shouldNotifyIncoming()).toBe(true)
   })

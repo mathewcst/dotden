@@ -282,6 +282,13 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
       confirmedDeletions ?? [],
     )
   })
+  // Auto-apply Sync (issue 2-12): fetch + (when the level permits) auto-apply CLEAN incoming
+  // changes, holding Conflicts/edit-guard/deletions for review. A sync+apply Operation, so the
+  // _trace is forwarded. The LEVEL gate is AutomationPolicy's and the per-File safety is the
+  // ApplyPlanner/ConflictModel owners' — the bridge re-checks nothing (ADR 0008).
+  registrar.handle('den:auto-apply', async (_event, payload: TracedPayload) => {
+    return (await deps.denService()).autoApplyIncoming(traceId(payload))
+  })
   // The Conflict path (issue 1-11): detect fetches+merges in the source repo (a sync
   // Operation, _trace forwarded) and surfaces true Conflicts; resolve/complete/abort MUTATE
   // the merge, so each forwards its _trace so the Operation emits a correlated wide event.

@@ -23,10 +23,12 @@ import {
   planIncoming,
   type ApplyChangeKind,
   type ApplyPlan,
+  type ApplyPlanItem,
   type IncomingChange,
   type LocalEditState,
 } from './apply-planner.js'
 import { ApplicabilityResolver, isAppliesHere } from './applicability-resolver.js'
+import type { AutomationPolicy } from './automation-policy.js'
 import { isResolvedConflict, type ResolvedConflict } from './conflict-model.js'
 import type { EnvironmentEntry, WorkspacesDoc } from './myenv-store.js'
 import type { OperationTracer } from './operation-tracer.js'
@@ -67,6 +69,54 @@ export interface IncomingCleanRouting {
    * this environment's subscription, refused by {@link ApplicabilityResolver}).
    */
   readonly deferred: readonly { targetPath: string; reason: 'conflict' | 'not-applicable' }[]
+}
+
+/**
+ * Why a routed incoming item still needs the **user** rather than auto-applying — the
+ * verdict that kept it off the auto-apply path (issue 2-12). Every value here is *read*
+ * from an invariant owner; `SyncEngine` never re-derives it (ADR 0008):
+ *
+ * - `conflict` — a true Conflict, deferred before the planner. NEVER auto-resolved
+ *   (invariant #1, `ConflictModel`'s job).
+ * - `not-applicable` — outside this environment's subscription/Scope; no witness was
+ *   minted (invariant #3, `ApplicabilityResolver`).
+ * - `uncommitted-edit` — the File has uncommitted local edits here; auto-applying would
+ *   silently overwrite in-progress work (invariant #2, `ApplyPlanner`'s edit guard).
+ * - `needs-confirmation` — an incoming deletion; never applied without an explicit
+ *   confirmation (invariant #4, `ApplyPlanner`).
+ * - `clean` — a ready, applicable, non-deletion item the policy still did NOT auto-apply
+ *   because the current LEVEL leaves Apply manual (Manual / Auto-sync). It is held purely
+ *   by the level gate, not by a safety owner — so it surfaces for ordinary review.
+ */
+export type AutoApplyHoldReason =
+  | 'conflict'
+  | 'not-applicable'
+  | 'uncommitted-edit'
+  | 'needs-confirmation'
+  | 'clean'
+
+/**
+ * The result of routing one Sync's incoming Files through the **Auto-apply** event path
+ * (issue 2-12), partitioned by what the {@link AutomationPolicy} permits.
+ *
+ * The split is the whole point: it shows exactly what the engine would write without the
+ * user (`autoApply`) versus what it deliberately held back for manual review
+ * (`needsReview`) and why — so an Auto-apply Sync never silently overwrites, never
+ * auto-resolves a Conflict, and never lands an unconfirmed deletion (never fail silently).
+ */
+export interface AutoApplyRouting {
+  /**
+   * The plan items the policy cleared to **apply automatically** — each clean, ready,
+   * witness-backed (invariant #3), not blocked (invariant #2), and not a deletion
+   * (invariant #4). These are the `targetPath`s the caller writes with no review.
+   */
+  readonly autoApply: readonly ApplyPlanItem[]
+  /**
+   * The incoming Files the policy held back for **manual review**, with the owner verdict
+   * that held them. These STILL surface to the user (the Incoming banner / Review surface)
+   * — Auto-apply narrows what needs a human, it never hides what does.
+   */
+  readonly needsReview: readonly { targetPath: string; reason: AutoApplyHoldReason }[]
 }
 
 /** Construction dependencies for {@link SyncEngine}. */
@@ -172,6 +222,90 @@ export class SyncEngine {
     }
 
     return { plan, deferred }
+  }
+
+  /**
+   * Route the **Auto-apply** event path (issue 2-12): partition this Sync's incoming Files
+   * into the ones the {@link AutomationPolicy} clears to apply *without* the user, and the
+   * ones it deliberately holds back for manual review — never re-checking an owner's
+   * invariant (ADR 0008).
+   *
+   * This is the load-bearing composition test point for Auto-apply. It is built ENTIRELY
+   * on {@link routeIncomingClean} (which already enforces invariants #1 and #3 and produces
+   * the planner's #2/#4 verdicts) plus the policy's level gate, so there is exactly one
+   * place the dangerous composition lives:
+   *
+   * - a `conflict` was deferred by `routeIncomingClean` *before the planner* — it never
+   *   becomes a plan item, so it can never be auto-applied (invariant #1). It is reported
+   *   in `needsReview` with reason `conflict`;
+   * - a `not-applicable` File got no witness (invariant #3) — reported `not-applicable`;
+   * - for every actual plan item we ask {@link AutomationPolicy.mayAutoApply}. The policy
+   *   only says yes when the item is not blocked (invariant #2) and needs no confirmation
+   *   (invariant #4) — verdicts the planner OWNS and this engine merely reads. A `false`
+   *   verdict routes the item to `needsReview` with the specific owner reason
+   *   (`uncommitted-edit` / `needs-confirmation`), so the user still sees it.
+   *
+   * Because `mayAutoApply` returns `false` at Manual/Auto-sync, calling this at those rungs
+   * yields an EMPTY `autoApply` and every incoming File in `needsReview` — i.e. it degrades
+   * to "review everything", exactly the manual contract. Nothing is auto-applied that the
+   * owners did not already clear, at any level.
+   *
+   * @param incoming The classified incoming Files from this Sync's fetch.
+   * @param policy The environment's {@link AutomationPolicy} — the LEVEL gate this depends on.
+   * @param traceId Correlation id for the wide event (the IPC `_trace.traceId`).
+   * @param localEdits The local-drift facts the planner needs for invariant #2.
+   * @returns The auto-applicable items and the held-back Files (with the owner reason).
+   */
+  routeAutoApply(
+    incoming: readonly IncomingFile[],
+    policy: AutomationPolicy,
+    traceId: string,
+    localEdits?: LocalEditState,
+  ): AutoApplyRouting {
+    const span = this.tracer?.startOperation('sync', traceId)
+    // Reuse the one router that owns invariants #1 + #3 and surfaces the planner's #2/#4
+    // verdicts — Auto-apply NEVER forks a second path that could route a row differently.
+    const { plan, deferred } = this.routeIncomingClean(incoming, traceId, localEdits)
+
+    const autoApply: ApplyPlanItem[] = []
+    const needsReview: { targetPath: string; reason: AutoApplyHoldReason }[] = []
+
+    // Conflicts + non-applicable Files were deferred before the planner — they are never
+    // plan items, so they can never be auto-applied; carry them through to `needsReview`.
+    for (const item of deferred) {
+      needsReview.push({ targetPath: item.targetPath, reason: item.reason })
+    }
+
+    for (const item of plan.items) {
+      // The LEVEL gate: depend on the policy, which depends on the planner's verdicts. We
+      // do NOT re-read `blockedReason`/`requiresConfirmation` to decide — only to name WHY
+      // an item the policy refused was held (so the reason matches the owner's verdict).
+      if (policy.mayAutoApply({ witness: item.witness, item })) {
+        autoApply.push(item)
+      } else {
+        // The policy refused. Name WHY by reading the OWNER'S verdict on the item (we do not
+        // re-derive the verdict — the planner already set it; we only translate it to a
+        // surfaced reason), so a held item always carries the true owner cause:
+        // - invariant #2: an uncommitted-edit block — never overwrite in-progress work;
+        // - invariant #4: an incoming deletion needing explicit confirmation;
+        // - otherwise it is a clean, ready item the LEVEL (Manual/Auto-sync) keeps manual.
+        const reason: AutoApplyHoldReason =
+          item.blockedReason === 'uncommitted-edit'
+            ? 'uncommitted-edit'
+            : item.requiresConfirmation
+              ? 'needs-confirmation'
+              : 'clean'
+        needsReview.push({ targetPath: item.witness.targetPath, reason })
+      }
+    }
+
+    if (span) {
+      span.setAttribute('fileCount', autoApply.length)
+      span.setAttribute('outcome', 'ok')
+      span.end('ok')
+    }
+
+    return { autoApply, needsReview }
   }
 
   /**

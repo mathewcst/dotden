@@ -37,7 +37,7 @@ import {
   type WorkspacesDoc,
 } from './myenv-store.js'
 import type { OperationTracer } from './operation-tracer.js'
-import { SyncEngine, type IncomingFile } from './sync-engine.js'
+import { SyncEngine, type AutoApplyHoldReason, type IncomingFile } from './sync-engine.js'
 import type { ApplyChangeKind } from './apply-planner.js'
 import { ConflictModel, type ResolutionChoice } from './conflict-model.js'
 import { parseChezmoiStatus, parseIncomingDeletions, type FileGitStatus } from './chezmoi-status.js'
@@ -383,6 +383,34 @@ export interface ApplyResult {
   readonly applied: readonly string[]
   /** The Files that failed, each with its reason + retryable flag (for the retry UI). */
   readonly failed: readonly ApplyFileResult[]
+}
+
+/**
+ * The outcome of one **Auto-apply** Sync (issue 2-12) — what landed without the user, and
+ * what was held back for manual review.
+ *
+ * Auto-apply NEVER suppresses what still needs a human (never fail silently): a clean
+ * incoming change applies on its own, but Conflicts, an uncommitted-edit-guard hit, and
+ * incoming deletions are reported in `needsReview` so the in-app Incoming banner still
+ * surfaces them for the normal reviewed Apply (issue 1-09). At Manual/Auto-sync the policy
+ * auto-applies nothing, so `autoApplied` is empty and EVERY incoming File is in
+ * `needsReview` — the manual contract, unchanged.
+ */
+export interface AutoApplyResult {
+  /**
+   * Whether this environment's automation level even permits auto-applying. `false` at
+   * Manual/Auto-sync — the caller then knows nothing was auto-applied by design (not by
+   * an error), so it can fall straight back to the reviewed-Apply surface.
+   */
+  readonly autoApplyEnabled: boolean
+  /** The per-File outcomes of the Files Auto-apply actually wrote (the apply record). */
+  readonly applied: ApplyResult
+  /**
+   * The incoming Files held back for the user, with the owner verdict that held each (a
+   * Conflict, a non-applicable File, an uncommitted-edit block, an incoming deletion, or a
+   * clean item the level kept manual). These STILL surface for review — never dropped.
+   */
+  readonly needsReview: readonly { targetPath: string; reason: AutoApplyHoldReason }[]
 }
 
 /**
@@ -1446,6 +1474,72 @@ export class DenService {
       // a partial Apply honestly (the per-File detail lives in the returned result).
       span?.end(failed.length === 0 ? 'ok' : 'error')
       return { results, applied, failed }
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
+   * **env B** — the **Auto-apply** Sync (issue 2-12): fetch the Remote and, when the
+   * automation level permits, apply the *clean* incoming changes automatically — while
+   * Conflicts, the uncommitted-edit guard, and incoming deletions are held back for the
+   * user. The faithful realization of ADR 0006's Auto-apply rung.
+   *
+   * The safety here is **composed, not re-checked** (ADR 0008). It depends on:
+   * - {@link AutomationPolicy} for the LEVEL gate — at Manual/Auto-sync `mayAutoApply`
+   *   refuses everything, so `autoApplyEnabled` is `false`, nothing is written, and every
+   *   incoming File is returned in `needsReview` for the ordinary reviewed Apply;
+   * - {@link SyncEngine.routeAutoApply}, which defers a Conflict before the planner
+   *   (invariant #1), refuses a non-applicable File for lack of a witness (invariant #3),
+   *   and consumes the planner's uncommitted-edit (invariant #2) / deletion-confirmation
+   *   (invariant #4) verdicts to decide what may auto-apply.
+   *
+   * The cleared paths are then written through the SAME guarded {@link applyIncoming} path
+   * a manual Apply uses — so the apply-time atomic uncommitted-edit re-check still runs
+   * (no plan→apply TOCTOU) and we never fork a second, weaker write path. Auto-apply passes
+   * NO `confirmedDeletions`: a deletion is never in the auto-applied set (the policy holds
+   * every `requiresConfirmation` item), so it can only ever be applied via an explicit user
+   * confirmation through the manual path (invariant #4 stays intact).
+   *
+   * @param traceId Correlation id for the wide event (the IPC `_trace.traceId`).
+   * @returns Whether auto-apply was enabled, the apply record for what landed, and the
+   *   Files held back for review (each with the owner reason).
+   */
+  async autoApplyIncoming(traceId: string): Promise<AutoApplyResult> {
+    const span = this.tracer?.startOperation('sync', traceId)
+    try {
+      await this.git.fetch()
+      const incoming = await this.computeIncoming()
+      const { environment, workspaces } = await this.loadSyncedModel()
+      const engine = new SyncEngine({ environment, workspaces, tracer: this.tracer })
+      // Hand the local-drift facts to the planner (invariant #2) so a File with an
+      // uncommitted edit is held for review, never auto-overwritten.
+      const uncommittedEdits = await this.chezmoi.localEdits()
+      // Partition by what the policy clears — depending on the policy's LEVEL gate, which
+      // depends on the planner's verdicts (ADR 0008). DenService never re-checks the gate.
+      const { autoApply, needsReview } = engine.routeAutoApply(incoming, this.automation, traceId, {
+        uncommittedEdits,
+      })
+
+      const autoApplyPaths = autoApply.map((item) => item.witness.targetPath)
+      // Write the cleared Files through the SAME guarded path a manual Apply uses (the
+      // apply-time atomic re-check runs there). No confirmedDeletions — a deletion is never
+      // in this set, so it can only ever be applied via an explicit confirmation elsewhere.
+      const applied =
+        autoApplyPaths.length > 0
+          ? await this.applyIncoming(autoApplyPaths, traceId)
+          : { results: [], applied: [], failed: [] }
+
+      span?.setAttribute('automationLevel', this.automation.automationLevel)
+      span?.setAttribute('fileCount', applied.applied.length)
+      span?.end('ok')
+      return {
+        // The level's permission, read straight off the policy (Manual/Auto-sync ⇒ false).
+        autoApplyEnabled: this.automation.autoAppliesIncoming(),
+        applied,
+        needsReview,
+      }
     } catch (error) {
       span?.end('error')
       throw error

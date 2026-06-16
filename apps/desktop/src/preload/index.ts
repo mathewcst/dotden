@@ -170,6 +170,12 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['apply']>
     },
+    // → IPC channel 'den:auto-apply' (Auto-apply Sync: fetch + auto-apply clean changes, 2-12)
+    autoApply() {
+      return ipcRenderer.invoke('den:auto-apply', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['autoApply']>
+    },
     // → IPC channel 'den:detect-conflicts' (fetch + merge; surface true Conflicts, 1-11)
     detectConflicts() {
       return ipcRenderer.invoke('den:detect-conflicts', {

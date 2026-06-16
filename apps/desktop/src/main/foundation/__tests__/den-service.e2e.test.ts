@@ -133,6 +133,92 @@ describe('DenService end-to-end thread (real chezmoi/git)', () => {
     await expect(readFile(join(bHome, '.zshrc'), 'utf8')).resolves.toBe('export EDITOR=nvim\n')
   })
 
+  it('Auto-apply (issue 2-12): env B on the Auto-apply rung applies a CLEAN incoming change with NO review', async () => {
+    // Shared Remote + env A authors a clean change, exactly like the thread above.
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+    const aHome = join(root, 'a-home')
+    const aSource = join(root, 'a-source')
+    await mkdir(aHome, { recursive: true })
+    await initSourceRepo(aSource, remote)
+    const envA = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: aHome,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+    await writeFile(join(aHome, '.zshrc'), 'export EDITOR=nvim\n')
+    await envA.trackFile('.zshrc', 'trace-track')
+    await envA.commitTracked(['.zshrc'], 'trace-commit')
+    await envA.syncPush('trace-push')
+
+    // env B clones the Den and is on the **Auto-apply** rung (the only difference).
+    const bHome = join(root, 'b-home')
+    const bSource = join(root, 'b-source')
+    await mkdir(bHome, { recursive: true })
+    await cloneRepo(gitBin, remote, bSource)
+    const envB = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: bSource,
+      destinationDir: bHome,
+      environment: { id: 'env-b', label: 'work-laptop', os: process.platform },
+      automationLevel: 'auto-apply',
+    })
+
+    // One Auto-apply Sync: the clean incoming `.zshrc` is applied to disk WITHOUT a review,
+    // with the exact source bytes — the core Auto-apply behavior end to end (story 27).
+    expect(existsSync(join(bHome, '.zshrc'))).toBe(false)
+    const result = await envB.autoApplyIncoming('trace-auto-apply')
+    expect(result.autoApplyEnabled).toBe(true)
+    expect(result.applied.applied).toEqual(['.zshrc'])
+    expect(result.needsReview).toEqual([])
+    await expect(readFile(join(bHome, '.zshrc'), 'utf8')).resolves.toBe('export EDITOR=nvim\n')
+  })
+
+  it('Auto-apply (issue 2-12): at Manual nothing is auto-applied — every incoming File is held for review', async () => {
+    // Same author flow; env B stays on the DEFAULT Manual rung.
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+    const aHome = join(root, 'a-home')
+    const aSource = join(root, 'a-source')
+    await mkdir(aHome, { recursive: true })
+    await initSourceRepo(aSource, remote)
+    const envA = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: aHome,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+    await writeFile(join(aHome, '.zshrc'), 'export EDITOR=nvim\n')
+    await envA.trackFile('.zshrc', 'trace-track')
+    await envA.commitTracked(['.zshrc'], 'trace-commit')
+    await envA.syncPush('trace-push')
+
+    const bHome = join(root, 'b-home')
+    const bSource = join(root, 'b-source')
+    await mkdir(bHome, { recursive: true })
+    await cloneRepo(gitBin, remote, bSource)
+    const envB = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: bSource,
+      destinationDir: bHome,
+      environment: { id: 'env-b', label: 'work-laptop', os: process.platform },
+      // automationLevel omitted ⇒ Manual: enabling a rung is the ONLY thing that turns
+      // auto-apply on (it never changes behavior retroactively).
+    })
+
+    const result = await envB.autoApplyIncoming('trace-auto-apply-manual')
+    // Nothing auto-applied — the File is held for the ordinary reviewed Apply, untouched on disk.
+    expect(result.autoApplyEnabled).toBe(false)
+    expect(result.applied.applied).toEqual([])
+    expect(result.needsReview).toEqual([{ targetPath: '.zshrc', reason: 'clean' }])
+    expect(existsSync(join(bHome, '.zshrc'))).toBe(false)
+  })
+
   it('fileTree() reads managed Files with their placement, local status, and diff (issue 1-07)', async () => {
     const remote = join(root, 'remote.git')
     await runCommand(gitBin, ['init', '--bare', remote])

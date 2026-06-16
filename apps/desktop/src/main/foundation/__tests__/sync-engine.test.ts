@@ -17,6 +17,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { isAppliesHere } from '../applicability-resolver.js'
+import { AutomationPolicy } from '../automation-policy.js'
 import { ConflictModel, isResolvedConflict, type ResolvedConflict } from '../conflict-model.js'
 import type { EnvironmentEntry, WorkspacesDoc } from '../myenv-store.js'
 import { SyncEngine, type IncomingFile } from '../sync-engine.js'
@@ -291,6 +292,189 @@ describe('SyncEngine conflict-resolved routing (ADR 0008 invariant #1, load-bear
     // Sanity: the run actually exercised both accept and reject paths (not vacuous).
     expect(accepted).toBeGreaterThan(0)
     expect(forged).toBeGreaterThan(0)
+  })
+})
+
+describe('SyncEngine Auto-apply routing (ADR 0008 #1/#2/#3/#4, issue 2-12 load-bearing)', () => {
+  // One Workspace this env subscribes to ('personal'); '.work-only' is out of subscription.
+  const workspaces: WorkspacesDoc = {
+    workspaces: [
+      { id: 'personal', label: 'Personal', groups: [], scope: null },
+      { id: 'work', label: 'Work', groups: [], scope: null },
+    ],
+    placements: [
+      { targetPath: '.zshrc', workspaceId: 'personal', groupId: null, scope: null },
+      { targetPath: '.gitconfig', workspaceId: 'personal', groupId: null, scope: null },
+      { targetPath: '.work-only', workspaceId: 'work', groupId: null, scope: null },
+    ],
+  }
+  const autoApply = new AutomationPolicy('auto-apply')
+
+  it('auto-applies a CLEAN incoming change (the core Auto-apply behavior, story 27)', () => {
+    const engine = new SyncEngine({ environment: env(['personal']), workspaces })
+
+    const { autoApply: applied, needsReview } = engine.routeAutoApply(
+      [{ targetPath: '.zshrc', status: 'incoming-clean' }],
+      autoApply,
+      'trace-aa-clean',
+    )
+
+    // The clean, ready, applicable, non-deletion item lands without the user.
+    expect(applied.map((i) => i.witness.targetPath)).toEqual(['.zshrc'])
+    expect(needsReview).toEqual([])
+  })
+
+  it('still PROMPTS on a Conflict — never auto-resolved/applied (invariant #1, story 28)', () => {
+    const engine = new SyncEngine({ environment: env(['personal']), workspaces })
+
+    const { autoApply: applied, needsReview } = engine.routeAutoApply(
+      [{ targetPath: '.zshrc', status: 'conflict' }],
+      autoApply,
+      'trace-aa-conflict',
+    )
+
+    // A true Conflict is NEVER auto-applied — it is held for the ConflictModel resolver.
+    expect(applied).toEqual([])
+    expect(needsReview).toEqual([{ targetPath: '.zshrc', reason: 'conflict' }])
+  })
+
+  it('still PROMPTS on the uncommitted-edit guard — no silent overwrite (invariant #2, story 29)', () => {
+    const engine = new SyncEngine({ environment: env(['personal']), workspaces })
+
+    const { autoApply: applied, needsReview } = engine.routeAutoApply(
+      [{ targetPath: '.zshrc', status: 'incoming-clean' }],
+      autoApply,
+      'trace-aa-edit',
+      // The File has an uncommitted local edit here — auto-applying would clobber it.
+      { uncommittedEdits: new Set(['.zshrc']) },
+    )
+
+    expect(applied).toEqual([])
+    expect(needsReview).toEqual([{ targetPath: '.zshrc', reason: 'uncommitted-edit' }])
+  })
+
+  it('still PROMPTS on an incoming DELETION — confirmation required (invariant #4, story 33)', () => {
+    const engine = new SyncEngine({ environment: env(['personal']), workspaces })
+
+    const { autoApply: applied, needsReview } = engine.routeAutoApply(
+      [{ targetPath: '.gitconfig', status: 'incoming-delete' }],
+      autoApply,
+      'trace-aa-delete',
+    )
+
+    // A deletion is `requiresConfirmation` from the planner — never auto-applied.
+    expect(applied).toEqual([])
+    expect(needsReview).toEqual([{ targetPath: '.gitconfig', reason: 'needs-confirmation' }])
+  })
+
+  it('holds a NON-APPLICABLE File for review (invariant #3, no witness ⇒ never auto-applied)', () => {
+    const engine = new SyncEngine({ environment: env(['personal']), workspaces })
+
+    const { autoApply: applied, needsReview } = engine.routeAutoApply(
+      [{ targetPath: '.work-only', status: 'incoming-clean' }],
+      autoApply,
+      'trace-aa-na',
+    )
+
+    expect(applied).toEqual([])
+    expect(needsReview).toEqual([{ targetPath: '.work-only', reason: 'not-applicable' }])
+  })
+
+  it('at Manual/Auto-sync the LEVEL gate auto-applies NOTHING (every File held as clean)', () => {
+    const engine = new SyncEngine({ environment: env(['personal']), workspaces })
+
+    for (const level of ['manual', 'auto-sync'] as const) {
+      const { autoApply: applied, needsReview } = engine.routeAutoApply(
+        [{ targetPath: '.zshrc', status: 'incoming-clean' }],
+        new AutomationPolicy(level),
+        `trace-aa-${level}`,
+      )
+      // The very item Auto-apply WOULD land is instead held for ordinary review — the
+      // manual contract: enabling a rung never retroactively changes prior behavior.
+      expect(applied).toEqual([])
+      expect(needsReview).toEqual([{ targetPath: '.zshrc', reason: 'clean' }])
+    }
+  })
+
+  it('mixes them in one Sync: only the clean applicable item auto-applies, the rest are held', () => {
+    const engine = new SyncEngine({ environment: env(['personal']), workspaces })
+
+    const { autoApply: applied, needsReview } = engine.routeAutoApply(
+      [
+        { targetPath: '.zshrc', status: 'incoming-clean' }, // ← auto-applies
+        { targetPath: '.gitconfig', status: 'incoming-delete' }, // ← held (deletion)
+        { targetPath: '.work-only', status: 'incoming-clean' }, // ← held (not-applicable)
+      ],
+      autoApply,
+      'trace-aa-mixed',
+    )
+
+    expect(applied.map((i) => i.witness.targetPath)).toEqual(['.zshrc'])
+    expect(needsReview).toContainEqual({ targetPath: '.gitconfig', reason: 'needs-confirmation' })
+    expect(needsReview).toContainEqual({ targetPath: '.work-only', reason: 'not-applicable' })
+  })
+
+  it('property: an auto-applied item is ALWAYS clean+applicable+ready (never a risky one)', () => {
+    // Drive randomized status/subscription/drift combos and assert EVERY auto-applied item
+    // cleared all four owners — the composition guarantee a single example cannot give.
+    const ids = ['personal', 'work', 'home']
+    let appliedCount = 0
+    let heldRisky = 0
+
+    for (let seed = 0; seed < 400; seed++) {
+      const rng = mulberry32(seed)
+      const subscribed = ids.filter(() => rng() < 0.5)
+      const placements = ids.flatMap((workspaceId, index) =>
+        rng() < 0.4 ? [] : [{ targetPath: `.f${index}`, workspaceId, groupId: null, scope: null }],
+      )
+      const ws: WorkspacesDoc = {
+        workspaces: ids.map((id) => ({ id, label: id, groups: [], scope: null })),
+        placements,
+      }
+      const engine = new SyncEngine({ environment: env(subscribed), workspaces: ws })
+
+      const dirty = new Set<string>()
+      const incoming: IncomingFile[] = ids.map((_id, index) => {
+        const path = `.f${index}`
+        if (rng() < 0.3) dirty.add(path)
+        const roll = rng()
+        const status: IncomingFile['status'] =
+          roll < 0.25 ? 'conflict' : roll < 0.5 ? 'incoming-delete' : 'incoming-clean'
+        return { targetPath: path, status }
+      })
+
+      const { autoApply: applied, needsReview } = engine.routeAutoApply(
+        incoming,
+        autoApply,
+        `t-aa-${seed}`,
+        { uncommittedEdits: dirty },
+      )
+
+      for (const item of applied) {
+        appliedCount++
+        const path = item.witness.targetPath
+        // Invariant #3: applicable (placed in a subscribed Workspace) — witness is real.
+        expect(isAppliesHere(item.witness)).toBe(true)
+        const placement = placements.find((p) => p.targetPath === path)
+        expect(subscribed).toContain(placement?.workspaceId)
+        // Invariant #1: never a Conflict.
+        expect(incoming.find((f) => f.targetPath === path)?.status).not.toBe('conflict')
+        // Invariant #4: never a deletion.
+        expect(item.kind).not.toBe('delete')
+        // Invariant #2: never a locally-edited (blocked) File.
+        expect(item.blockedReason).toBeNull()
+        expect(dirty.has(path)).toBe(false)
+      }
+      // Every conflict / deletion / blocked / non-applicable File is held — never applied.
+      for (const held of needsReview) {
+        if (held.reason !== 'clean') heldRisky++
+        expect(applied.map((i) => i.witness.targetPath)).not.toContain(held.targetPath)
+      }
+    }
+
+    // Sanity: the run actually exercised both auto-apply and held-back paths (not vacuous).
+    expect(appliedCount).toBeGreaterThan(0)
+    expect(heldRisky).toBeGreaterThan(0)
   })
 })
 
