@@ -82,6 +82,27 @@ function run(cmd, args, opts = {}) {
   }
 }
 
+/** Detected once: is the host `tar` GNU tar? (vs the bsdtar Windows/macOS ship.) */
+let gnuTarCache
+function isGnuTar() {
+  if (gnuTarCache === undefined) {
+    const version = spawnSync('tar', ['--version'], { encoding: 'utf8' })
+    gnuTarCache = /GNU tar/.test(version.stdout ?? '')
+  }
+  return gnuTarCache
+}
+
+/**
+ * Extract a tar.gz, working around GNU tar's remote-host heuristic: it reads any path
+ * containing a colon (`C:\…`, both the `-f` archive and the `-C` dest on Windows) as a
+ * `host:path` rsh spec and dies with "Cannot connect to C: resolve failed". `--force-local`
+ * disables that; it's GNU-only (bsdtar both lacks the flag and lacks the misbehavior), so
+ * we add it only when the host tar is actually GNU.
+ */
+function tarExtract(args) {
+  run('tar', isGnuTar() ? ['--force-local', ...args] : args)
+}
+
 /** Is `path` an existing executable for this process? (the resolver's own test). */
 async function isExecutable(path) {
   try {
@@ -101,7 +122,12 @@ async function isExecutable(path) {
  * Returns the absolute path to the runnable launcher to chmod + smoke-assert.
  */
 async function extractAsset(tool, target, assetBytes, destDir) {
-  const mode = tool.extract
+  // The per-target `archive` is the source of truth for how the asset is packaged:
+  // a target shipped as a bare binary (chezmoi's windows .exe) pins `archive: "raw"`,
+  // which overrides the tool-wide `extract` mode (chezmoi is `file` elsewhere). Without
+  // this override we'd run `tar -xzf` on a raw .exe — and on Windows GNU tar reads the
+  // `C:\…` dest as a remote host ("Cannot connect to C:") and dies.
+  const mode = target.archive === 'raw' ? 'raw' : tool.extract
   if (mode === 'raw') {
     const out = join(destDir, target.member)
     await writeFile(out, assetBytes)
@@ -115,7 +141,7 @@ async function extractAsset(tool, target, assetBytes, destDir) {
 
     if (mode === 'file') {
       // Pull the single binary member out of the tar.gz straight into destDir.
-      run('tar', ['-xzf', archivePath, '-C', destDir, target.member])
+      tarExtract(['-xzf', archivePath, '-C', destDir, target.member])
       return join(destDir, target.member)
     }
 
@@ -126,7 +152,7 @@ async function extractAsset(tool, target, assetBytes, destDir) {
       const treeDest = join(destDir, tool.treeDest)
       await rm(treeDest, { recursive: true, force: true })
       await mkdir(treeDest, { recursive: true })
-      run('tar', ['-xzf', archivePath, '-C', treeDest])
+      tarExtract(['-xzf', archivePath, '-C', treeDest])
       return join(destDir, target.launcher)
     }
 
