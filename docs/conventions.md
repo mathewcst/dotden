@@ -53,6 +53,40 @@ This is a **guide, not a lint gate** — judgment over mechanical caps.
 - Dependency direction is one-way: `index.ts` / `ipc` → `foundation`, never back.
 - See **ADR 0023**.
 
+## Renderer layering: features by domain capability
+
+The renderer organizes by **domain-capability feature**, not by file type. See
+**ADR 0027** for the rationale (and the rejected `git/`/`file/` and module-global-store
+alternatives).
+
+```
+src/renderer/
+  App.tsx                 # thin root: renders the launch router, wraps the
+                          # 'app' route in <DenSessionProvider key={role}>
+  features/
+    launch/   shell/   workspace/   commit/   sync/   apply/
+    secrets/  scope/   file-history/   onboarding/   returning/   settings/
+    └─ each feature:
+         components/  hooks/  lib/        # + per-subdir __tests__/ (ADR 0019)
+  shared/                 # dotden-specific components used by 2+ features
+    components/  lib/      #   (ConfirmDialog, StatusTag, apply-theme, utils…)
+  ui/                     # scaffolded shadcn primitives — flat, exempt
+```
+
+- **A feature = a user-facing capability in glossary words** (`../CONTEXT.md`). The
+  change-lifecycle split follows ADR 0006's seam: `commit/` outbound, `sync/`
+  transport, `apply/` inbound (Conflict folds in — it only exists during an Apply).
+- **Never overload a glossary term with a code name.** The old `Workspace.tsx` was the
+  _den window_, not a domain Workspace (ADR 0005) — that lie is how it became a
+  1377-line god-component. The window is `shell/`; a domain Workspace is `workspace/`.
+- **Placement rule.** A module imported by **one** feature lives in that feature's
+  `components/`/`lib/`; imported by **2+**, it moves to `shared/`. shadcn primitives
+  (`button`, `switch`…) stay in `ui/`.
+- **Shared state is the scoped `den-session` store** — one Zustand store composed from
+  per-feature slices, created inside `<DenSessionProvider>` and passed via Context,
+  **never a module-level singleton** (so `key={role}` still resets the A/B thread).
+  Ephemeral UI state (input text, open menus) stays in `useState`. See **ADR 0027**.
+
 ## Comments: over-comment, but only what earns its line
 
 dotden is public OSS read by newcomers and AI agents — bias toward **more**
