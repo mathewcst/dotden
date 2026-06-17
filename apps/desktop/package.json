@@ -28,7 +28,8 @@
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "shiki": "4.2.0",
-    "tailwind-merge": "catalog:desktop"
+    "tailwind-merge": "catalog:desktop",
+    "zustand": "catalog:desktop"
   },
   "devDependencies": {
     "@babel/core": "catalog:desktop",

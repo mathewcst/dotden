@@ -44,6 +44,7 @@ catalogs:
     tailwindcss: ^4.3.0
     vite: ^8.0.16
     vitest: ^4.1.8
+    zustand: ^5.0.0
   astro:
     "@astrojs/check": ^0.9.4
     "@tailwindcss/vite": 4.1.18
