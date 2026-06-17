@@ -14,6 +14,15 @@ pnpm dev      # run all apps
 pnpm check    # typecheck + lint — run before every PR
 ```
 
+The desktop app shells out to a **bundled** `chezmoi` + `git` (never your host install). They're fetched per build, not committed, so set them up once before `pnpm dev` reaches the desktop app:
+
+```sh
+pnpm --filter @dotden/desktop fetch:binaries          # download pinned chezmoi + git into resources/bin/
+cp apps/desktop/.env.example apps/desktop/.env.local  # then point DOTDEN_*_BIN at the fetched binaries
+```
+
+Skipping this surfaces `Bundled chezmoi/git tools were not found`. See [`apps/desktop/resources/bin/README.md`](apps/desktop/resources/bin/README.md) for the layout and troubleshooting (including a Git-Bash/GNU-tar gotcha on Windows).
+
 ## Workflow
 
 1. Open or comment on an issue before large changes, so effort isn't duplicated.

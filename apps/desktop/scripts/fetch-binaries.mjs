@@ -93,14 +93,25 @@ function isGnuTar() {
 }
 
 /**
- * Extract a tar.gz, working around GNU tar's remote-host heuristic: it reads any path
- * containing a colon (`C:\…`, both the `-f` archive and the `-C` dest on Windows) as a
- * `host:path` rsh spec and dies with "Cannot connect to C: resolve failed". `--force-local`
- * disables that; it's GNU-only (bsdtar both lacks the flag and lacks the misbehavior), so
- * we add it only when the host tar is actually GNU.
+ * Extract a tar.gz, working around two GNU-tar-on-Windows quirks:
+ *
+ *  1. The remote-host heuristic: GNU tar reads any path containing a colon (`C:\…`,
+ *     both the `-f` archive and the `-C` dest on Windows) as a `host:path` rsh spec and
+ *     dies with "Cannot connect to C: resolve failed". `--force-local` disables that;
+ *     it's GNU-only (bsdtar both lacks the flag and lacks the misbehavior), so we add it
+ *     only when the host tar is actually GNU.
+ *
+ *  2. Backslash escapes: the GNU tar Git-for-Windows ships (an MSYS2/Cygwin build) reads
+ *     `\` in a path as a C escape introducer, so a native Windows `-C C:\…\git-dist`
+ *     arrives mangled — backslashes are swallowed and tar reports "Cannot open: No such
+ *     file or directory" on a path that does exist. Forward slashes sidestep this and
+ *     Windows accepts them in every path API, so we normalize every arg `\`→`/`. POSIX
+ *     paths carry no backslashes (no-op off Windows), and tar flags / archive-internal
+ *     member names are forward-slash already, so normalizing the whole arg list is safe.
  */
 function tarExtract(args) {
-  run('tar', isGnuTar() ? ['--force-local', ...args] : args)
+  const normalized = args.map((arg) => arg.replaceAll('\\', '/'))
+  run('tar', isGnuTar() ? ['--force-local', ...normalized] : normalized)
 }
 
 /** Is `path` an existing executable for this process? (the resolver's own test). */

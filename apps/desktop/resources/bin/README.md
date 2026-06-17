@@ -37,3 +37,31 @@ node apps/desktop/scripts/fetch-binaries.mjs --all     # every pinned target (CI
 
 Development and integration tests can override discovery with `DOTDEN_CHEZMOI_BIN` and
 `DOTDEN_GIT_BIN` (e.g. point at host installs) — see `tools.ts`.
+
+## Troubleshooting (local dev)
+
+**`Bundled chezmoi/git tools were not found. Set DOTDEN_CHEZMOI_BIN/DOTDEN_GIT_BIN …`**
+The resolver found neither a bundled binary nor an env override. Two things must hold for
+`pnpm --filter @dotden/desktop dev`:
+
+1. **The binaries are fetched** — run `pnpm --filter @dotden/desktop fetch:binaries` to
+   populate `resources/bin/<platform>/<arch>/`.
+2. **`apps/desktop/.env.local` points at them.** Unpackaged Electron sets
+   `process.resourcesPath` to Electron's _own_ folder, not this repo, so the runtime can't
+   discover the repo's `resources/bin/` on its own — the `DOTDEN_*_BIN` override is the only
+   way dev finds the bundled tools. (Packaged builds need neither step.) Copy
+   [`../../.env.example`](../../.env.example) to `.env.local` and point each var at a fetched
+   binary, e.g. on Windows:
+
+   ```
+   DOTDEN_CHEZMOI_BIN="…/apps/desktop/resources/bin/win32/x64/chezmoi.exe"
+   DOTDEN_GIT_BIN="…/apps/desktop/resources/bin/win32/x64/git-dist/cmd/git.exe"
+   ```
+
+**`fetch:binaries` fails extracting git on Windows** — `tar: …: Cannot open: No such file or
+directory`, the reported path visibly mangled. The `tar` on PATH under Git Bash is GNU tar
+(an MSYS2/Cygwin build), which reads a `C:` drive prefix as a remote `host:path` _and_ treats
+`\` as a C escape introducer, so a native Windows `-C C:\…` arrives corrupted. The
+`tarExtract` helper in [`../../scripts/fetch-binaries.mjs`](../../scripts/fetch-binaries.mjs)
+neutralizes both — `--force-local` for the colon, and normalizing path args `\`→`/` for the
+backslashes. That helper is where the workaround lives if it ever regresses.
