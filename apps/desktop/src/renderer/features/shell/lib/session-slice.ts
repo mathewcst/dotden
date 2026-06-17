@@ -89,8 +89,8 @@ export interface SessionSlice {
   reloadTree(): Promise<void>
   /** Switch the active center-pane tab. */
   setCenterTab(tab: 'changes' | 'history'): void
-  /** Track a File by path. Returns whether the Track succeeded (so the caller clears its input). */
-  track(targetPath: string): Promise<boolean>
+  /** Track a File by path; `onTracked` fires the moment the Track lands (so the caller clears its input). */
+  track(targetPath: string, onTracked?: () => void): Promise<void>
   /** Inline-rename a File in the tree (optimistic; persistence lands with the row verbs, 1-08). */
   onRename(event: FileTreeRenameEvent): void
   /** Create a Workspace (the access boundary); the SECOND one reveals the concept (issue 1-14). */
@@ -181,21 +181,19 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
 
     setCenterTab: (centerTab) => set({ centerTab }),
 
-    // Track a File then reload + select it. Returns success so the center pane clears its (local,
-    // ephemeral) input only when the Track actually landed — a failed Track keeps the typed path
-    // for retry. `run` swallows the error into the error channel, so we capture success explicitly.
-    track: async (targetPath) => {
-      const path = targetPath.trim()
-      if (!path) return false
-      let ok = false
-      await get().run('track', async () => {
+    // Track a File then reload + select it. `onTracked` fires the instant the Track lands — BEFORE
+    // the tree reload, inside the same `run('track')` span — so the center pane clears its (local,
+    // ephemeral) input mid-flow exactly as the old Workspace did, and only on success (a failed
+    // Track skips it inside `run`'s swallow, keeping the typed path for retry).
+    track: (targetPath, onTracked) =>
+      get().run('track', async () => {
+        const path = targetPath.trim()
+        if (!path) return
         await api.den.track(path)
-        ok = true
+        onTracked?.()
         await get().reloadTree()
         await get().selectFile(path)
-      })
-      return ok
-    },
+      }),
 
     // Inline rename: optimistic tree edit + surface that persistence is pending so we never
     // silently imply a rename was written (the faithful chezmoi move is the 1-08 verb slice).

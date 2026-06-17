@@ -1,0 +1,113 @@
+import { EnvironmentBadge } from '@/features/shell/components/EnvironmentBadge'
+import { FileRow } from '@/features/workspace/components/FileRow'
+import { RowContextMenu } from '@/features/workspace/components/RowContextMenu'
+import { AddInline, WorkspaceSidebar } from '@/features/workspace/components/WorkspaceSidebar'
+import { useDenSession } from '@/features/shell/components/DenSessionProvider'
+import { FileTree } from '@pierre/trees/react'
+import { Loader2, Plus } from 'lucide-react'
+import type { ComponentProps } from 'react'
+
+/**
+ * LeftPane — the den window's left Workspace tree (issue 1-07/1-14). Renders, by precedence:
+ * a load placeholder; the grouped Workspace/Group sidebar once the organization layer is in play
+ * (a 2nd Workspace exists OR any Group was created); or the flat `@pierre/trees` File tree with the
+ * `WORKSPACES` header. Right-clicking any row offers the verbs (Commit · Apply · Untrack · Delete
+ * everywhere), resolved from the row's `data-item-path`.
+ *
+ * The `@pierre/trees` model is built once in the shell (it is shared with the title-bar search) and
+ * handed in; everything else reads the scoped den-session store.
+ */
+export function LeftPane({ model }: { model: ComponentProps<typeof FileTree>['model'] }) {
+  const role = useDenSession((s) => s.role)
+  const files = useDenSession((s) => s.files)
+  const incoming = useDenSession((s) => s.incoming)
+  const workspaces = useDenSession((s) => s.workspaces)
+  const selected = useDenSession((s) => s.selected)
+  const busy = useDenSession((s) => s.busy)
+  const selectFile = useDenSession((s) => s.selectFile)
+  const onRowVerb = useDenSession((s) => s.onRowVerb)
+  const createWorkspace = useDenSession((s) => s.createWorkspace)
+  const createGroup = useDenSession((s) => s.createGroup)
+
+  // The paths the tree renders: real managed Files on A, incoming Files on B.
+  const paths = role === 'a' ? files.map((f) => f.targetPath) : incoming.map((i) => i.targetPath)
+
+  // Switch to the grouped Workspace/Group sidebar (issue 1-14) once the organization layer is in
+  // play: a SECOND Workspace exists OR the user has created any Group. Until then the flat tree is
+  // shown and the Workspace concept stays invisible. env B always uses the flat incoming list.
+  const useGroupedSidebar =
+    role === 'a' && (workspaces.length > 1 || workspaces.some((w) => w.groups.length > 0))
+
+  return (
+    <aside className="border-border bg-sidebar flex flex-col overflow-hidden border-r">
+      <div className="min-h-0 flex-1 overflow-auto px-1">
+        {busy === 'load' && paths.length === 0 && !useGroupedSidebar ? (
+          <p className="text-muted-foreground flex items-center gap-2 px-2 py-3 text-xs">
+            <Loader2 className="size-3.5 animate-spin" /> Reading your managed Files…
+          </p>
+        ) : useGroupedSidebar ? (
+          // Organization layer (issue 1-14): the Workspace concept is visible (a 2nd Workspace
+          // exists) OR the user has organized Files into Groups, so render the Workspace sections +
+          // nested Group tree instead of the flat tree. The File rows still carry `data-item-path`,
+          // so the same right-click verbs work.
+          <RowContextMenu onVerb={onRowVerb}>
+            <WorkspaceSidebar
+              workspaces={workspaces}
+              files={files}
+              busy={busy === 'organize'}
+              onCreateWorkspace={createWorkspace}
+              onCreateGroup={createGroup}
+              renderFiles={(workspaceId, groupId) =>
+                files
+                  .filter((f) => f.workspaceId === workspaceId && f.groupId === groupId)
+                  .map((f) => (
+                    <FileRow
+                      key={f.targetPath}
+                      file={f}
+                      selected={selected === f.targetPath}
+                      onSelect={(path) => void selectFile(path)}
+                    />
+                  ))
+              }
+            />
+          </RowContextMenu>
+        ) : (
+          // Simple case: exactly one Workspace, no Groups → the Workspace concept is INVISIBLE
+          // (issue 1-14). Just the `WORKSPACES` header (the `+` creates the first extra Workspace,
+          // which reveals the concept) over the flat tree.
+          <>
+            <div className="flex items-center px-3 pt-2 pr-2 pb-1">
+              <span className="text-muted-foreground font-mono text-[11px] font-medium tracking-[0.8px] uppercase">
+                Workspaces
+              </span>
+              <div className="flex-1" />
+              <AddInline
+                title="New Workspace"
+                icon={<Plus className="size-3.5" />}
+                triggerClassName="hover:bg-sidebar-accent inline-flex size-6 items-center justify-center rounded-md"
+                placeholder="Workspace name…"
+                disabled={role !== 'a' || busy !== null}
+                onSubmit={createWorkspace}
+              />
+            </div>
+            {paths.length === 0 ? (
+              <p className="text-muted-foreground px-2 py-3 text-xs">
+                {role === 'a'
+                  ? 'No Files yet. Track a File below to start managing it.'
+                  : 'No incoming Files. Detect the Remote, then refresh.'}
+              </p>
+            ) : (
+              // Right-click any row for the verbs (Commit · Apply · Untrack · Delete everywhere);
+              // the menu resolves which File from the row's data-item-path.
+              <RowContextMenu onVerb={onRowVerb}>
+                <FileTree model={model} className="text-sm" />
+              </RowContextMenu>
+            )}
+          </>
+        )}
+      </div>
+      {/* This environment's editable label + git-log attribution (issue 1-05). */}
+      <EnvironmentBadge />
+    </aside>
+  )
+}
