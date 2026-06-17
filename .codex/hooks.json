@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=\"${CLAUDE_PROJECT_DIR:-$PWD}\"; f=\"$(jq -r '.tool_input.file_path // empty')\"; case \"$f\" in \"$d\"/*.ts|\"$d\"/*.tsx|\"$d\"/*.astro|\"$d\"/*.css|\"$d\"/*.md|\"$d\"/*.json) cd \"$d\" && pnpm exec prettier --write \"$f\" ;; esac 2>/dev/null || true",
+            "statusMessage": "Formatting with prettier"
+          }
+        ]
+      }
+    ]
+  }
+}
