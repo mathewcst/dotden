@@ -18,6 +18,7 @@ import type { DenService } from '../foundation/den-service.js'
 import type { ResolutionChoice } from '../foundation/conflict-model.js'
 import type { DiscoveryScanner } from '../foundation/discovery-scanner.js'
 import type { EnvironmentRegistry } from '../foundation/environment-registry.js'
+import type { LaunchState } from '../foundation/launch-state.js'
 import type { RemoteClient } from '../foundation/remote-client.js'
 import type { AutomationLevel } from '../foundation/automation-policy.js'
 import type { SyncSettings } from '../foundation/sync-settings.js'
@@ -66,6 +67,13 @@ export interface IpcBridgeDeps {
   readonly remoteClient: () => Promise<RemoteClient>
   /** Lazily resolves the shared {@link DenService} bound to this environment. */
   readonly denService: () => Promise<DenService>
+  /**
+   * Compute the launch-routing gate (ADR 0026) for the renderer's boot decision. index.ts
+   * implements this with side-effect-free reads (it does NOT go through {@link denService}/
+   * `env:list`, which mint identity / register as a side effect and assume a working clone),
+   * so the gate is safe to call before any Den exists. The bridge only routes it.
+   */
+  readonly launchState: () => Promise<LaunchState>
   /** Lazily resolves the shared {@link DiscoveryScanner} bound to this environment's home dir. */
   readonly discoveryScanner: () => Promise<DiscoveryScanner>
   /** Lazily resolves the shared {@link EnvironmentRegistry} for identity/labels/attribution. */
@@ -179,6 +187,14 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   })
 
   // ── Den channels (issue 1-04): the MVP sync loop, _trace forwarded to the tracer ──
+  // The launch-routing gate (ADR 0026): the renderer's boot decision. Read-only and
+  // side-effect-free — it deliberately does NOT route through denService()/env:list (those
+  // mint identity / register as a side effect and assume a working clone); the gate must not
+  // depend on the thing it gates. Asserts the `_trace` envelope like every other read.
+  registrar.handle('den:launch-state', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    return deps.launchState()
+  })
   registrar.handle('den:track', async (_event, payload: TracedPayload) => {
     const { targetPath } = payload as TracedPayload & { targetPath: string }
     return (await deps.denService()).trackFile(targetPath, traceId(payload))

@@ -20,6 +20,7 @@ import { DenService } from './foundation/den-service.js'
 import { DiscoveryScanner } from './foundation/discovery-scanner.js'
 import { claimLocalIdentity, loadEnvironmentIdentity } from './foundation/environment-identity.js'
 import { EnvironmentRegistry } from './foundation/environment-registry.js'
+import { computeLaunchState, type LaunchState } from './foundation/launch-state.js'
 import { OperationTracer } from './foundation/operation-tracer.js'
 import { RemoteClient } from './foundation/remote-client.js'
 import { resolveBundledTools } from './foundation/tools.js'
@@ -193,6 +194,18 @@ async function buildEnvironmentRegistry(): Promise<EnvironmentRegistry> {
     configPath: chezmoiConfigPath(),
     identity,
   })
+}
+
+/**
+ * Compute the launch-routing gate (ADR 0026) the renderer reads on boot to choose its first
+ * screen. Side-effect-free by construction: {@link computeLaunchState} reads this environment's
+ * local id WITHOUT minting one, probes the clone, and reads the synced registry directly — it
+ * never builds the lazy {@link DenService} or calls `env:list` (both register/mint and assume a
+ * working clone), so the gate works in the pre-clone `fresh` state without bricking. The gate
+ * must not depend on, or mutate, the very thing it is gating.
+ */
+function denLaunchState(): Promise<LaunchState> {
+  return computeLaunchState({ sourceDir: sourceDir(), userDataDir: app.getPath('userData') })
 }
 
 // ── Automation level + the always-on TrayPoller (issue 1-12) ──
@@ -575,6 +588,7 @@ app.whenReady().then(() => {
   registerIpcBridge(ipcMain, {
     remoteClient: getRemoteClient,
     denService: getDenService,
+    launchState: denLaunchState,
     discoveryScanner: getDiscoveryScanner,
     environmentRegistry: getEnvironmentRegistry,
     getAutomationLevel,

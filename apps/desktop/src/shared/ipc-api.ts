@@ -40,6 +40,7 @@ import type {
   SyncPushResult,
   YoloSyncResult,
 } from '../main/foundation/den-service.js'
+import type { LaunchState } from '../main/foundation/launch-state.js'
 import type { UnsubscribeDisposition } from '../main/foundation/subscription-settings.js'
 import type { SecretFinding } from '../main/foundation/secret-scanner.js'
 import type { SecretAllowlist } from '../main/foundation/secret-allowlist.js'
@@ -112,6 +113,16 @@ export interface DotdenApi {
    * boundary (ADR 0007). All paths are destination-relative File paths (e.g. `.zshrc`).
    */
   readonly den: {
+    /**
+     * **Read the launch-routing gate** (ADR 0026) — the single boot question "is THIS
+     * environment already set up here?". Returns a `fresh | incomplete | ready` status
+     * DERIVED from the synced registry + the local clone (never a stored `onboardingComplete`
+     * flag — ADR 0003/0024). App.tsx boots into a `'booting'` splash, calls this once, then
+     * routes `ready → app` and everything else `→ landing` (v1; smart-resume of `incomplete`
+     * is a deferred follow-up — see ADR 0026). Side-effect-free: it neither mints an identity
+     * nor registers this environment, so it is safe to call before any Den exists.
+     */
+    launchState(): Promise<LaunchState>
     /**
      * **Track** a File and record its Workspace placement (env A).
      * Maps to `chezmoi add` + a synced `.myenv/` placement.

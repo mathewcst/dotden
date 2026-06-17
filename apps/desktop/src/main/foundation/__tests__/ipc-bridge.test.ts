@@ -86,6 +86,7 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      launchState: async () => ({ status: 'ready' as const }),
       getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
       checkForUpdates: async () => ({
         status: 'unavailable' as const,
@@ -151,6 +152,10 @@ describe('IpcBridge', () => {
       targetPath: '.zshrc',
       _trace: { traceId: 't9' },
     } as never)
+    // The launch-routing gate (ADR 0026): read-only, asserts _trace, returns the gate status.
+    const launch = await handlers.get('den:launch-state')?.({}, {
+      _trace: { traceId: 't17' },
+    } as never)
 
     expect(den.trackFile).toHaveBeenCalledWith('.zshrc', 't1')
     expect(den.scanCommit).toHaveBeenCalledWith(['.zshrc'], 't12')
@@ -166,6 +171,8 @@ describe('IpcBridge', () => {
     expect(den.fileDiff).toHaveBeenCalledWith('.zshrc')
     // connected-remote is read-only too (asserts _trace, forwards no id).
     expect(den.connectedRemote).toHaveBeenCalledTimes(1)
+    // launch-state routes to deps.launchState and passes its status straight back (ADR 0026).
+    expect(launch).toEqual({ status: 'ready' })
     // file-history / file-version-diff are read-only (assert _trace, forward no id).
     expect(den.fileHistory).toHaveBeenCalledWith('.zshrc')
     expect(den.fileVersionDiff).toHaveBeenCalledWith('.zshrc', 'abc1234')
@@ -210,6 +217,7 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      launchState: async () => ({ status: 'ready' as const }),
       getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
       checkForUpdates: async () => ({
         status: 'unavailable' as const,
@@ -276,6 +284,7 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (s) => s,
+      launchState: async () => ({ status: 'ready' as const }),
       getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
       checkForUpdates: async () => ({
         status: 'unavailable' as const,
@@ -361,6 +370,7 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      launchState: async () => ({ status: 'ready' as const }),
       getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
       checkForUpdates: async () => ({
         status: 'unavailable' as const,
@@ -435,6 +445,7 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      launchState: async () => ({ status: 'ready' as const }),
       getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
       checkForUpdates: async () => ({
         status: 'unavailable' as const,
@@ -544,6 +555,7 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      launchState: async () => ({ status: 'ready' as const }),
       getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
       checkForUpdates: async () => ({
         status: 'unavailable' as const,
@@ -624,6 +636,7 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      launchState: async () => ({ status: 'ready' as const }),
       getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
       checkForUpdates: async () => ({
         status: 'unavailable' as const,
@@ -667,6 +680,7 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      launchState: async () => ({ status: 'ready' as const }),
       getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
       checkForUpdates: async () => ({
         status: 'unavailable' as const,
@@ -709,6 +723,7 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      launchState: async () => ({ status: 'ready' as const }),
       getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
       checkForUpdates: async () => ({
         status: 'unavailable' as const,
@@ -776,6 +791,7 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      launchState: async () => ({ status: 'ready' as const }),
       getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
       checkForUpdates: async () => ({
         status: 'unavailable' as const,
@@ -851,6 +867,7 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      launchState: async () => ({ status: 'ready' as const }),
       getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
       checkForUpdates: async () => ({
         status: 'unavailable' as const,
@@ -904,6 +921,7 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      launchState: async () => ({ status: 'ready' as const }),
       getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
       checkForUpdates: async () => ({
         status: 'unavailable' as const,
@@ -958,6 +976,7 @@ describe('IpcBridge', () => {
       setSyncSettings: async (settings) => settings,
       getPrivacySettings,
       setPrivacySettings,
+      launchState: async () => ({ status: 'ready' as const }),
       getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
       checkForUpdates: async () => ({
         status: 'unavailable' as const,
@@ -1025,6 +1044,7 @@ describe('IpcBridge', () => {
         diagnosticLogsEnabled: false,
       }),
       setPrivacySettings: async (settings) => settings,
+      launchState: async () => ({ status: 'ready' as const }),
       getAppInfo,
       checkForUpdates,
     })

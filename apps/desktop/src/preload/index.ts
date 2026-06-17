@@ -51,6 +51,12 @@ const api: DotdenApi = {
     },
   },
   den: {
+    // → IPC channel 'den:launch-state' (boot gate: fresh|incomplete|ready, ADR 0026)
+    launchState() {
+      return ipcRenderer.invoke('den:launch-state', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['launchState']>
+    },
     // → IPC channel 'den:track'
     track(targetPath) {
       return ipcRenderer.invoke('den:track', {
