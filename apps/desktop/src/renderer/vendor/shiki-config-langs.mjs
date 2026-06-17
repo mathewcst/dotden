@@ -34,7 +34,13 @@
 
 // Grammar-free Shiki internals (no `bundledLanguages`/`bundledThemes` are reachable
 // from these subpaths, so importing them pulls in zero TextMate grammars).
-import { createBundledHighlighter, codeToHtml, createCssVariablesTheme } from 'shiki/core'
+import {
+  createBundledHighlighter,
+  codeToHtml,
+  createCssVariablesTheme,
+  getTokenStyleObject,
+  stringifyTokenStyle,
+} from 'shiki/core'
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript'
 import { createOnigurumaEngine } from 'shiki/engine/oniguruma'
 
@@ -117,4 +123,11 @@ export const createHighlighter = createBundledHighlighter({
 
 // The remaining symbols `@pierre/diffs` imports from `shiki`, re-exported from the
 // grammar-free subpaths so the bare-`shiki` surface it depends on stays complete.
-export { codeToHtml, createCssVariablesTheme, createJavaScriptRegexEngine, createOnigurumaEngine }
+export {
+  codeToHtml,
+  createCssVariablesTheme,
+  createJavaScriptRegexEngine,
+  createOnigurumaEngine,
+  getTokenStyleObject,
+  stringifyTokenStyle,
+}

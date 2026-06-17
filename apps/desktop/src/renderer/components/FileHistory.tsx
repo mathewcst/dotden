@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { PatchDiff } from '@pierre/diffs/react'
-import { GripHorizontal, History, Loader2, RotateCcw, ShieldCheck } from 'lucide-react'
 import { CommitRow } from '@/components/CommitRow'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Button } from '@/components/ui/button'
+import { FILE_HISTORY_PATCH_DIFF_OPTIONS } from '@/lib/dotden-shiki-theme'
+import { PatchDiff } from '@pierre/diffs/react'
+import { GripHorizontal, History, Loader2, RotateCcw, ShieldCheck } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FileVersion } from '../../main/foundation/file-history'
 
 /**
@@ -258,7 +259,12 @@ export function FileHistory({ targetPath }: { targetPath: string }) {
                 </p>
               ) : preview.trim().length > 0 ? (
                 // The SAME read-only PatchDiff role used everywhere — no resolve/edit controls.
-                <PatchDiff patch={preview} disableWorkerPool />
+                <PatchDiff
+                  patch={preview}
+                  options={FILE_HISTORY_PATCH_DIFF_OPTIONS}
+                  className="dotden-file-history-diff"
+                  disableWorkerPool
+                />
               ) : (
                 <p className="text-muted-foreground">
                   This version didn’t change this File — nothing to preview here.

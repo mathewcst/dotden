@@ -139,6 +139,54 @@
   --trees-theme-git-ignored-fg: var(--muted-foreground);
 }
 
+/* ── @pierre/diffs (History PatchDiff) theming ──────────────────────────────
+   The History tab's `PatchDiff` is a Shadow-DOM custom element
+   (`diffs-container`). These variables are inherited by the host and by the
+   Shiki CSS-variable theme registered in `lib/dotden-shiki-theme.ts`, keeping
+   the diff card warm-dark instead of the library's default black/white chrome. */
+diffs-container.dotden-file-history-diff {
+  color-scheme: dark;
+
+  /* Let the library's chrome blend into the raised History preview card. */
+  --diffs-background: var(--card);
+  --diffs-foreground: var(--foreground);
+  --diffs-light-bg: var(--card);
+  --diffs-dark-bg: var(--card);
+  --diffs-light: var(--foreground);
+  --diffs-dark: var(--foreground);
+  --diffs-bg-context-override: var(--dd-ink-800);
+  --diffs-bg-context-gutter-override: var(--dd-ink-850);
+  --diffs-bg-buffer-override: var(--dd-ink-800);
+  --diffs-bg-separator-override: var(--dd-ink-750);
+  --diffs-bg-hover-override: var(--dd-ink-500);
+  --diffs-fg-number-override: var(--muted-foreground);
+
+  /* Git change colors use dotden's functional ramps, not stock neon red/green. */
+  --diffs-addition-color-override: var(--dd-green-400);
+  --diffs-deletion-color-override: var(--dd-red-400);
+  --diffs-modified-color-override: var(--dd-amber-400);
+  --diffs-bg-addition-override: color-mix(in oklab, var(--card) 78%, var(--dd-green-400));
+  --diffs-bg-deletion-override: color-mix(in oklab, var(--card) 78%, var(--dd-red-400));
+  --diffs-bg-addition-emphasis-override: color-mix(
+    in oklab,
+    transparent 74%,
+    var(--dd-green-400)
+  );
+  --diffs-bg-deletion-emphasis-override: color-mix(
+    in oklab,
+    transparent 74%,
+    var(--dd-red-400)
+  );
+  --diffs-bg-selection-override: var(--dd-ember-500);
+
+  /* Match the surrounding app typography and keep the preview compact. */
+  --diffs-font-size: 12px;
+  --diffs-line-height: 20px;
+  --diffs-gap-block: 6px;
+  --diffs-gap-inline: 8px;
+  --diffs-scrollbar-gutter-override: 8px;
+}
+
 /* ── Theme accents (issue 2-10) ─────────────────────────────────────────────
    dotden is dark-only; a "theme" is which warm ACCENT the sole interactive hue
    uses. The Appearance tab applies exactly one `theme-*` class to <html>
