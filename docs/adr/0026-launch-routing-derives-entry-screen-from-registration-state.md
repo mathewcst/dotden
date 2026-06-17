@@ -3,6 +3,7 @@
 **Status:** Accepted.
 **Complements** [ADR 0022](./0022-onboarding-gate-is-feature-detection-not-emptiness.md) — that gate classifies _repo content at connect time_ (empty / dotden-managed / adopt / refuse); **this** gate is the _launch-time routing_ decision (which screen to show on boot). They are different gates on different axes.
 **Faithful-wrapper consequence** of [ADR 0003](./0003-faithful-chezmoi-wrapper.md) and the data model in [ADR 0024](./0024-synced-vs-local-data-architecture.md).
+**Renderer home:** the `'booting'`/route machine described here now lives in `features/launch/LaunchRouter`, not `App.tsx` — see [ADR 0027](./0027-renderer-feature-folders-and-scoped-den-session-store.md) (renderer feature-folders + the scoped den-session store).
 
 ## Decision
 

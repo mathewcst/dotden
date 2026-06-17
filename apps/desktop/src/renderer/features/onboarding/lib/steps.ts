@@ -36,7 +36,7 @@ export const RAIL_STEPS: readonly { step: OnboardingStep; label: string }[] = [
   { step: 'auto-sync', label: 'Auto-sync' },
 ]
 
-/** Linear order of every step including `done`, used to advance/retreat the flow. */
+/** Linear order of every step including `done`, used to advance the flow. */
 export const STEP_ORDER: readonly OnboardingStep[] = [
   'welcome',
   'create-repo',
@@ -51,10 +51,4 @@ export const STEP_ORDER: readonly OnboardingStep[] = [
 export function nextStep(step: OnboardingStep): OnboardingStep {
   const index = STEP_ORDER.indexOf(step)
   return STEP_ORDER[Math.min(index + 1, STEP_ORDER.length - 1)] ?? step
-}
-
-/** The previous step before `step`, or `step` itself when already at the start. */
-export function previousStep(step: OnboardingStep): OnboardingStep {
-  const index = STEP_ORDER.indexOf(step)
-  return STEP_ORDER[Math.max(index - 1, 0)] ?? step
 }

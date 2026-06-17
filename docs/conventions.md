@@ -67,7 +67,8 @@ src/renderer/
     launch/   shell/   workspace/   commit/   sync/   apply/
     secrets/  scope/   file-history/   onboarding/   returning/   settings/
     └─ each feature:
-         components/  hooks/  lib/        # + per-subdir __tests__/ (ADR 0019)
+         components/  lib/               # (+ hooks/ as needed — none today)
+                                         # per subdir gets its own __tests__/ (ADR 0019)
   shared/                 # dotden-specific components used by 2+ features
     components/  lib/      #   (ConfirmDialog, StatusTag, apply-theme, utils…)
   ui/                     # scaffolded shadcn primitives — flat, exempt
@@ -86,6 +87,22 @@ src/renderer/
   per-feature slices, created inside `<DenSessionProvider>` and passed via Context,
   **never a module-level singleton** (so `key={role}` still resets the A/B thread).
   Ephemeral UI state (input text, open menus) stays in `useState`. See **ADR 0027**.
+- **`@/` for renderer-internal imports** (`@/features/…`, `@/shared/…`, `@/ui/…`); reach for
+  `@`, not deep `../../` chains. Two deliberate exceptions: (1) imports into `src/shared/**`
+  and `src/main/**` use relative paths — the `@` alias only maps `src/renderer/*`, so there
+  is no alias to use; (2) the **store slices** (`*/lib/*-slice.ts` + `shell/lib/den-session-store.ts`)
+  import each other **relatively**, because the node-env slice tests value-import them and vitest
+  runs with **no `@/` alias** (no vitest config, by design — it keeps the slices testable in plain
+  Node). `@/` resolves under `tsc` but throws at test runtime, so the cluster stays relative.
+- **The scoped store is structurally enforced, not lint-enforced.** A guardrail _is_ cheaply
+  available — a one-line `no-restricted-syntax` rule
+  (`VariableDeclarator[init.callee.name='createStore']`) catches a module-level `const xStore =
+createStore()` while leaving the factory's `return createStore(…)` alone, and a desktop-scoped
+  `files: ['src/renderer/**']` override keeps it out of the shared `@dotden/eslint-config`. We
+  **deliberately skip it anyway**: the factory-in-Context pattern already makes the A/B leak
+  impossible (remount = new store) and the `key={role}` contract is documented at
+  `DenSessionProvider` + `LaunchRouter`, so the rule would only restate the pattern. "Guide not
+  gate" (ADR 0021). See **ADR 0027** for the recorded decision.
 
 ## Comments: over-comment, but only what earns its line
 

@@ -20,6 +20,10 @@
  */
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import type { DotdenApi } from '../../../../shared/ipc-api'
+// Cross-feature slice imports stay RELATIVE, not `@/` (the convention everywhere else). This file
+// and the slices are value-imported by the node-env slice tests, and vitest runs with no `@/` alias
+// (there is deliberately no vitest config — it keeps the slices testable in plain Node). `@/` would
+// resolve under tsc but throw at test runtime. See docs/conventions.md "Renderer layering".
 import { createSessionSlice, type Role, type SessionSlice } from './session-slice'
 import { createCommitSlice, type CommitSlice } from '../../commit/lib/commit-slice'
 import { createSecretsSlice, type SecretsSlice } from '../../secrets/lib/secrets-slice'

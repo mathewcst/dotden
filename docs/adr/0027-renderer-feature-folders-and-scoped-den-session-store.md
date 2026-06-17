@@ -62,6 +62,18 @@ Ephemeral UI state (input text, open menus) stays in `useState`.
   The risk-free moves never share a diff with the behavioral split.
 - **`zustand` is a new renderer dependency** (none today) — a deliberate exception to the
   package-averse default, scoped to the renderer; `main/` stays dependency-light.
-- Each feature is `components/` + `hooks/` + `lib/` with per-subdir `__tests__/` (ADR 0019).
-  Placement rule: a module imported by one feature lives in that feature; imported by 2+ goes to
-  `shared/`. Day-to-day specifics live in `../conventions.md`.
+- Each feature is `components/` + `lib/` (+ a `hooks/` when one earns it — none today) with
+  per-subdir `__tests__/` (ADR 0019). Placement rule: a module imported by one feature lives in that
+  feature; imported by 2+ goes to `shared/`. Day-to-day specifics live in `../conventions.md`.
+- **The scoped store is enforced structurally, not by lint (Phase 3 decision).** A guardrail _is_
+  cheaply expressible: a one-line `no-restricted-syntax` rule on the selector
+  `VariableDeclarator[init.callee.name='createStore']` flags a module-level `const xStore =
+createStore()` while leaving the factory untouched (it does `return createStore(…)`, not a
+  `VariableDeclarator`), with zero false positives on today's tree. It need not touch the shared
+  `@dotden/eslint-config` either — a flat-config `files: ['src/renderer/**']` override in
+  `apps/desktop` would scope it to the renderer. We **deliberately skip it anyway**: the
+  factory-in-Context pattern already makes the A/B leak structurally impossible (remount = new
+  store), the load-bearing `key={role}` contract is documented at `DenSessionProvider` +
+  `LaunchRouter`, and we keep this "guide not gate" (ADR 0021). Recorded — rule and all — so the
+  question is not re-litigated. The renderer-import and slice-relative-import conventions live in
+  `../conventions.md`.
