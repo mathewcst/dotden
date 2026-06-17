@@ -23,17 +23,21 @@ import type {
 import { FileTree, useFileTree } from '@pierre/trees/react'
 import {
   AlertTriangle,
+  ArrowDownUp,
   Bell,
-  CircleDot,
+  ChevronDown,
   Download,
   FilePlus2,
+  Folder,
   GitCommitVertical,
   GitMerge,
   Loader2,
+  Plus,
   RefreshCw,
   Search,
-  Settings,
+  Settings2,
 } from 'lucide-react'
+import { IconButton } from '@/components/ui/icon-button'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AutomationLevel } from '../../main/foundation/automation-policy'
 import type {
@@ -753,38 +757,57 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
 
   return (
     <div className="bg-background text-foreground grid h-screen grid-rows-[auto_auto_1fr]">
-      {/* Title bar — workspace switcher · centered search · sync · bell · settings (signature screen). */}
-      <header className="border-border bg-sidebar flex items-center gap-3 border-b px-4 py-2 text-sm">
-        <span className="bg-dd-ember-950 text-dd-ember-400 inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-semibold">
-          {workspaceLabel}
-        </span>
-        <span className="text-muted-foreground text-xs">
-          {role === 'a' ? 'this environment' : 'second environment'}
-        </span>
+      {/* Title bar — workspace switcher · centered search · sync · bell · settings · avatar
+          (signature screen, Figma `Titlebar` 516:1424). gap-2 + flex-1 spacers on either
+          side of the search keep it optically centered regardless of the side clusters. */}
+      <header className="border-border bg-sidebar flex items-center gap-2 border-b px-3 py-2.5 text-sm">
+        {/* Workspace switcher — folder + label + chevron. Presentational for now: the
+            single-pane shell shows every Workspace in the tree, so there is no per-pane
+            switch to wire yet (the chevron previews the post-v1 Workspace picker). */}
+        <div className="text-foreground flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5">
+          <Folder className="text-muted-foreground size-4" aria-hidden />
+          <span className="text-[13px] font-medium">{workspaceLabel}</span>
+          <ChevronDown className="text-muted-foreground size-4" aria-hidden />
+        </div>
+
+        <div className="h-px flex-1" />
+
         {/* Centered ⌘K search — opens the tree's built-in search session (issue 1-07). */}
         <button
           type="button"
-          className="border-border bg-background text-muted-foreground hover:text-foreground mx-auto flex w-80 items-center gap-2 rounded-md border px-3 py-1 text-xs"
+          className="bg-secondary text-muted-foreground hover:text-foreground flex w-[420px] shrink-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px]"
           onClick={() => model.openSearch()}
           disabled={role !== 'a' || paths.length === 0}
         >
           <Search className="size-3.5" />
           <span>Search files &amp; workspaces…</span>
-          <kbd className="border-border ml-auto rounded border px-1 text-[10px]">⌘K</kbd>
+          <kbd className="border-border text-muted-foreground ml-auto rounded border px-1.5 py-0.5 font-mono text-[11px]">
+            ⌘K
+          </kbd>
         </button>
-        <div className="text-muted-foreground flex items-center gap-3">
-          <CircleDot className="size-4" aria-label="sync status" />
-          <Bell className="size-4" aria-label="notifications" />
+
+        <div className="h-px flex-1" />
+
+        {/* Right cluster — sync status · bell · settings · avatar. */}
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="text-muted-foreground mr-1 flex items-center gap-1 pr-1 text-xs">
+            <ArrowDownUp className="size-3" aria-hidden />
+            {role === 'a' && incomingCount > 0 ? `${incomingCount} incoming` : 'Up to date'}
+          </span>
+          <IconButton aria-label="notifications">
+            <Bell />
+          </IconButton>
           {/* Open the Settings surface (issue 2-08): the app shows it over the Workspace. */}
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            disabled={!onOpenSettings}
-            className="hover:text-foreground rounded transition-colors disabled:pointer-events-none"
-            aria-label="settings"
+          <IconButton aria-label="settings" onClick={onOpenSettings} disabled={!onOpenSettings}>
+            <Settings2 />
+          </IconButton>
+          {/* User avatar — initials placeholder (no account model in v1). */}
+          <span
+            className="bg-background text-foreground ml-1 inline-flex size-7 items-center justify-center rounded-full text-xs font-medium"
+            aria-hidden
           >
-            <Settings className="size-4" />
-          </button>
+            {workspaceLabel.charAt(0).toUpperCase()}
+          </span>
         </div>
       </header>
 
@@ -851,13 +874,15 @@ export function Workspace({ role, onOpenSettings }: { role: Role; onOpenSettings
               // INVISIBLE (issue 1-14). Just the `WORKSPACES` header (the `+` creates the
               // first extra Workspace, which reveals the concept) over the flat tree.
               <>
-                <div className="flex items-center justify-between px-3 pt-3 pb-1">
-                  <span className="text-muted-foreground text-xs font-semibold tracking-wide">
-                    WORKSPACES
+                <div className="flex items-center px-3 pt-2 pr-2 pb-1">
+                  <span className="text-muted-foreground font-mono text-[11px] font-medium tracking-[0.8px] uppercase">
+                    Workspaces
                   </span>
+                  <div className="flex-1" />
                   <AddInline
                     title="New Workspace"
-                    icon={<span className="text-muted-foreground hover:text-foreground text-xs">+</span>}
+                    icon={<Plus className="size-3.5" />}
+                    triggerClassName="hover:bg-sidebar-accent inline-flex size-6 items-center justify-center rounded-md"
                     placeholder="Workspace name…"
                     disabled={role !== 'a' || busy !== null}
                     onSubmit={createWorkspace}

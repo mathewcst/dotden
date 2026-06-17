@@ -1,3 +1,4 @@
+import { File } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { FileTreeEntry } from '../../main/foundation/den-service'
 
@@ -51,15 +52,16 @@ export function FileRow({
       type="button"
       data-item-path={file.targetPath}
       className={cn(
-        'hover:bg-sidebar-accent flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm',
-        selected && 'bg-sidebar-accent',
+        'hover:bg-sidebar-accent flex w-full items-center gap-1.5 rounded-sm px-1.5 py-1.5 text-left',
+        selected && 'bg-secondary',
         file.muted && 'opacity-50',
       )}
       onClick={() => onSelect(file.targetPath)}
     >
-      <span className="truncate font-mono text-xs">{leaf}</span>
-      {file.status ? (
-        <span className={cn('ml-auto text-xs font-semibold', STATUS_TONE[file.status])}>
+      <File className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
+      <span className="text-foreground flex-1 truncate text-[13px]">{leaf}</span>
+      {file.status && STATUS_LETTER[file.status] ? (
+        <span className={cn('font-mono text-[11px] font-medium', STATUS_TONE[file.status])}>
           {STATUS_LETTER[file.status]}
         </span>
       ) : null}

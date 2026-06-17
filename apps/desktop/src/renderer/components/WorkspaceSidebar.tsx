@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { ChevronRight, FolderPlus, Layers, Plus } from 'lucide-react'
+import { ChevronDown, ChevronRight, Folder, FolderPlus, Plus } from 'lucide-react'
 import type { Group, Workspace } from '../../main/foundation/myenv-store'
 import type { FileTreeEntry } from '../../main/foundation/den-service'
 import { cn } from '@/lib/utils'
@@ -78,13 +78,15 @@ export function WorkspaceSidebar({
     <div className="flex flex-col">
       {/* WORKSPACES header — the `+` always creates a Workspace; creating the second is
           what flips `conceptVisible` and reveals the sections (signature screen). */}
-      <div className="flex items-center justify-between px-3 pt-3 pb-1">
-        <span className="text-muted-foreground text-xs font-semibold tracking-wide">
-          WORKSPACES
+      <div className="flex items-center px-3 pt-2 pr-2 pb-1">
+        <span className="text-muted-foreground font-mono text-[11px] font-medium tracking-[0.8px] uppercase">
+          Workspaces
         </span>
+        <div className="flex-1" />
         <AddInline
           title="New Workspace"
           icon={<Plus className="size-3.5" />}
+          triggerClassName="hover:bg-sidebar-accent inline-flex size-6 items-center justify-center rounded-md"
           placeholder="Workspace name…"
           disabled={busy}
           onSubmit={(label) => onCreateWorkspace(label)}
@@ -134,20 +136,37 @@ function WorkspaceSection({
   onCreateGroup: WorkspaceSidebarProps['onCreateGroup']
   busy: boolean
 }) {
+  // The Workspace row is collapsible (matching the signature tree): the chevron is the
+  // only affordance and the trailing count is the number of Files this Workspace owns.
+  const [open, setOpen] = useState(true)
+  const fileCount = files.filter((f) => f.workspaceId === workspace.id).length
   return (
-    <section className="pt-1">
-      <div className="text-dd-ember-400 flex items-center gap-1.5 px-3 py-1 text-xs font-semibold">
-        <Layers className="size-3.5" />
-        <span className="truncate">{workspace.label}</span>
-      </div>
-      <WorkspaceBody
-        workspace={workspace}
-        files={files}
-        renderFiles={renderFiles}
-        onCreateGroup={onCreateGroup}
-        busy={busy}
-        showGroupAffordance
-      />
+    <section className="px-2 pt-1">
+      <button
+        type="button"
+        className="hover:bg-sidebar-accent flex w-full items-center gap-1.5 rounded-sm px-1.5 py-1.5 text-left"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <ChevronDown
+          className={cn(
+            'text-muted-foreground size-3.5 transition-transform',
+            !open && '-rotate-90',
+          )}
+        />
+        <span className="text-foreground truncate text-[13px] font-medium">{workspace.label}</span>
+        <span className="flex-1" />
+        <span className="text-muted-foreground text-[11px]">{fileCount}</span>
+      </button>
+      {open ? (
+        <WorkspaceBody
+          workspace={workspace}
+          files={files}
+          renderFiles={renderFiles}
+          onCreateGroup={onCreateGroup}
+          busy={busy}
+          showGroupAffordance
+        />
+      ) : null}
     </section>
   )
 }
@@ -247,11 +266,14 @@ function GroupBranch({
     <div style={{ paddingLeft: depth * 10 }}>
       <button
         type="button"
-        className="text-foreground hover:bg-sidebar-accent flex w-full items-center gap-1 rounded px-2 py-1 text-xs"
+        className="text-foreground hover:bg-sidebar-accent flex w-full items-center gap-1.5 rounded-sm px-1.5 py-1.5 text-left text-[13px]"
         onClick={() => setOpen((v) => !v)}
       >
-        <ChevronRight className={cn('size-3 transition-transform', open && 'rotate-90')} />
-        <span className="truncate font-medium">{node.group.label}</span>
+        <ChevronRight
+          className={cn('text-muted-foreground size-3.5 transition-transform', open && 'rotate-90')}
+        />
+        <Folder className="text-muted-foreground size-3.5" aria-hidden />
+        <span className="truncate">{node.group.label}</span>
       </button>
       {open ? (
         <div className="pl-3">
@@ -297,12 +319,15 @@ function GroupBranch({
 export function AddInline({
   title,
   icon,
+  triggerClassName,
   placeholder,
   disabled,
   onSubmit,
 }: {
   title: string
   icon: ReactNode
+  /** Overrides the trigger button's classes (e.g. to render it as an IconButton box). */
+  triggerClassName?: string
   placeholder: string
   disabled?: boolean
   onSubmit: (label: string) => void
@@ -316,7 +341,10 @@ export function AddInline({
         type="button"
         title={title}
         aria-label={title}
-        className="text-muted-foreground hover:text-foreground"
+        className={cn(
+          'text-muted-foreground hover:text-foreground transition-colors',
+          triggerClassName,
+        )}
         disabled={disabled}
         onClick={() => setEditing(true)}
       >

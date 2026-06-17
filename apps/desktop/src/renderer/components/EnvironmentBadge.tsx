@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Check, Loader2, Pencil } from 'lucide-react'
+import { Check, Loader2, Monitor, Pencil } from 'lucide-react'
 import type { EnvironmentWithAttribution } from '../../main/foundation/environment-registry'
 
 /**
@@ -105,8 +105,9 @@ export function EnvironmentBadge() {
           }}
           aria-label="Rename this environment"
         >
-          <span className="bg-dd-ember-500 size-1.5 rounded-full" aria-hidden />
+          <Monitor className="text-muted-foreground size-3.5" aria-hidden />
           <span className="text-foreground font-medium">{self.label}</span>
+          <span className="bg-dd-green-500 size-1.5 rounded-full" aria-hidden />
           <span className="text-muted-foreground">· {self.os}</span>
           <Pencil className="size-3 opacity-0 transition-opacity group-hover:opacity-60" />
         </button>
