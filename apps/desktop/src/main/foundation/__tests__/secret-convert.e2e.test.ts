@@ -15,7 +15,7 @@
  */
 /* eslint-disable turbo/no-undeclared-env-vars -- integration test discovers local chezmoi/git binaries. */
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { homedir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ChezmoiAdapter } from '../chezmoi-adapter.js'
@@ -31,7 +31,12 @@ const RESOLVED_VALUE = 'RESOLVED-SECRET-VALUE'
 const RAW_SECRET = 'AKIAIOSFODNN7EXAMPLE'
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'dotden-secret-convert-'))
+  // Newer chezmoi protects `/tmp` and git worktrees, refusing `chezmoi add` from those roots.
+  // Put this real-chezmoi fixture under the user's cache dir: outside protected paths, still
+  // disposable, and removed in afterEach.
+  const fixtureParent = join(homedir(), '.cache')
+  await mkdir(fixtureParent, { recursive: true })
+  root = await mkdtemp(join(fixtureParent, 'dotden-secret-convert-'))
   chezmoiBin = await requireTool('chezmoi', 'DOTDEN_CHEZMOI_BIN')
   originalPath = process.env.PATH
 })
