@@ -17,7 +17,7 @@ import { RAIL_STEPS, STEP_ORDER, type OnboardingStep } from '../lib/steps'
 export function OnboardingMenu({ current }: { current: OnboardingStep }) {
   const currentIndex = STEP_ORDER.indexOf(current)
   return (
-    <nav className="bg-sidebar border-border flex w-[300px] shrink-0 flex-col border-r px-6 py-7">
+    <nav className="bg-sidebar border-border flex w-[360px] shrink-0 flex-col border-r px-6 py-7">
       {/* Wordmark — the den is home; lowercase brand (brand-and-vocabulary.md). */}
       <div className="text-foreground mb-8 flex items-center gap-2 text-lg font-semibold tracking-tight">
         <span className="bg-dd-ember-500 text-dd-ink-990 grid size-7 place-items-center rounded-md text-sm font-bold">

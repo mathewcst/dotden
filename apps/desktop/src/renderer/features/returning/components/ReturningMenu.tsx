@@ -16,7 +16,7 @@ import { RETURNING_RAIL_STEPS, RETURNING_STEP_ORDER, type ReturningStep } from '
 export function ReturningMenu({ current }: { current: ReturningStep }) {
   const currentIndex = RETURNING_STEP_ORDER.indexOf(current)
   return (
-    <nav className="bg-sidebar border-border flex w-[300px] shrink-0 flex-col border-r px-6 py-7">
+    <nav className="bg-sidebar border-border flex w-[360px] shrink-0 flex-col border-r px-6 py-7">
       {/* Wordmark — lowercase brand (brand-and-vocabulary.md). */}
       <div className="text-foreground mb-8 flex items-center gap-2 text-lg font-semibold tracking-tight">
         <span className="bg-dd-ember-500 text-dd-ink-990 grid size-7 place-items-center rounded-md text-sm font-bold">

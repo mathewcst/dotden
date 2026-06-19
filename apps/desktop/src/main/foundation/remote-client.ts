@@ -10,7 +10,8 @@
  * Credential Manager, 1Password SSH agent, Keychain, WSL bridges, and askpass
  * hooks keep working exactly as they do for the user's CLI.
  */
-import { mkdir } from 'node:fs/promises'
+import { access, mkdir, readdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import {
   CommandAbortedError,
   CommandFailedError,
@@ -100,6 +101,12 @@ export interface ConnectResult {
   readonly gitCommand: string
   /** Local source-state directory initialized by chezmoi. */
   readonly sourceDir: string
+  /**
+   * What dotden found after clone. This is the launch-flow truth: empty/benign repos continue
+   * through first-run onboarding, existing dotden repos route to returning setup, and foreign
+   * chezmoi repos are refused for v1.
+   */
+  readonly repositoryKind: 'greenfield' | 'dotden' | 'foreign-chezmoi'
 }
 
 /**
@@ -265,7 +272,11 @@ export class RemoteClient {
       // surfaced error is host/scheme-only with redacted stderr — never the raw URL/token — across IPC.
       throw new RemoteConnectError(diagnosticsFromError(url, error, 'init'))
     }
-    return { gitCommand: preflight.gitCommand, sourceDir: this.options.sourceDir }
+    return {
+      gitCommand: preflight.gitCommand,
+      sourceDir: this.options.sourceDir,
+      repositoryKind: await classifyInitializedSource(this.options.sourceDir),
+    }
   }
 
   /**
@@ -331,6 +342,48 @@ export class RemoteClient {
   ): Promise<CommandResult> {
     // Intentionally omit `env`: runCommand will inherit process.env unchanged, preserving credential hooks.
     return this.run(command, args, { timeoutMs: this.timeoutMs, signal })
+  }
+}
+
+/**
+ * Classify the just-initialized source dir for ADR 0022's post-clone branch.
+ *
+ * This intentionally checks for dotden's synced `.myenv/` first: a dotden Den can still contain
+ * normal chezmoi source files, but `.myenv/` is the v1 proof that this repo is ours.
+ */
+async function classifyInitializedSource(
+  sourceDir: string,
+): Promise<ConnectResult['repositoryKind']> {
+  if (await exists(join(sourceDir, '.myenv'))) return 'dotden'
+
+  const entries = await readdir(sourceDir, { withFileTypes: true })
+  const visible = entries.filter((entry) => entry.name !== '.git')
+
+  if (visible.some((entry) => isForeignChezmoiEntry(entry.name))) {
+    return 'foreign-chezmoi'
+  }
+
+  return 'greenfield'
+}
+
+/** True when the source entry is a chezmoi feature dotden v1 does not adopt. */
+function isForeignChezmoiEntry(name: string): boolean {
+  return (
+    name === '.chezmoiroot' ||
+    name === '.chezmoiexternal' ||
+    name.startsWith('dot_') ||
+    name.startsWith('run_') ||
+    name.endsWith('.tmpl') ||
+    name.includes('.age')
+  )
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await access(path)
+    return true
+  } catch {
+    return false
   }
 }
 

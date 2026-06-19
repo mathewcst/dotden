@@ -57,6 +57,12 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['launchState']>
     },
+    // → IPC channel 'den:register-environment' (first-run setup even with zero tracked Files)
+    registerEnvironment() {
+      return ipcRenderer.invoke('den:register-environment', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['den']['registerEnvironment']>
+    },
     // → IPC channel 'den:track'
     track(targetPath) {
       return ipcRenderer.invoke('den:track', {

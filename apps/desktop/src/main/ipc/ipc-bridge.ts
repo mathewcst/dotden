@@ -195,6 +195,9 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     traceId(payload)
     return deps.launchState()
   })
+  registrar.handle('den:register-environment', async (_event, payload: TracedPayload) => {
+    return (await deps.denService()).registerEnvironment(traceId(payload))
+  })
   registrar.handle('den:track', async (_event, payload: TracedPayload) => {
     const { targetPath } = payload as TracedPayload & { targetPath: string }
     return (await deps.denService()).trackFile(targetPath, traceId(payload))

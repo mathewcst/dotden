@@ -8,6 +8,9 @@
  * poller SHA with `git ls-remote` instead of a Provider API or full fetch.
  */
 import { describe, expect, it } from 'vitest'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { CommandFailedError, type CommandResult, type RunCommandOptions } from '../process.js'
 import { RemoteClient, RemoteConnectError, RemotePreflightError } from '../remote-client.js'
 
@@ -23,11 +26,12 @@ function createClient(
     args: readonly string[],
     options?: RunCommandOptions,
   ) => Promise<CommandResult>,
+  sourceDir = '/tmp/source',
 ) {
   return new RemoteClient({
     chezmoiBin: '/bin/chezmoi',
     gitBin: '/bin/git',
-    sourceDir: '/tmp/source',
+    sourceDir,
     destinationDir: '/tmp/home',
     timeoutMs: 123,
     run,
@@ -97,7 +101,11 @@ describe('RemoteClient', () => {
 
     await expect(
       client.connectExistingRemote('ssh://git@example.com/dotden.git', { _trace: trace }),
-    ).resolves.toEqual({ gitCommand: '/bin/git', sourceDir: '/tmp/source' })
+    ).resolves.toEqual({
+      gitCommand: '/bin/git',
+      sourceDir: '/tmp/source',
+      repositoryKind: 'greenfield',
+    })
 
     expect(calls.map((call) => [call.command, call.args])).toEqual([
       ['/bin/chezmoi', ['--no-tty', 'execute-template', '{{ .chezmoi.config.git.command }}']],
@@ -117,6 +125,46 @@ describe('RemoteClient', () => {
       ],
     ])
     expect(calls[2]?.options?.env).toBeUndefined()
+  })
+
+  it('classifies an existing dotden Den after clone', async () => {
+    const source = await mkdtemp(join(tmpdir(), 'dotden-remote-client-'))
+    try {
+      const client = createClient(async (command, args) => {
+        if (command === '/bin/chezmoi' && args.includes('execute-template'))
+          return result(command, args, '')
+        if (command === '/bin/chezmoi' && args.includes('init')) {
+          await mkdir(join(source, '.myenv'), { recursive: true })
+        }
+        return result(command, args)
+      }, source)
+
+      await expect(
+        client.connectExistingRemote('ssh://git@example.com/dotden.git', { _trace: trace }),
+      ).resolves.toMatchObject({ repositoryKind: 'dotden' })
+    } finally {
+      await rm(source, { recursive: true, force: true })
+    }
+  })
+
+  it('classifies a foreign chezmoi source after clone', async () => {
+    const source = await mkdtemp(join(tmpdir(), 'dotden-remote-client-'))
+    try {
+      const client = createClient(async (command, args) => {
+        if (command === '/bin/chezmoi' && args.includes('execute-template'))
+          return result(command, args, '')
+        if (command === '/bin/chezmoi' && args.includes('init')) {
+          await writeFile(join(source, 'dot_zshrc'), '# shell\n')
+        }
+        return result(command, args)
+      }, source)
+
+      await expect(
+        client.connectExistingRemote('ssh://git@example.com/chezmoi.git', { _trace: trace }),
+      ).resolves.toMatchObject({ repositoryKind: 'foreign-chezmoi' })
+    } finally {
+      await rm(source, { recursive: true, force: true })
+    }
   })
 
   it('does not run chezmoi init after failed preflight', async () => {

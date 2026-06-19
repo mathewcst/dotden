@@ -29,6 +29,14 @@ export function TitleBar({
 
   return (
     <header className="border-border bg-sidebar flex items-center gap-2 border-b px-3 py-2.5 text-sm">
+      {/* Desktop window chrome from the Figma shell. Electron owns the real controls; these keep the
+          custom dark titlebar visually aligned across platforms. */}
+      <div className="mr-2 flex shrink-0 items-center gap-1.5" aria-hidden>
+        <span className="size-3 rounded-full bg-[#ff5f57]" />
+        <span className="size-3 rounded-full bg-[#ffbd2e]" />
+        <span className="size-3 rounded-full bg-[#28c840]" />
+      </div>
+
       {/* Workspace switcher — folder + label + chevron. Presentational for now: the single-pane
           shell shows every Workspace in the tree, so there is no per-pane switch to wire yet (the
           chevron previews the post-v1 Workspace picker). */}

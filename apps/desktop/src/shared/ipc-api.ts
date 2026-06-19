@@ -124,6 +124,11 @@ export interface DotdenApi {
      */
     launchState(): Promise<LaunchState>
     /**
+     * **Finish first-run setup** even when no Files were Tracked. Seeds the default Workspace and
+     * registers this environment so the launch gate opens the app on the next boot.
+     */
+    registerEnvironment(): Promise<void>
+    /**
      * **Track** a File and record its Workspace placement (env A).
      * Maps to `chezmoi add` + a synced `.myenv/` placement.
      */

@@ -1,10 +1,10 @@
 import { EnvironmentBadge } from '@/features/shell/components/EnvironmentBadge'
 import { FileRow } from '@/features/workspace/components/FileRow'
 import { RowContextMenu } from '@/features/workspace/components/RowContextMenu'
-import { AddInline, WorkspaceSidebar } from '@/features/workspace/components/WorkspaceSidebar'
+import { WorkspaceSidebar } from '@/features/workspace/components/WorkspaceSidebar'
 import { useDenSession } from '@/features/shell/components/DenSessionProvider'
 import { FileTree } from '@pierre/trees/react'
-import { Loader2, Plus } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import type { ComponentProps } from 'react'
 
 /**
@@ -73,22 +73,12 @@ export function LeftPane({ model }: { model: ComponentProps<typeof FileTree>['mo
           </RowContextMenu>
         ) : (
           // Simple case: exactly one Workspace, no Groups → the Workspace concept is INVISIBLE
-          // (issue 1-14). Just the `WORKSPACES` header (the `+` creates the first extra Workspace,
-          // which reveals the concept) over the flat tree.
+          // (issue 1-14). Render only the flat File list; no default Workspace chrome.
           <>
             <div className="flex items-center px-3 pt-2 pr-2 pb-1">
               <span className="text-muted-foreground font-mono text-[11px] font-medium tracking-[0.8px] uppercase">
-                Workspaces
+                Files
               </span>
-              <div className="flex-1" />
-              <AddInline
-                title="New Workspace"
-                icon={<Plus className="size-3.5" />}
-                triggerClassName="hover:bg-sidebar-accent inline-flex size-6 items-center justify-center rounded-md"
-                placeholder="Workspace name…"
-                disabled={role !== 'a' || busy !== null}
-                onSubmit={createWorkspace}
-              />
             </div>
             {paths.length === 0 ? (
               <p className="text-muted-foreground px-2 py-3 text-xs">

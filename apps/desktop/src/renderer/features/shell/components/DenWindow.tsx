@@ -40,7 +40,15 @@ function toGitStatus(file: FileTreeEntry): GitStatusEntry | null {
  * is a faithful read of real chezmoi state. The A/B role switch is the MVP single-window stand-in
  * for the two-environment thread (issue 1-04): role `a` drives Track/Commit/Sync, `b` Detect/Apply.
  */
-export function DenWindow({ onOpenSettings }: { onOpenSettings?: () => void }) {
+export function DenWindow({
+  openReviewOnMount = false,
+  onReviewOpened,
+  onOpenSettings,
+}: {
+  openReviewOnMount?: boolean
+  onReviewOpened?: () => void
+  onOpenSettings?: () => void
+}) {
   const role = useDenSession((s) => s.role)
   const files = useDenSession((s) => s.files)
   const incoming = useDenSession((s) => s.incoming)
@@ -107,6 +115,14 @@ export function DenWindow({ onOpenSettings }: { onOpenSettings?: () => void }) {
   useEffect(() => {
     void init()
   }, [init])
+
+  // Returning onboarding hands off directly to the reviewed Apply surface. The ReviewApply
+  // component fetches its own incoming summary on mount, so the shell only needs to flip the route.
+  useEffect(() => {
+    if (!openReviewOnMount) return
+    setReviewing(true)
+    onReviewOpened?.()
+  }, [openReviewOnMount, onReviewOpened, setReviewing])
 
   // Connectivity detection (issue 1-16): on `online`, ask the store to flush any queued push then
   // refresh the banner; `offline` just refreshes. The main process also pushes `net:reconnected`
@@ -195,7 +211,7 @@ export function DenWindow({ onOpenSettings }: { onOpenSettings?: () => void }) {
         <div />
       )}
 
-      <div className="grid grid-cols-[260px_1fr_300px] overflow-hidden">
+      <div className="grid grid-cols-[284px_1fr_320px] overflow-hidden">
         <LeftPane model={model} />
         <CenterPane />
         <RightInspector />

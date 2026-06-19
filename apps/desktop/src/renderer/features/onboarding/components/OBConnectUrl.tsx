@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { GitBranch, Loader2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/ui/button'
+import type { ConnectResult } from '../../../../main/foundation/remote-client'
 
 /**
  * The connect-URL preflight states, mirroring the design spec's `ConnectURL` `State`
@@ -40,7 +41,13 @@ function hostFromRemote(url: string): string {
  * @param onConnected Called once the Remote is reachable AND `chezmoi init` succeeds,
  *   so the shell can advance to Discover.
  */
-export function OBConnectUrl({ onConnected }: { onConnected: () => void }) {
+export function OBConnectUrl({
+  onConnected,
+  onCancel,
+}: {
+  onConnected: (result: ConnectResult) => void
+  onCancel?: () => void
+}) {
   const [url, setUrl] = useState('')
   const [state, setState] = useState<ConnectState>('idle')
   // Sanitized diagnostics from a failed preflight (host/scheme/exitCode/stderr/help).
@@ -74,8 +81,8 @@ export function OBConnectUrl({ onConnected }: { onConnected: () => void }) {
       }
       // Reachable → clone + initialize the Den, then hand off to Discover.
       setState('reachable')
-      await window.dotden.remote.connect(url)
-      onConnected()
+      const connected = await window.dotden.remote.connect(url)
+      onConnected(connected)
     } catch (error) {
       // A rejected invoke (e.g. chezmoi init failed, bundled tools missing) must leave a
       // recoverable state — surface it, never strand the UI mid-check (never fail silently).
@@ -163,11 +170,22 @@ export function OBConnectUrl({ onConnected }: { onConnected: () => void }) {
         </div>
       ) : null}
 
-      <div>
+      <div className="flex items-center gap-2">
         <Button disabled={!url.trim() || busy} onClick={() => void connect()}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : <GitBranch className="size-4" />}
           {state === 'credential-error' ? 'Retry' : 'Connect'}
         </Button>
+        {state === 'checking' || state === 'credential-error' ? (
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setState('idle')
+              onCancel?.()
+            }}
+          >
+            Cancel
+          </Button>
+        ) : null}
       </div>
     </div>
   )

@@ -42,6 +42,7 @@ type Route = 'booting' | 'landing' | 'onboarding' | 'returning' | 'app' | 'setti
 export function LaunchRouter() {
   const [route, setRoute] = useState<Route>('booting')
   const [role, setRole] = useState<'a' | 'b'>('a')
+  const [openReviewOnAppMount, setOpenReviewOnAppMount] = useState(false)
 
   // Launch gate (ADR 0026): ask the main process whether THIS environment is already set up, then
   // route — `ready` → straight to the app, everything else → the landing chooser. This runs once on
@@ -76,8 +77,10 @@ export function LaunchRouter() {
       <OnboardingShell
         onComplete={() => {
           setRole('a')
+          setOpenReviewOnAppMount(false)
           setRoute('app')
         }}
+        onExistingDen={() => setRoute('returning')}
       />
     )
   }
@@ -89,8 +92,10 @@ export function LaunchRouter() {
           // Open the app on the second-environment (Review & Apply) role: the returning user lands
           // on the reviewed Apply of the Den they just connected (issue 1-13).
           setRole('b')
+          setOpenReviewOnAppMount(true)
           setRoute('app')
         }}
+        onNewDen={() => setRoute('onboarding')}
       />
     )
   }
@@ -106,7 +111,11 @@ export function LaunchRouter() {
     // session (the reset guarantee, ADR 0027), keeping the A/B thread clean.
     <DenSessionProvider key={role} role={role}>
       <div className="relative">
-        <DenWindow onOpenSettings={() => setRoute('settings')} />
+        <DenWindow
+          openReviewOnMount={openReviewOnAppMount}
+          onReviewOpened={() => setOpenReviewOnAppMount(false)}
+          onOpenSettings={() => setRoute('settings')}
+        />
       </div>
     </DenSessionProvider>
   )

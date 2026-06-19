@@ -76,22 +76,29 @@ export function WorkspaceSidebar({
 
   return (
     <div className="flex flex-col">
-      {/* WORKSPACES header — the `+` always creates a Workspace; creating the second is
-          what flips `conceptVisible` and reveals the sections (signature screen). */}
-      <div className="flex items-center px-3 pt-2 pr-2 pb-1">
-        <span className="text-muted-foreground font-mono text-[11px] font-medium tracking-[0.8px] uppercase">
-          Workspaces
-        </span>
-        <div className="flex-1" />
-        <AddInline
-          title="New Workspace"
-          icon={<Plus className="size-3.5" />}
-          triggerClassName="hover:bg-sidebar-accent inline-flex size-6 items-center justify-center rounded-md"
-          placeholder="Workspace name…"
-          disabled={busy}
-          onSubmit={(label) => onCreateWorkspace(label)}
-        />
-      </div>
+      {conceptVisible ? (
+        /* WORKSPACES header — shown only after a second Workspace exists. */
+        <div className="flex items-center px-3 pt-2 pr-2 pb-1">
+          <span className="text-muted-foreground font-mono text-[11px] font-medium tracking-[0.8px] uppercase">
+            Workspaces
+          </span>
+          <div className="flex-1" />
+          <AddInline
+            title="New Workspace"
+            icon={<Plus className="size-3.5" />}
+            triggerClassName="hover:bg-sidebar-accent inline-flex size-6 items-center justify-center rounded-md"
+            placeholder="Workspace name…"
+            disabled={busy}
+            onSubmit={(label) => onCreateWorkspace(label)}
+          />
+        </div>
+      ) : (
+        <div className="flex items-center px-3 pt-2 pr-2 pb-1">
+          <span className="text-muted-foreground font-mono text-[11px] font-medium tracking-[0.8px] uppercase">
+            Files
+          </span>
+        </div>
+      )}
 
       {conceptVisible ? (
         // ≥2 Workspaces: render each as a labelled section with its nested Group tree.

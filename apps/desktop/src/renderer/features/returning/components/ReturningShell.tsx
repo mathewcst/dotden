@@ -26,7 +26,13 @@ import { nextReturningStep, type ReturningStep } from '../lib/returningSteps'
  * @param onComplete Called once this env is registered/claimed with its subscription, so the App
  *   router opens the app on the second-environment (Review & Apply) surface.
  */
-export function ReturningShell({ onComplete }: { onComplete: () => void }) {
+export function ReturningShell({
+  onComplete,
+  onNewDen,
+}: {
+  onComplete: () => void
+  onNewDen: () => void
+}) {
   const [step, setStep] = useState<ReturningStep>('connect')
   // The new/returning identity choice from FoundDen (null until that step is done).
   const [identity, setIdentity] = useState<FoundDenChoice | null>(null)
@@ -67,7 +73,32 @@ export function ReturningShell({ onComplete }: { onComplete: () => void }) {
         {/* Connect reuses the onboarding paste+preflight screen unchanged (V1-Lean, ADR 0020):
             first and second environment share the identical seam; the flows differ only AFTER
             clone by repo content. On a successful clone we advance to Find your Den. */}
-        {step === 'connect' ? <OBConnectUrl onConnected={advance} /> : null}
+        {step === 'connect' ? (
+          <div className="flex flex-col gap-4">
+            <OBConnectUrl
+              onCancel={() => setError(null)}
+              onConnected={(result) => {
+                setError(null)
+                if (result.repositoryKind === 'greenfield') {
+                  onNewDen()
+                  return
+                }
+                if (result.repositoryKind === 'foreign-chezmoi') {
+                  setError(
+                    'This repo already has a chezmoi setup. Full adoption is coming later; connect a dotden repo for now.',
+                  )
+                  return
+                }
+                advance()
+              }}
+            />
+            {error ? (
+              <p className="text-dd-red-400 text-xs" role="alert">
+                {error}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         {step === 'found-den' ? (
           <OBFoundDen

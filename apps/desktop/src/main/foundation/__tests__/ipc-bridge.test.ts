@@ -62,6 +62,7 @@ describe('IpcBridge', () => {
         targetPath: '.zshrc',
         committed: true,
       })),
+      registerEnvironment: vi.fn(async () => undefined),
     }
     const { registrar, handlers } = fakeRegistrar()
     registerIpcBridge(registrar, {
@@ -156,8 +157,11 @@ describe('IpcBridge', () => {
     const launch = await handlers.get('den:launch-state')?.({}, {
       _trace: { traceId: 't17' },
     } as never)
+    // First-run setup with zero Tracked Files still registers the environment.
+    await handlers.get('den:register-environment')?.({}, { _trace: { traceId: 't18' } } as never)
 
     expect(den.trackFile).toHaveBeenCalledWith('.zshrc', 't1')
+    expect(den.registerEnvironment).toHaveBeenCalledWith('t18')
     expect(den.scanCommit).toHaveBeenCalledWith(['.zshrc'], 't12')
     expect(den.commitTracked).toHaveBeenCalledWith(['.zshrc'], 't2')
     expect(den.syncPush).toHaveBeenCalledWith('t3')

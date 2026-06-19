@@ -33,7 +33,13 @@ import type { CommitResult } from '../../../../main/foundation/den-service'
  * @param onComplete Called when onboarding finishes (the user clicks into the app),
  *   so the top-level router leaves the onboarding gate.
  */
-export function OnboardingShell({ onComplete }: { onComplete: () => void }) {
+export function OnboardingShell({
+  onComplete,
+  onExistingDen,
+}: {
+  onComplete: () => void
+  onExistingDen: () => void
+}) {
   const [step, setStep] = useState<OnboardingStep>('welcome')
   const [trackedPaths, setTrackedPaths] = useState<readonly string[]>([])
   const [commit, setCommit] = useState<CommitResult | null>(null)
@@ -41,7 +47,7 @@ export function OnboardingShell({ onComplete }: { onComplete: () => void }) {
   // local automation level when the user finishes this step. Auto-sync auto-pushes
   // Committed changes and notifies on incoming; Apply always stays a manual review.
   const [autoSync, setAutoSync] = useState(false)
-  const [busy, setBusy] = useState<null | 'commit' | 'sync' | 'auto-sync'>(null)
+  const [busy, setBusy] = useState<null | 'commit' | 'sync' | 'auto-sync' | 'finish'>(null)
   const [error, setError] = useState<string | null>(null)
 
   const advance = () => setStep((current) => nextStep(current))
@@ -60,6 +66,19 @@ export function OnboardingShell({ onComplete }: { onComplete: () => void }) {
     } finally {
       setBusy(null)
       advance()
+    }
+  }
+
+  async function finishSetup() {
+    setBusy('finish')
+    setError(null)
+    try {
+      await window.dotden.den.registerEnvironment()
+      onComplete()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Finishing setup failed.')
+    } finally {
+      setBusy(null)
     }
   }
 
@@ -173,7 +192,32 @@ export function OnboardingShell({ onComplete }: { onComplete: () => void }) {
           </div>
         ) : null}
 
-        {step === 'connect' ? <OBConnectUrl onConnected={advance} /> : null}
+        {step === 'connect' ? (
+          <div className="flex flex-col gap-4">
+            <OBConnectUrl
+              onCancel={() => setError(null)}
+              onConnected={(result) => {
+                setError(null)
+                if (result.repositoryKind === 'dotden') {
+                  onExistingDen()
+                  return
+                }
+                if (result.repositoryKind === 'foreign-chezmoi') {
+                  setError(
+                    'This repo already has a chezmoi setup. Full adoption is coming later; connect an empty repo for now.',
+                  )
+                  return
+                }
+                advance()
+              }}
+            />
+            {error ? (
+              <p className="text-dd-red-400 text-xs" role="alert">
+                {error}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         {step === 'discover' ? (
           <OBDiscover
@@ -301,10 +345,16 @@ export function OnboardingShell({ onComplete }: { onComplete: () => void }) {
               ) : null}
             </ul>
             <div>
-              <Button onClick={onComplete}>
+              <Button disabled={busy !== null} onClick={() => void finishSetup()}>
+                {busy === 'finish' ? <Loader2 className="size-4 animate-spin" /> : null}
                 Open dotden <ArrowRight className="size-4" />
               </Button>
             </div>
+            {error ? (
+              <p className="text-dd-red-400 text-xs" role="alert">
+                {error}
+              </p>
+            ) : null}
           </div>
         ) : null}
       </main>
