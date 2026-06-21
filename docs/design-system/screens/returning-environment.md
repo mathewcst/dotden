@@ -18,13 +18,13 @@ built **Conflict/Resolve** flow ([conflict resolver](./conflict-resolver.md)).
 > (new vs returning _identity_) is unchanged and still asked on `OBContent/FoundDen`. The original
 > `OBContent/SignIn` is **kept** as the deferred-convenience-layer reference, not deleted.
 
-It is a **hybrid**: a setup **wizard** (reuses the onboarding shell) hands off to the real app's
+It is a **hybrid**: a setup **wizard** (reuses the onboarding shell pattern and global titlebar) hands off to the real app's
 **Apply surface** (reuses `AppShell` + panes). Pages, per the
 [per-flow pair rule](../architecture.md):
 `06 · Components — Returning` · `07 · Screens — Returning`.
 
-**Wizard (Part A — built).** Three `OnboardingShell` instances in a `Second environment` SECTION on
-page 07, reusing the onboarding shell **unchanged**:
+**Wizard (Part A — built).** Three setup screens in a `Second environment` SECTION on page 07, using
+the same `WindowTitleBar` chrome and left-rail/content-shell pattern as onboarding:
 
 - **`ReturningMenu`** SET — `Step=1|2|3` rail (**Connect** · Find your Den · Choose Workspaces ·
   Review & Apply). _(Rail step 1 relabeled Sign in → Connect for V1-Lean.)_ The 4th rail item (Review &
@@ -40,10 +40,10 @@ page 07, reusing the onboarding shell **unchanged**:
   `Lead` swapped to a `Checkbox` (Checked/Unchecked per instance) + `Title`/`Subtitle` (= Name/Meta),
   neutral border (selection conveyed by the checkbox, not ember).
 
-Each screen = one `OnboardingShell` instance: swap `Content#85:0` to the `OBContent`, and
+Each screen = one returning-shell instance: swap `Content#85:0` to the `OBContent`, and
 **`swapComponent` the nested `Menu` instance to the matching `ReturningMenu` variant**. The shell
-bakes `OnboardingMenu`; swapping the nested instance per-screen overrides it and keeps the slot's
-360×680 FILL — **no second shell built**. (Confirms
+bakes the rail/content layout; swapping the nested instance per-screen overrides it and keeps the slot's
+360×680 FILL — **no duplicated titlebar built**. (Confirms
 [figma-conventions.md](../figma-conventions.md): a nested instance's main is swappable
 without exposing it, and the override persists.)
 

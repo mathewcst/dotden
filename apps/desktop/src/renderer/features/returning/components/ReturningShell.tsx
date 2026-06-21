@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { OBConnectUrl } from '@/features/onboarding/components/OBConnectUrl'
+import { WindowTitleBar } from '@/shared/components/WindowControls'
 import { ReturningMenu } from './ReturningMenu'
 import { OBFoundDen, type FoundDenChoice } from './OBFoundDen'
 import { OBPickWorkspaces } from './OBPickWorkspaces'
@@ -66,65 +67,69 @@ export function ReturningShell({
   }
 
   return (
-    <div className="bg-background text-foreground grid h-screen grid-cols-[auto_1fr]">
-      <ReturningMenu current={step} />
+    <div className="bg-background text-foreground grid h-screen grid-rows-[40px_1fr]">
+      <WindowTitleBar windowsControlsClassName="-mr-3 h-10" />
 
-      <main className="flex min-h-0 flex-col overflow-auto px-12 py-10">
-        {/* Connect reuses the onboarding paste+preflight screen unchanged (V1-Lean, ADR 0020):
+      <div className="grid min-h-0 grid-cols-[auto_1fr]">
+        <ReturningMenu current={step} />
+
+        <main className="flex min-h-0 flex-col overflow-auto px-12 py-10">
+          {/* Connect reuses the onboarding paste+preflight screen unchanged (V1-Lean, ADR 0020):
             first and second environment share the identical seam; the flows differ only AFTER
             clone by repo content. On a successful clone we advance to Find your Den. */}
-        {step === 'connect' ? (
-          <div className="flex flex-col gap-4">
-            <OBConnectUrl
-              onCancel={() => setError(null)}
-              onConnected={(result) => {
-                setError(null)
-                if (result.repositoryKind === 'greenfield') {
-                  onNewDen()
-                  return
-                }
-                if (result.repositoryKind === 'foreign-chezmoi') {
-                  setError(
-                    'This repo already has a chezmoi setup. Full adoption is coming later; connect a dotden repo for now.',
-                  )
-                  return
-                }
+          {step === 'connect' ? (
+            <div className="flex flex-col gap-4">
+              <OBConnectUrl
+                onCancel={() => setError(null)}
+                onConnected={(result) => {
+                  setError(null)
+                  if (result.repositoryKind === 'greenfield') {
+                    onNewDen()
+                    return
+                  }
+                  if (result.repositoryKind === 'foreign-chezmoi') {
+                    setError(
+                      'This repo already has a chezmoi setup. Full adoption is coming later; connect a dotden repo for now.',
+                    )
+                    return
+                  }
+                  advance()
+                }}
+              />
+              {error ? (
+                <p className="text-dd-red-400 text-xs" role="alert">
+                  {error}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {step === 'found-den' ? (
+            <OBFoundDen
+              onChoose={(choice) => {
+                setIdentity(choice)
                 advance()
               }}
             />
-            {error ? (
-              <p className="text-dd-red-400 text-xs" role="alert">
-                {error}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
+          ) : null}
 
-        {step === 'found-den' ? (
-          <OBFoundDen
-            onChoose={(choice) => {
-              setIdentity(choice)
-              advance()
-            }}
-          />
-        ) : null}
-
-        {step === 'workspaces' ? (
-          <div className="flex flex-col gap-4">
-            <OBPickWorkspaces onContinue={(ids) => void finish(ids)} />
-            {busy ? (
-              <p className="text-muted-foreground flex items-center gap-2 text-sm" role="status">
-                <Loader2 className="size-4 animate-spin" /> Setting up this environment&hellip;
-              </p>
-            ) : null}
-            {error ? (
-              <p className="text-dd-red-400 text-xs" role="alert">
-                {error}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-      </main>
+          {step === 'workspaces' ? (
+            <div className="flex flex-col gap-4">
+              <OBPickWorkspaces onContinue={(ids) => void finish(ids)} />
+              {busy ? (
+                <p className="text-muted-foreground flex items-center gap-2 text-sm" role="status">
+                  <Loader2 className="size-4 animate-spin" /> Setting up this environment&hellip;
+                </p>
+              ) : null}
+              {error ? (
+                <p className="text-dd-red-400 text-xs" role="alert">
+                  {error}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </main>
+      </div>
     </div>
   )
 }

@@ -11,8 +11,9 @@ import { IncomingBanner } from '@/features/sync/components/IncomingBanner'
 import { OfflineBanner } from '@/features/sync/components/OfflineBanner'
 import { remoteAxisDecoration } from '@/features/shell/lib/remote-axis'
 import { syncStatus } from '@/features/shell/lib/sync-status'
+import { WindowTitleBar } from '@/shared/components/WindowControls'
+import { useReactiveFileTree } from '@/features/shell/lib/use-reactive-file-tree'
 import type { FileTreeRowDecorationRenderer, GitStatusEntry } from '@pierre/trees'
-import { useFileTree } from '@pierre/trees/react'
 import { lazy, Suspense, useCallback, useEffect, useMemo } from 'react'
 import type { FileTreeEntry } from '@shared/den'
 
@@ -29,8 +30,9 @@ const ReviewApply = lazy(() =>
 
 function FullWindowLoading({ label }: { label: string }) {
   return (
-    <div className="bg-background text-muted-foreground grid h-screen place-items-center text-sm">
-      {label}
+    <div className="bg-background text-muted-foreground grid h-screen grid-rows-[40px_1fr] text-sm">
+      <WindowTitleBar windowsControlsClassName="-mr-3 h-10" />
+      <div className="grid min-h-0 place-items-center">{label}</div>
     </div>
   )
 }
@@ -138,15 +140,11 @@ export function DenWindow({
 
   // Build the tree model with search, the git-status axis, and the Remote decoration lane.
   // Inline file rename / drag are intentionally not advertised until they have a persistent
-  // chezmoi-backed file move primitive.
-  const { model } = useFileTree(fileTreeOptions)
-
-  // Keep the live model's git-status axis in sync when the File set/status changes (useFileTree only
-  // seeds `gitStatus` at construction; later refreshes go through the model's imperative
-  // `setGitStatus`, the 1-00 recipe). An external-system sync (the web component), not setState.
-  useEffect(() => {
-    model.setGitStatus(gitStatus)
-  }, [model, gitStatus])
+  // chezmoi-backed file move primitive. `useReactiveFileTree` keeps the model's File set AND
+  // git-status axis live as the store fills in — `useFileTree` itself seeds both only at
+  // construction, when the den-session store is still empty (so the tree would otherwise stay blank
+  // after the async boot load: the "no Files after onboarding" bug).
+  const { model } = useReactiveFileTree(fileTreeOptions)
 
   // The title-bar advertises the native search chord; bind it at the shell layer that owns the
   // shared tree model so keyboard and mouse open the exact same search session.
@@ -248,24 +246,25 @@ export function DenWindow({
     error,
     online: navigator.onLine,
   })
-  const banner = status.kind === 'error' && error ? (
-    <ErrorBanner
-      message={error.message}
-      onViewDetails={error.traceId ? () => void openDiagnosticsPanel(error.traceId) : undefined}
-      onRetry={error.retry ? () => void error.retry?.() : undefined}
-    />
-  ) : status.kind === 'offline' ? (
-    <OfflineBanner />
-  ) : status.kind === 'incoming' ? (
-    <IncomingBanner
-      count={incomingCount}
-      fromEnvironmentLabel={incomingFrom}
-      onReview={() => setReviewing(true)}
-    />
-  ) : (
-    // Keep the middle grid row collapsed when there is no banner (no layout shift).
-    <div />
-  )
+  const banner =
+    status.kind === 'error' && error ? (
+      <ErrorBanner
+        message={error.message}
+        onViewDetails={error.traceId ? () => void openDiagnosticsPanel(error.traceId) : undefined}
+        onRetry={error.retry ? () => void error.retry?.() : undefined}
+      />
+    ) : status.kind === 'offline' ? (
+      <OfflineBanner />
+    ) : status.kind === 'incoming' ? (
+      <IncomingBanner
+        count={incomingCount}
+        fromEnvironmentLabel={incomingFrom}
+        onReview={() => setReviewing(true)}
+      />
+    ) : (
+      // Keep the middle grid row collapsed when there is no banner (no layout shift).
+      <div />
+    )
 
   // The Conflict resolution surface (issue 1-11): the ⚠ CTA opens it. On close it re-checks the
   // Remote + tree so the decorations reflect what was resolved.

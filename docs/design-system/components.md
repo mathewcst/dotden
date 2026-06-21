@@ -256,7 +256,11 @@ mirroring `<AppShell left center right />` in React:
   the left; Windows/Linux render minimize/maximize/close buttons on the right. The titlebar itself is
   the Electron drag region, while every control/search/settings hit target is `no-drag` so clicks
   still work. Native actions cross the preload/IPC seam (`window.minimize`,
-  `window.toggleMaximize`, `window.close`); the renderer never imports Electron. **`SyncStatus`** TEXT
+  `window.toggleMaximize`, `window.close`); the renderer never imports Electron. Code now splits the
+  global chrome primitive from app-specific content: `WindowTitleBar` provides the draggable row and
+  native controls for every full-window route (boot, landing, onboarding, returning, settings,
+  review/apply, conflict, loading), while `TitleBar` fills that row with the main app workspace/search
+  and sync affordances. **`SyncStatus`** TEXT
   prop (the right-side sync label) + **`SyncIcon`** INSTANCE_SWAP (its glyph — `ArrowDownUp` default,
   `Cloud` for offline). Extracted from the inline AppShell titlebar frame via **detach-extract**
   (`detachInstance` preserves bindings → `createComponentFromNode`), then AppShell + all 20
@@ -380,4 +384,4 @@ redacted **Command log** rendered three ways. Vocabulary: [CONTEXT.md](../../CON
   `Diagnostics` nav `SidebarItem` `State=Active`, icon `SquareTerminal`). Header + a `SettingsRow` card
   (Enable Console `Switch` · Copy diagnostics · Open log location) + a **loud amber Unredacted-mode card**
   (`dd/amber/950`+`/500` border, `TriangleAlert` note: "secrets appear in full … Copy diagnostics always
-  stays redacted") + a redact-at-write footnote linking *What gets redacted*.
+  stays redacted") + a redact-at-write footnote linking _What gets redacted_.

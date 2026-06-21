@@ -12,6 +12,7 @@ import {
 import { Button } from '@/ui/button'
 import { toast } from '@/ui/toast'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
+import { WindowTitleBar } from '@/shared/components/WindowControls'
 import { StatusTag } from '@/shared/components/StatusTag'
 import { ErrorBanner } from '@/features/shell/components/ErrorBanner'
 import { useDenSession } from '@/features/shell/components/DenSessionProvider'
@@ -228,7 +229,8 @@ export function ReviewApply({ onClose }: { onClose: () => void }) {
   const totalCount = items.length
 
   return (
-    <div className="bg-background text-foreground grid h-screen grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
+    <div className="bg-background text-foreground grid h-screen grid-rows-[40px_auto_minmax(0,1fr)] overflow-hidden">
+      <WindowTitleBar windowsControlsClassName="-mr-3 h-10" />
       {failedOperation ? (
         <ErrorBanner
           message={failedOperation.message}
@@ -251,7 +253,9 @@ export function ReviewApply({ onClose }: { onClose: () => void }) {
           message={`Couldn't apply ${failures.length} ${failures.length === 1 ? 'file' : 'files'}.`}
           onRetry={retryable.length > 0 ? retryFailures : undefined}
         />
-      ) : null}
+      ) : (
+        <div />
+      )}
 
       <div className="grid min-h-0 grid-cols-[280px_1fr_320px] overflow-hidden">
         {/* Left pane — the incoming list, grouped CONFLICTS / APPLIES CLEANLY. */}

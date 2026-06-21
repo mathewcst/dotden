@@ -1,5 +1,6 @@
 import { Suspense, useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
+import { WindowTitleBar, windowNoDragRegionStyle } from '@/shared/components/WindowControls'
 import { cn } from '@/shared/lib/utils'
 import { DEFAULT_SETTINGS_TAB_ID, SETTINGS_TABS, type SettingsTab } from '../lib/tabs'
 
@@ -31,16 +32,18 @@ export function SettingsShell({ onClose }: { onClose: () => void }) {
   return (
     <div className="bg-background text-foreground grid h-screen grid-rows-[auto_1fr]">
       {/* Shared Titlebar — back to the app + the Settings heading (design: settings.md Titlebar). */}
-      <header className="border-border bg-sidebar flex items-center gap-3 border-b px-4 py-2 text-sm">
+      <WindowTitleBar className="gap-3 px-4 py-2 text-sm" windowsControlsClassName="-mr-4 h-10">
         <button
           type="button"
           onClick={onClose}
           className="text-muted-foreground hover:text-foreground hover:bg-secondary/40 flex items-center gap-1.5 rounded-md px-2 py-1 text-xs"
+          style={windowNoDragRegionStyle}
         >
           <ArrowLeft className="size-4" /> Back
         </button>
         <span className="text-foreground font-medium">Settings</span>
-      </header>
+        <div className="h-px flex-1" />
+      </WindowTitleBar>
 
       <div className="grid min-h-0 grid-cols-[248px_1fr]">
         {/* 248px nav rail — a SETTINGS eyebrow + one SidebarItem per registered tab. */}

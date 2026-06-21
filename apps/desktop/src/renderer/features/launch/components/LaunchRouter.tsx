@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { useLaunch } from '@/features/launch/components/LaunchProvider'
 import { LandingChooser } from '@/features/launch/components/LandingChooser'
 import { DenSessionProvider } from '@/features/shell/components/DenSessionProvider'
+import { WindowTitleBar } from '@/shared/components/WindowControls'
 // DenWindow is EAGER, not lazy: it is the hot path — a set-up environment boots straight to the
 // `app` route (the launch gate returns `ready`), so lazy-splitting it would put a Suspense fallback
 // flash on the single most common launch (splash → splash → app). The cold setup/settings shells
@@ -126,13 +127,16 @@ export function LaunchRouter() {
  */
 function BootingSplash() {
   return (
-    <div className="bg-background text-foreground grid h-screen place-items-center">
-      <span
-        className="bg-dd-ember-500 text-dd-ink-990 grid size-10 place-items-center rounded-md text-lg font-bold motion-safe:animate-pulse"
-        aria-label="Loading dotden"
-      >
-        d
-      </span>
+    <div className="bg-background text-foreground grid h-screen grid-rows-[40px_1fr]">
+      <WindowTitleBar windowsControlsClassName="-mr-3 h-10" />
+      <div className="grid min-h-0 place-items-center">
+        <span
+          className="bg-dd-ember-500 text-dd-ink-990 grid size-10 place-items-center rounded-md text-lg font-bold motion-safe:animate-pulse"
+          aria-label="Loading dotden"
+        >
+          d
+        </span>
+      </div>
     </div>
   )
 }

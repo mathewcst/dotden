@@ -15,8 +15,9 @@ separate pages.
   vector check, current = ember dot + number, upcoming = outlined number). Switching screens = switch
   this one variant.
 - **`OnboardingShell`** — the window chrome: frameless titlebar + body. In code, the titlebar uses
-  the same shared real window controls as the main shell: macOS traffic lights on the left;
-  Windows/Linux minimize/maximize/close on the right; the bar is draggable and controls are no-drag.
+  the global `WindowTitleBar`, the same shared real window controls as the main shell: macOS traffic
+  lights on the left; Windows/Linux minimize/maximize/close on the right; the bar is draggable and
+  controls are no-drag.
   The body composes an `OnboardingMenu` instance (left, fixed 360, `Step` set per screen) + a
   **content slot** (`INSTANCE_SWAP` property `Content`, default `OBContent/Welcome`).
 - **`OBContent/<Step>`** — one component per step holding that step's content + footer
@@ -29,6 +30,10 @@ swap `Content`. No raw duplication; editing the menu or shell updates every scre
 Window: 1100 × 720, radius 12, `border` stroke. Reuse the same shell pattern for any future
 full-window flow; reuse page-02 library components (`Button`, `Input`, `Checkbox`, `Radio`,
 `StatusTag`, …) for the repeatable controls _inside_ each `OBContent`.
+
+Code parity note: every full-window setup surface (first-run chooser, onboarding, returning setup,
+settings, loading, review/apply, conflict) mounts the same shared titlebar row, so native drag and
+window controls are present before the user chooses a setup path.
 
 > **Built in code (v1, issue 1-06, 2026-06-15).** The V1-Lean A+B flow below is implemented in
 > `apps/desktop/src/renderer/features/onboarding/components/`: `OnboardingShell` (frameless titlebar

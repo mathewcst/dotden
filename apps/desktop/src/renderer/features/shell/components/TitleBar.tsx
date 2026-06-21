@@ -1,11 +1,6 @@
 import { useDenSession } from '@/features/shell/components/DenSessionProvider'
 import { syncStatus } from '@/features/shell/lib/sync-status'
-import {
-  WindowControls,
-  windowDragRegionStyle,
-  windowNoDragRegionStyle,
-  type WindowControlsPlatform,
-} from '@/shared/components/WindowControls'
+import { WindowTitleBar, windowNoDragRegionStyle } from '@/shared/components/WindowControls'
 import { IconButton } from '@/ui/icon-button'
 import { ArrowDownUp, ChevronDown, Folder, Search, Settings2 } from 'lucide-react'
 
@@ -32,7 +27,6 @@ export function TitleBar({
   const pushQueued = useDenSession((s) => s.pushQueued)
   const busy = useDenSession((s) => s.busy)
   const error = useDenSession((s) => s.error)
-  const platform = window.dotden.platform
 
   const workspaceLabel = workspaces[0]?.label ?? 'Personal'
   const status = syncStatus({
@@ -43,16 +37,12 @@ export function TitleBar({
     error,
     online: navigator.onLine,
   })
-  const isMac = platform === 'darwin'
-  const controlsPlatform: WindowControlsPlatform = platform === 'win32' ? 'win32' : 'linux'
-
   return (
-    <header
-      className="border-border bg-sidebar flex items-center gap-2 border-b px-3 py-2.5 text-sm"
-      style={windowDragRegionStyle}
+    <WindowTitleBar
+      className="h-auto gap-2 py-2.5 text-sm"
+      macControlsClassName="mr-2"
+      windowsControlsClassName="-my-2.5 -mr-3 ml-1 h-12"
     >
-      {isMac ? <WindowControls platform="darwin" className="mr-2" /> : null}
-
       {/* Workspace switcher — folder + label + chevron. Presentational for now: the single-pane
           shell shows every Workspace in the tree, so there is no per-pane switch to wire yet (the
           chevron previews the post-v1 Workspace picker). */}
@@ -102,9 +92,6 @@ export function TitleBar({
           {workspaceLabel.charAt(0).toUpperCase()}
         </span>
       </div>
-      {!isMac ? (
-        <WindowControls platform={controlsPlatform} className="-my-2.5 -mr-3 ml-1 h-12" />
-      ) : null}
-    </header>
+    </WindowTitleBar>
   )
 }

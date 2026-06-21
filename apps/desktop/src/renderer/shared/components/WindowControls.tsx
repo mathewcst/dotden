@@ -15,6 +15,41 @@ export const windowNoDragRegionStyle = {
 export type WindowControlsPlatform = 'darwin' | 'win32' | 'linux'
 
 /**
+ * WindowTitleBar — shared draggable row for every frameless full-window route.
+ *
+ * Each surface can provide its own route content, but drag/no-drag behavior and native window
+ * actions stay one implementation so boot, setup, settings, and app routes keep parity.
+ */
+export function WindowTitleBar({
+  children,
+  className,
+  macControlsClassName,
+  windowsControlsClassName,
+}: {
+  children?: ReactNode
+  className?: string
+  macControlsClassName?: string
+  windowsControlsClassName?: string
+}) {
+  const platform = window.dotden.platform
+  const isMac = platform === 'darwin'
+  const controlsPlatform: WindowControlsPlatform = platform === 'win32' ? 'win32' : 'linux'
+
+  return (
+    <header
+      className={cn('border-border bg-sidebar flex h-10 items-center border-b px-3', className)}
+      style={windowDragRegionStyle}
+    >
+      {isMac ? <WindowControls platform="darwin" className={macControlsClassName} /> : null}
+      {children ?? <div className="h-px flex-1" />}
+      {!isMac ? (
+        <WindowControls platform={controlsPlatform} className={windowsControlsClassName} />
+      ) : null}
+    </header>
+  )
+}
+
+/**
  * WindowControls — real minimize/maximize/close buttons for dotden's frameless BrowserWindow.
  *
  * The renderer owns OS-specific layout, but native effects stay behind the preload bridge. macOS
@@ -59,10 +94,7 @@ export function WindowControls({
   }
 
   return (
-    <div
-      className={cn('flex shrink-0 items-stretch', className)}
-      style={windowNoDragRegionStyle}
-    >
+    <div className={cn('flex shrink-0 items-stretch', className)} style={windowNoDragRegionStyle}>
       <WindowsWindowButton
         label="minimize window"
         onClick={() => void window.dotden.window.minimize()}

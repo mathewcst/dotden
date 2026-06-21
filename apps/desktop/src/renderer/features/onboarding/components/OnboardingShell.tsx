@@ -9,11 +9,7 @@ import {
   Lock,
   RefreshCw,
 } from 'lucide-react'
-import {
-  WindowControls,
-  windowDragRegionStyle,
-  type WindowControlsPlatform,
-} from '@/shared/components/WindowControls'
+import { WindowTitleBar } from '@/shared/components/WindowControls'
 import { Button } from '@/ui/button'
 import { OnboardingMenu } from './OnboardingMenu'
 import { OBConnectUrl } from './OBConnectUrl'
@@ -54,9 +50,6 @@ export function OnboardingShell({
   const [autoSync, setAutoSync] = useState(false)
   const [busy, setBusy] = useState<null | 'commit' | 'sync' | 'auto-sync' | 'finish'>(null)
   const [error, setError] = useState<string | null>(null)
-  const isMac = window.dotden.platform === 'darwin'
-  const controlsPlatform: WindowControlsPlatform =
-    window.dotden.platform === 'win32' ? 'win32' : 'linux'
 
   const advance = () => setStep((current) => nextStep(current))
 
@@ -109,7 +102,7 @@ export function OnboardingShell({
 
   return (
     <div className="bg-background text-foreground grid h-screen grid-rows-[40px_1fr]">
-      <OnboardingTitleBar isMac={isMac} controlsPlatform={controlsPlatform} />
+      <WindowTitleBar windowsControlsClassName="-mr-3 h-10" />
 
       <div className="grid min-h-0 grid-cols-[auto_1fr]">
         <OnboardingMenu current={step} />
@@ -372,24 +365,5 @@ export function OnboardingShell({
         </main>
       </div>
     </div>
-  )
-}
-
-function OnboardingTitleBar({
-  isMac,
-  controlsPlatform,
-}: {
-  isMac: boolean
-  controlsPlatform: WindowControlsPlatform
-}) {
-  return (
-    <header
-      className="border-border bg-sidebar flex h-10 items-center border-b px-3"
-      style={windowDragRegionStyle}
-    >
-      {isMac ? <WindowControls platform="darwin" /> : null}
-      <div className="h-px flex-1" />
-      {!isMac ? <WindowControls platform={controlsPlatform} className="-mr-3 h-10" /> : null}
-    </header>
   )
 }

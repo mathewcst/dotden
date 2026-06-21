@@ -82,7 +82,10 @@ This is a **guide, not a lint gate** — judgment over mechanical caps.
   effects. Titlebar controls call a narrow preload/IPC API (`window.minimize`,
   `window.toggleMaximize`, `window.close`); only `index.ts` resolves the sending
   `BrowserWindow`. Drag regions live in renderer CSS (`app-region: drag`), and
-  every clickable titlebar element must opt out with `app-region: no-drag`.
+  every clickable titlebar element must opt out with `app-region: no-drag`. All
+  full-window renderer routes must include the shared `WindowTitleBar`/`TitleBar`
+  path so boot, first-run, setup, settings, loading, and review surfaces all keep
+  drag + native close/minimize/maximize parity.
 - Dependency direction is one-way: `index.ts` / `ipc` → `foundation`, never back.
 - See **ADR 0023**.
 
