@@ -41,7 +41,9 @@ export function DialogLayer() {
               ? 'Untrack'
               : confirm.verb === 'apply-deletion'
                 ? 'Delete file'
-                : 'Delete everywhere'
+                : confirm.verb === 'discard'
+                  ? 'Discard changes'
+                  : 'Delete everywhere'
           }
           confirmDisabled={busy !== null}
           onConfirm={runConfirmedVerb}
@@ -50,7 +52,9 @@ export function DialogLayer() {
               ? `Untrack ${confirm.path}?`
               : confirm.verb === 'apply-deletion'
                 ? `Apply incoming deletion of ${confirm.path}?`
-                : `Delete ${confirm.path} everywhere?`
+                : confirm.verb === 'discard'
+                  ? `Discard local changes to ${confirm.path}?`
+                  : `Delete ${confirm.path} everywhere?`
           }
           body={
             confirm.verb === 'untrack' ? (
@@ -65,6 +69,12 @@ export function DialogLayer() {
                 <strong>delete the real file</strong>{' '}
                 <span className="font-mono">{confirm.path}</span> on this environment.
                 <span className="mt-2 block">This can&rsquo;t be undone.</span>
+              </>
+            ) : confirm.verb === 'discard' ? (
+              <>
+                dotden will restore <span className="font-mono">{confirm.path}</span> from the Den
+                and <strong>throw away this environment&rsquo;s uncommitted local edit</strong>.
+                <span className="mt-2 block">Commit first if you want to keep these changes.</span>
               </>
             ) : (
               <>

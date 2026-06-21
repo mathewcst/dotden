@@ -46,6 +46,7 @@ export type Busy =
   | 'delete'
   | 'organize'
   | 'convert'
+  | 'discard'
 
 /**
  * The pending destructive/lifecycle confirm (issue 1-08): which row verb is awaiting
@@ -54,7 +55,7 @@ export type Busy =
  * Apply removes the real file (invariant #4, ADR 0008).
  */
 export interface PendingConfirm {
-  readonly verb: 'untrack' | 'delete-everywhere' | 'apply-deletion'
+  readonly verb: 'untrack' | 'delete-everywhere' | 'apply-deletion' | 'discard'
   readonly path: string
   readonly affected: readonly AffectedEnvironment[]
 }
@@ -384,6 +385,15 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
           if (result.applied.length > 0) toast.success('Applied 1 file.')
           if (get().selected === path) await get().selectFile(null)
           await get().reloadTree()
+        })
+        return
+      }
+      if (verb === 'discard') {
+        void get().run('discard', async () => {
+          await api.den.discardLocalChange(path)
+          toast.success('Discarded local changes.')
+          await get().reloadTree()
+          if (get().selected === path) await get().selectFile(path)
         })
         return
       }

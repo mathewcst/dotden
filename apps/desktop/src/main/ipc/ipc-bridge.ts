@@ -530,6 +530,10 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     const { targetPath } = payload as TracedPayload & { targetPath: string }
     return (await deps.denService()).untrackFile(targetPath, traceId(payload))
   })
+  registrar.handle('den:discard-local-change', async (_event, payload: TracedPayload) => {
+    const { targetPath } = payload as TracedPayload & { targetPath: string }
+    return (await deps.denService()).discardLocalChange(targetPath, traceId(payload))
+  })
   registrar.handle('den:delete-everywhere', async (_event, payload: TracedPayload) => {
     const { targetPath } = payload as TracedPayload & { targetPath: string }
     return (await deps.denService()).deleteEverywhereFile(targetPath, traceId(payload))

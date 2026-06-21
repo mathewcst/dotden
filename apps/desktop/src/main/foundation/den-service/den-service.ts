@@ -1582,6 +1582,28 @@ export class DenService {
   }
 
   /**
+   * **Discard local changes** for one managed File from the everyday view.
+   *
+   * This is intentionally NOT {@link ChezmoiAdapter.applyGuarded}: the whole point of
+   * Discard is that the user explicitly confirms throwing away this environment's
+   * uncommitted edit and restoring the destination from the Den's source state.
+   *
+   * @param targetPath Destination-relative File path to reset (e.g. `.zshrc`).
+   * @param traceId Correlation id for the wide event.
+   */
+  async discardLocalChange(targetPath: string, traceId: string): Promise<void> {
+    const span = this.tracer?.startOperation('apply', traceId)
+    try {
+      await this.chezmoi.apply([targetPath])
+      span?.setAttribute('fileCount', 1)
+      span?.end('ok')
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  /**
    * **Delete everywhere** a File: remove it from the Den AND delete the real path on
    * every environment where it applies (CONTEXT.md "Delete everywhere"; destructive,
    * always confirmed).

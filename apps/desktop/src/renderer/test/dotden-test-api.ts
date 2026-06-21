@@ -96,6 +96,7 @@ export function installDotdenTestApi(overrides: DeepPartial<DotdenApi> = {}): Do
       fileVersionDiff: unimplemented,
       restoreVersion: unimplemented,
       untrack: unimplemented,
+      discardLocalChange: unimplemented,
       deleteEverywhere: unimplemented,
       affectedEnvironments: vi.fn(async () => []),
       createWorkspace: unimplemented,

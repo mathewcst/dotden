@@ -2,7 +2,15 @@ import { ChangesDiff } from '@/features/commit/components/ChangesDiff'
 import { StatusTag, type FileStatus } from '@/shared/components/StatusTag'
 import { Button } from '@/ui/button'
 import { useDenSession } from '@/features/shell/components/DenSessionProvider'
-import { Download, FilePlus2, FolderOpen, GitCommitVertical, Loader2, RefreshCw } from 'lucide-react'
+import {
+  Download,
+  FilePlus2,
+  FolderOpen,
+  GitCommitVertical,
+  Loader2,
+  RefreshCw,
+  RotateCcw,
+} from 'lucide-react'
 import { lazy, Suspense, useState } from 'react'
 
 const FileHistory = lazy(() =>
@@ -44,6 +52,7 @@ export function CenterPane() {
   const push = useDenSession((s) => s.push)
   const list = useDenSession((s) => s.list)
   const setReviewing = useDenSession((s) => s.setReviewing)
+  const setConfirm = useDenSession((s) => s.setConfirm)
   const track = useDenSession((s) => s.track)
 
   // The Track input text — ephemeral UI state, kept local (per ADR 0027).
@@ -107,6 +116,20 @@ export function CenterPane() {
                   <GitCommitVertical className="size-4" />
                 )}
                 Commit changes
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy !== null || !selectedFile || selectedFile.status === null}
+                onClick={() => {
+                  if (selectedFile) {
+                    setConfirm({ verb: 'discard', path: selectedFile.targetPath, affected: [] })
+                  }
+                }}
+                title="Discard this File's uncommitted local changes and restore it from your Den."
+              >
+                <RotateCcw className="size-4" />
+                Discard
               </Button>
               <Button
                 size="sm"

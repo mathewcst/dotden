@@ -43,6 +43,7 @@ function makeApi(over: Record<string, unknown> = {}): DotdenApi {
       })),
       track: vi.fn(async () => undefined),
       untrack: vi.fn(async () => undefined),
+      discardLocalChange: vi.fn(async () => undefined),
       deleteEverywhere: vi.fn(async () => undefined),
       affectedEnvironments: vi.fn(async () => [{ id: 'e1', label: 'desktop', isSelf: true }]),
       apply: vi.fn(async () => ({ results: [] })),
@@ -497,6 +498,16 @@ describe('session slice — row verbs', () => {
     store.getState().setConfirm({ verb: 'untrack', path: '.zshrc', affected: [] })
     store.getState().runConfirmedVerb()
     await vi.waitFor(() => expect(api.den.untrack).toHaveBeenCalledWith('.zshrc'))
+    expect(api.den.tree).toHaveBeenCalled()
+  })
+
+  it('a confirmed Discard restores the File from the Den and reloads the tree', async () => {
+    const api = makeApi()
+    const store = createDenSessionStore('a', api)
+    store.setState({ selected: '.zshrc' })
+    store.getState().setConfirm({ verb: 'discard', path: '.zshrc', affected: [] })
+    store.getState().runConfirmedVerb()
+    await vi.waitFor(() => expect(api.den.discardLocalChange).toHaveBeenCalledWith('.zshrc'))
     expect(api.den.tree).toHaveBeenCalled()
   })
 })

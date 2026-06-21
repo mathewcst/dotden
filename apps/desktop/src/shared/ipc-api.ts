@@ -443,8 +443,14 @@ export interface DotdenApi {
      * on disk on every environment**. Maps to chezmoi `forget` + drop the synced
      * placement, committed LOCALLY (ADR 0006). Non-destructive: the renderer confirms
      * with the Default-tone dialog whose copy states the File stays on disk.
-     */
+    */
     untrack(targetPath: string): Promise<void>
+    /**
+     * **Discard local changes** for one File from the everyday view. This is the explicit
+     * user-confirmed overwrite path: render the Den's source state back to the destination
+     * with `chezmoi apply <file>`, throwing away this environment's uncommitted edit.
+     */
+    discardLocalChange(targetPath: string): Promise<void>
     /**
      * **Delete everywhere** a File (issue 1-08) — remove it from the Den **and delete
      * the real path on every environment where it applies**. Maps to chezmoi

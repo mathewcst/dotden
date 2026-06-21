@@ -364,6 +364,12 @@ const api: DotdenApi = {
         targetPath,
       }) as ReturnType<DotdenApi['den']['untrack']>
     },
+    // → IPC channel 'den:discard-local-change' (explicitly overwrite local edits from Den source)
+    discardLocalChange(targetPath) {
+      return invokeWithTrace('den:discard-local-change', {
+        targetPath,
+      }) as ReturnType<DotdenApi['den']['discardLocalChange']>
+    },
     // → IPC channel 'den:delete-everywhere' (the Delete everywhere verb → chezmoi destroy)
     deleteEverywhere(targetPath) {
       return invokeWithTrace('den:delete-everywhere', {
