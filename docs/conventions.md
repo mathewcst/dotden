@@ -12,14 +12,13 @@ code under test** — one per source directory, never co-located beside producti
 files and never in a single repo-wide tree.
 
 ```
-src/main/foundation/
+src/main/foundation/chezmoi/
   chezmoi-adapter.ts
-  remote-client.ts
-  process.ts
+  git-transport.ts
   __tests__/
-    faithful-wrapper.test.ts
-    remote-client.test.ts
-    temp-git-repo.fixture.ts      # fixtures are test-only → they live here too
+    faithful-wrapper.test.ts      # one __tests__/ per source dir (ADR 0029)
+src/main/foundation/__tests__/    # root holds the den-service/den-store suites…
+  temp-git-repo.fixture.ts        # …and shared fixtures (test-only → live here too)
 ```
 
 - Imports step up one level: `./remote-client.js` → `../remote-client.js`. Imports
@@ -48,6 +47,25 @@ This is a **guide, not a lint gate** — judgment over mechanical caps.
 - **`foundation/` is Electron-free** — adapters/domain over the bundled chezmoi & git
   binaries. **Never `import 'electron'`** from `foundation/` (directly or
   transitively); this is what keeps the faithful-wrapper seam testable in plain Node.
+- **`foundation/` organizes by domain capability**, mirroring the renderer (ADR 0027) — the
+  same glossary words (`CONTEXT.md`) on both sides of the IPC seam. See **ADR 0029**.
+
+  ```
+  src/main/foundation/
+    den-service.ts  den-store.ts   # the two seams live at the root (façade + .dotden/ data model)
+    platform/      process · path-safety · os-scope · tools · operation-tracer  (cross-cutting infra)
+    chezmoi/       chezmoi-adapter · chezmoi-status · git-transport   (binary adapters)
+    environments/  sync/  apply/  commit/  file-history/  secrets/  settings/  system/
+  ```
+
+  - **Capability folders are glossary words**, name-matching renderer features 1:1 where they exist
+    (`secrets/`, `sync/`, `apply/`, `settings/`, `commit/`, `file-history/`, `environments/`).
+  - **The two seams stay at the root**, deliberately in no capability: `den-service` (the façade
+    `IpcBridge` calls) and `den-store` (the `.dotden/` synced-metadata data model, ADR 0024) — the
+    main-process analog of the renderer's root `App.tsx`.
+  - **`platform/` is the one non-capability folder** — infra primitives everything builds on but that
+    name no Den concept. New code picks its folder by capability; cross-cutting infra → `platform/`.
+
 - **IPC registration + service wiring** splits out of `index.ts` into `ipc/`
   (or `services/`) as it grows; `index.ts` keeps lifecycle + the window only.
 - **Frameless window chrome** is renderer-owned for layout, main-owned for native

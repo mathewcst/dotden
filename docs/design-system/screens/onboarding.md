@@ -33,7 +33,7 @@ full-window flow; reuse page-02 library components (`Button`, `Input`, `Checkbox
 > router) · `OnboardingMenu` (the 6-step rail) · `OBConnectUrl` (step 3, reuses the 1-03
 > `remote.preflight`/`connect` IPC) · `OBDiscover` (step 4) · `ListRow` (scan rows). The
 > tool-catalog discovery scan is the main-process `DiscoveryScanner`
-> (`apps/desktop/src/main/foundation/discovery-scanner.ts`) exposed over the `discover:*` IPC
+> (`apps/desktop/src/main/foundation/environments/discovery-scanner.ts`) exposed over the `discover:*` IPC
 > channels — **feature-detection grounded in a known-tools catalog, not a blind sweep** (ADR 0022).
 > Steps Welcome/CreateRepo/Commit/AutoSync/Done render inline in `OnboardingShell`. **C1/C2 and the
 > gh-CLI enrichment remain v1.1** (designs only — see below). The Auto-sync step is a **wired opt-in
