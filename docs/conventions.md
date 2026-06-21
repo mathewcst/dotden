@@ -109,69 +109,89 @@ boundary that matches the _runtime_ boundary (ADR 0004). See **ADR 0031**.
 - The standing invariant (grep-checkable): 0 renderer/preload imports from `main/**`, 0 `src/shared`
   imports from `main/**`, 0 `src/shared` imports of `node:`/`electron`.
 
-## Renderer layering: features by domain capability
+## Renderer layering: three layers, one-way
 
-The renderer organizes by **domain-capability feature**, not by file type. See
-**ADR 0027** for the rationale (and the rejected `git/`/`file/` and module-global-store
-alternatives).
+The renderer is **three layers with a one-way dependency graph** — `app/` → `features/` →
+shared leaves (`components/`, `lib/`, `hooks/`, `den-session/`). See **ADR 0033** for the
+rationale (and the rejected "everything is a feature" / `components/shell` / two-layer
+alternatives), **ADR 0034** for the `den-session` store, and **ADR 0035** for the lint gate
+that enforces the graph. This supersedes ADR 0027's flat feature layout.
 
 ```
 src/renderer/
-  App.tsx                 # thin root: <LaunchProvider> → LaunchRouter (which
-                          # wraps <DenSessionProvider key={role}> on the 'app' route)
-  features/
-    launch/   shell/   workspace/   commit/   sync/   apply/
-    secrets/  scope/   file-history/   onboarding/   returning/   settings/
-    └─ each feature:
-         components/  lib/               # (+ hooks/ as needed — none today)
-                                         # per subdir gets its own __tests__/ (ADR 0019)
-  shared/                 # dotden-specific components used by 2+ features
-    components/  lib/      #   (ConfirmDialog, StatusTag, apply-theme, utils…)
-  ui/                     # scaffolded shadcn primitives — flat, exempt
+  app/                      # composition root — MAY import features + den-session + shared
+    App.tsx · main.tsx · providers/        (Tooltip, Launch, DenSession key={role})
+    launch/  boot routing      shell/  DenWindow · panes · DialogLayer · TitleBar
+    update/  root-mounted prompt
+  features/                 # capabilities only — MAY import den-session + shared,
+    onboarding  returning  workspace  commit  sync  apply         NEVER app or another feature
+    secrets  settings  file-history  scope  diagnostics
+    └─ each feature: components/  lib/  (+ hooks/ as needed) · per subdir its own __tests__/
+  den-session/              # shared state leaf — store + slices + tree model (ADR 0034)
+    store.ts · context.ts · slices/ · tree-node-model.ts · remote-axis.ts
+  components/               # shared presentational — NEVER imports features/app
+    ui/   vanilla shadcn (CLI-owned)       den/   dotden-branded surface (ADR 0036)
+    tree/  the den file-tree view (single consumer; imports den-session *types* only)
+  lib/   cn · apply-theme · ipc-timeout         hooks/   use-mobile · …
 ```
 
-- **A feature = a user-facing capability in glossary words** (`../CONTEXT.md`). The
-  change-lifecycle split follows ADR 0006's seam: `commit/` outbound, `sync/`
+- **The feature bright-line (ADR 0033).** A folder earns `features/` only if it's a
+  **user-facing capability a user would name**. App infrastructure — the shell frame, boot
+  routing, the update prompt — is `app/`, not a feature. Diagnostics is a capability (the
+  command-log viewer, ADR 0030), so it stays a feature.
+- **The change-lifecycle split follows ADR 0006's seam:** `commit/` outbound, `sync/`
   transport, `apply/` inbound (Conflict folds in — it only exists during an Apply).
-- **Never overload a glossary term with a code name.** The old `Workspace.tsx` was the
-  _den window_, not a domain Workspace (ADR 0005) — that lie is how it became a
-  1377-line god-component. The window is `shell/`; a domain Workspace is `workspace/`.
-- **Placement rule.** A module imported by **one** feature lives in that feature's
-  `components/`/`lib/`; imported by **2+**, it moves to `shared/`. shadcn primitives
-  (`button`, `switch`…) stay in `ui/`.
-- **Shared state uses scoped Zustand stores via Context** — the app-scoped `launch` store
-  (`<LaunchProvider>`) owns boot + routing; the `den-session` store (composed from per-feature
-  slices, created inside `<DenSessionProvider>`) owns the den window session. Both are
-  **never module-level singletons** (`key={role}` still resets the A/B den-session thread).
-  Ephemeral UI state (input text, open menus) stays in `useState`. See **ADR 0027**.
-- **Code-split cold paths only; eager the hot path; warm the rest on idle.** We ship a desktop
-  Electron app — the renderer bundle is read from **local disk**, not the network, so `React.lazy`
-  buys far less than on the web: the only real win is keeping cold code out of the **boot-path
-  parse**, and the cost (a `Suspense` fallback flash on first navigation) is pure downside. So:
-  (1) **eager-import the hot path** — `DenWindow` is a plain import in `LaunchRouter`, because a
-  set-up environment boots straight to the `app` route and a lazy split would flash the splash
-  twice. (2) **`lazy` the cold paths** a set-up user may never open (the setup flows, Settings + its
-  tabs, the full-window Apply views, file history). (3) **warm those chunks on idle after boot** via
-  `launch/lib/preload-chunks.ts` (`preloadLaunchChunks`, fired from `<LaunchProvider>` once `boot()`
-  resolves) — the module registry dedupes `import()` by resolved file, so warming there resolves the
-  same chunk the `lazy()` site requests later, and `Suspense` unwraps in the same render with no
-  visible fallback. Keep the fallbacks anyway (honest safety net; never a blank screen). When you
-  add a new `lazy()` site, add its specifier to `COLD_CHUNKS`.
-- **`@/` for renderer-internal imports** (`@/features/…`, `@/shared/…`, `@/ui/…`); reach for
-  `@`, not deep `../../` chains. Two deliberate exceptions: (1) the **IPC contract** is reached via
-  **`@shared/*`** (ADR 0031), not `@/` — `@` only maps `src/renderer/*`; the renderer never imports
-  `src/main/**` at all; (2) the **store slices** (`*/lib/*-slice.ts` + `shell/lib/den-session-store.ts`)
-  import each other **relatively**, because the node-env slice tests value-import them and keeping
-  the cluster relative makes those tests independent of renderer alias wiring.
-- **The scoped store is structurally enforced, not lint-enforced.** A guardrail _is_ cheaply
-  available — a one-line `no-restricted-syntax` rule
-  (`VariableDeclarator[init.callee.name='createStore']`) catches a module-level `const xStore =
-createStore()` while leaving the factory's `return createStore(…)` alone, and a desktop-scoped
-  `files: ['src/renderer/**']` override keeps it out of the shared `@dotden/eslint-config`. We
-  **deliberately skip it anyway**: the factory-in-Context pattern already makes the A/B leak
-  impossible (remount = new store) and the `key={role}` contract is documented at
-  `DenSessionProvider` + `LaunchRouter`, so the rule would only restate the pattern. "Guide not
-  gate" (ADR 0021). See **ADR 0027** for the recorded decision.
+- **Never overload a glossary term with a code name.** The old `Workspace.tsx` was the _den
+  window_, not a domain Workspace (ADR 0005) — that lie is how it became a 1377-line
+  god-component. The window is `app/shell/`; a domain Workspace is `features/workspace/`.
+- **Import direction is one-way and lint-gated (ADR 0035).** `app → features → {components,
+lib, hooks, den-session}`. A feature never imports `app/` or another feature's internals;
+  the shared leaves never import up. `eslint-plugin-boundaries` enforces it — the boundaries
+  config is the canonical, machine-checked statement of this graph.
+- **Placement rule.** A module used by **one** feature lives in that feature; used by **2+**,
+  it moves to a shared leaf (`components/den/` for components, `lib/` for utilities, a slice in
+  `den-session/` for shared state). A single-consumer component that still carries den
+  vocabulary (the file Tree) stays in its feature, or in `components/` only when it imports
+  shared _types_ — never feature code.
+- **Components are two-tier (ADR 0036).** `components/ui/` is vanilla shadcn (CLI-owned, never
+  branded); `components/den/` is the dotden-branded surface app/features import — thin wrappers
+  that _compose over_ `ui/` (`den/button` imports `ui/button`) plus the bespoke design-system
+  family (Badge, Pill, StatusTag, StatusDot, Banner). **Only `den/` may import `ui/`** (gated).
+  Compose-over, never re-implement. Build `den/` lazily from the Figma `37:2` sheet.
+- **Bespoke-native allowlist.** A few rows render native `<button>`/`<div>` for keyboard a11y
+  and are _not_ shadcn-migration targets: TreeRow/FileRow (`components/tree/`), CommitRow
+  (`commit/`), SidebarItem, ListRow/SelectRow, DiffLine/DiffLineSplit/MergeHunk
+  (`file-history/`, `apply/`), WindowControls (`den/`). Each native element the
+  `no-restricted-syntax` gate would flag carries `// eslint-disable-next-line -- bespoke:
+<reason>` (ADR 0035); a stale one fails lint, so the list can't silently grow.
+- **Shared state is the scoped `den-session` store (ADR 0027 + 0034).** One Zustand store
+  composed from slices in `den-session/slices/`, created by a factory and handed down through
+  `<DenSessionProvider key={role}>` (mounted in `app/`) — **never a module-level singleton**
+  (`key={role}` resets the A/B den-session thread structurally; remount = new store). Features
+  read via `useDenSession(selector)` from `@/den-session`. The app-scoped `launch` store
+  (`<LaunchProvider>`) owns boot + routing. Ephemeral UI state stays in `useState`. The
+  store-singleton rule stays **structurally** enforced, not linted (ADR 0027) — ADR 0035 gates
+  layering + native-HTML, not the store pattern.
+- **Effects follow modern-React patterns.** Prefer `useSyncExternalStore` for browser/external
+  subscriptions and derived state over `setState`-in-`useEffect` (the `react-hooks` flat config
+  is on). The `react-patterns` and Vercel composition / best-practice skills are the reference.
+- **Code-split cold paths only; eager the hot path; warm the rest on idle.** The renderer bundle
+  is read from **local disk**, not the network, so `React.lazy` buys far less than on the web —
+  the only win is keeping cold code out of the **boot-path parse**, and a `Suspense` flash on
+  first navigation is pure downside. So: (1) **eager-import the hot path** — `DenWindow` is a
+  plain import in `app/launch` routing, because a set-up environment boots straight to the
+  `app` route and a lazy split would flash the splash twice. (2) **`lazy` the cold paths** a
+  set-up user may never open (setup flows, Settings + tabs, full-window Apply views, file
+  history). (3) **warm those chunks on idle after boot** via `app/launch/lib/preload-chunks.ts`
+  (`preloadLaunchChunks`, fired from `<LaunchProvider>` once `boot()` resolves) — the module
+  registry dedupes `import()` by resolved file, so warming resolves the same chunk the `lazy()`
+  site requests later, with no visible fallback. Keep the fallbacks anyway. New `lazy()` site →
+  add its specifier to `COLD_CHUNKS`.
+- **Aliases.** `@/` maps `src/renderer/*` (`@/app/…`, `@/features/…`, `@/components/den/…`,
+  `@/den-session`, `@/lib/…`); reach for `@`, not deep `../../` chains. The **IPC contract** is
+  reached via **`@shared/*`** (ADR 0031), _not_ `@/` — `@` only maps `src/renderer/*`, and the
+  renderer never imports `src/main/**`. The old `@/shared/*` (renderer junk drawer) and
+  `@/ui/*` (hand-authored primitives) are **retired** — both are gone (ADR 0033/0036).
 
 ## Comments: over-comment, but only what earns its line
 
@@ -190,6 +210,10 @@ explanation. Full policy in **ADR 0021**; in practice:
 
 - **Run lint clean.** `pnpm check:lint` (and `pnpm check` for types too) before
   pushing. The shared config is `@dotden/eslint-config`.
+- **Structural gates are hard (ADR 0035), craft stays a guide.** The renderer override gates
+  the **layer graph** (`eslint-plugin-boundaries`) and **native-HTML-where-shadcn-exists**
+  (`no-restricted-syntax`) — see _Renderer layering_ above. Comments / component size stay
+  review guides; the split is structure-vs-style, not gate-vs-guide globally.
 - **`eslint-disable` is a last resort, and never bare.** Every disable must carry an
   inline reason after `--`:
 
