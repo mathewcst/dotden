@@ -21,7 +21,6 @@ import type { RedactedCommandRecord } from '@shared/diagnostics'
 import type { Workspace as WorkspaceModel } from '@shared/workspace'
 import type { Scope } from '@shared/scope'
 import type { AutomationLevel } from '@shared/apply'
-import type { FileTreeRenameEvent } from '@pierre/trees'
 import type { RowVerb } from '../../workspace/components/RowContextMenu'
 import type { DenSessionGet, DenSessionSet } from './den-session-store'
 import { operationError, type OperationError } from './operation-error'
@@ -119,8 +118,6 @@ export interface SessionSlice {
   setCenterTab(tab: 'changes' | 'history'): void
   /** Track a File by path; `onTracked` fires the moment the Track lands (so the caller clears its input). */
   track(targetPath: string, onTracked?: () => void): Promise<void>
-  /** Inline-rename a File in the tree (optimistic; persistence lands with the row verbs, 1-08). */
-  onRename(event: FileTreeRenameEvent): void
   /** Create a Workspace (the access boundary); the SECOND one reveals the concept (issue 1-14). */
   createWorkspace(label: string): Promise<void>
   /** Create a nested Group inside a Workspace (pure organization, never changes access/path). */
@@ -278,20 +275,6 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
         await get().reloadTree()
         await get().selectFile(path)
       }),
-
-    // Inline rename: optimistic tree edit + surface that persistence is pending so we never
-    // silently imply a rename was written (the faithful chezmoi move is the 1-08 verb slice).
-    onRename: (event) =>
-      set((s) => ({
-        files: s.files.map((f) =>
-          f.targetPath === event.sourcePath ? { ...f, targetPath: event.destinationPath } : f,
-        ),
-        selected: event.destinationPath,
-        error: {
-          message:
-            'Renamed in the tree. Persisting a rename to chezmoi lands with the row verbs (issue 1-08).',
-        },
-      })),
 
     createWorkspace: (label) =>
       get().run('organize', async () => {

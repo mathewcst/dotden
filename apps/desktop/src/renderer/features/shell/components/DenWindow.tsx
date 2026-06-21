@@ -86,7 +86,6 @@ export function DenWindow({
   const error = useDenSession((s) => s.error)
 
   const selectFile = useDenSession((s) => s.selectFile)
-  const onRename = useDenSession((s) => s.onRename)
   const init = useDenSession((s) => s.init)
   const reloadTree = useDenSession((s) => s.reloadTree)
   const refreshIncoming = useDenSession((s) => s.refreshIncoming)
@@ -124,7 +123,6 @@ export function DenWindow({
   )
 
   const initialSelectedPaths = useMemo(() => (selected ? [selected] : []), [selected])
-  const renaming = useMemo(() => ({ onRename }), [onRename])
   const fileTreeOptions = useMemo(
     () => ({
       paths,
@@ -132,17 +130,15 @@ export function DenWindow({
       initialSelectedPaths,
       gitStatus,
       renderRowDecoration,
-      // Inline rename + drag-reorganize so managing many Files stays fast (issue 1-07).
-      renaming,
-      dragAndDrop: true,
       // Drive selection straight off the model so the center/inspector follow the tree.
       onSelectionChange: handleSelectionChange,
     }),
-    [paths, initialSelectedPaths, gitStatus, renderRowDecoration, renaming, handleSelectionChange],
+    [paths, initialSelectedPaths, gitStatus, renderRowDecoration, handleSelectionChange],
   )
 
-  // Build the tree model with all interactions the issue asks for: search, inline rename,
-  // drag-reorganize, the git-status axis, and the Remote decoration lane.
+  // Build the tree model with search, the git-status axis, and the Remote decoration lane.
+  // Inline file rename / drag are intentionally not advertised until they have a persistent
+  // chezmoi-backed file move primitive.
   const { model } = useFileTree(fileTreeOptions)
 
   // Keep the live model's git-status axis in sync when the File set/status changes (useFileTree only
