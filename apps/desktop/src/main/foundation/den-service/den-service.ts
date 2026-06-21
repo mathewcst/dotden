@@ -137,8 +137,13 @@ export class DenService {
       sourceDir: options.sourceDir,
       destinationDir: options.destinationDir,
       configPath: options.configPath,
+      ...(options.diagnosticsSink ? { diagnosticsSink: options.diagnosticsSink } : {}),
     })
-    this.git = new GitTransport({ gitBin: options.gitBin, repoDir: options.sourceDir })
+    this.git = new GitTransport({
+      gitBin: options.gitBin,
+      repoDir: options.sourceDir,
+      ...(options.diagnosticsSink ? { diagnosticsSink: options.diagnosticsSink } : {}),
+    })
     this.store = new DenStore(options.sourceDir)
     this.tracer = options.tracer
     this.automation = new AutomationPolicy(options.automationLevel ?? DEFAULT_AUTOMATION_LEVEL)

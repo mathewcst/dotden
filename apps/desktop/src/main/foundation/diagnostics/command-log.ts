@@ -19,6 +19,14 @@ export interface CommandLogOptions {
   readonly capacity?: number
   /** Local user facts used by the default redactor. */
   readonly redaction?: RedactionContext
+  /**
+   * Records restored from the environment-local diagnostics file.
+   *
+   * This is a constructor-only persistence seam, not a raw append API. The
+   * constructor redacts them again before hydrating the ring, so a corrupt/old
+   * file cannot become a raw in-memory path.
+   */
+  readonly initialRecords?: readonly CommandRecord[]
 }
 
 /**
@@ -37,6 +45,11 @@ export class CommandLog implements DiagnosticsSink {
   constructor(options: CommandLogOptions = {}) {
     this.capacity = options.capacity ?? 256
     this.redaction = options.redaction ?? {}
+    this.buffer.push(
+      ...(options.initialRecords
+        ?.map((record) => redactCommandRecord(record, this.redaction))
+        .slice(-this.capacity) ?? []),
+    )
   }
 
   /**

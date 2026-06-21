@@ -118,4 +118,25 @@ describe('CommandLog', () => {
     expect(serialized).toContain(REDACTED_TOKEN)
     expect(serialized).not.toContain(rawSecret)
   })
+
+  it('redacts hydrated records before they enter the buffer', () => {
+    const rawSecret = 'ghp_1234567890abcdefghijklmnopqrstuvwxyzABCD'
+    const log = new CommandLog({
+      capacity: 4,
+      initialRecords: [
+        {
+          command: 'git',
+          args: ['push', rawSecret],
+          exitCode: 1,
+          stdout: rawSecret,
+          stderr: rawSecret,
+          timestamp: 1,
+        },
+      ],
+    })
+
+    const serialized = JSON.stringify(log.records())
+    expect(serialized).toContain(REDACTED_TOKEN)
+    expect(serialized).not.toContain(rawSecret)
+  })
 })

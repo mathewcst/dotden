@@ -27,6 +27,7 @@ import { renderSecretReferenceTemplate } from '../secrets/secret-reference.js'
 import type { SecretReferenceRequest } from '../../../shared/secrets.js'
 import { runCommand } from '../platform/process.js'
 import type { CommitTemplateData } from '../../../shared/commit-template.js'
+import type { DiagnosticsSink } from '../diagnostics/command-log.js'
 
 /**
  * Thrown by {@link ChezmoiAdapter.applyGuarded} when the File it is about to apply has
@@ -67,6 +68,8 @@ export interface ChezmoiAdapterOptions {
    * do not exercise templated config data.
    */
   readonly configPath?: string
+  /** Optional redacted command diagnostics sink. */
+  readonly diagnosticsSink?: DiagnosticsSink
 }
 
 /**
@@ -470,20 +473,26 @@ export class ChezmoiAdapter {
     // Ensure both trees exist up front so chezmoi never fails on a missing dir.
     await mkdir(this.options.sourceDir, { recursive: true })
     await mkdir(this.options.destinationDir, { recursive: true })
-    return runCommand(this.options.chezmoiBin, [
-      // Pin source/destination explicitly so we never inherit a host chezmoi config,
-      // and force non-interactive (--no-tty, --force) so calls can't hang on a prompt.
-      '--source',
-      this.options.sourceDir,
-      '--destination',
-      this.options.destinationDir,
-      // Pin the environment-local config file (when provided) so `[data].dotden_env_id`
-      // is in scope for templated config like a per-environment `.chezmoiignore`.
-      ...(this.options.configPath ? ['--config', this.options.configPath] : []),
-      '--no-tty',
-      '--force',
-      ...args,
-    ])
+    return runCommand(
+      this.options.chezmoiBin,
+      [
+        // Pin source/destination explicitly so we never inherit a host chezmoi config,
+        // and force non-interactive (--no-tty, --force) so calls can't hang on a prompt.
+        '--source',
+        this.options.sourceDir,
+        '--destination',
+        this.options.destinationDir,
+        // Pin the environment-local config file (when provided) so `[data].dotden_env_id`
+        // is in scope for templated config like a per-environment `.chezmoiignore`.
+        ...(this.options.configPath ? ['--config', this.options.configPath] : []),
+        '--no-tty',
+        '--force',
+        ...args,
+      ],
+      {
+        ...(this.options.diagnosticsSink ? { diagnosticsSink: this.options.diagnosticsSink } : {}),
+      },
+    )
   }
 
   /**

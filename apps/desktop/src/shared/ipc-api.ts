@@ -101,6 +101,11 @@ export interface DotdenApi {
     /** Close the current BrowserWindow. */
     close(): Promise<void>
   }
+  /** Diagnostics operations, backed by the redacted local Command log. */
+  readonly diagnostics: {
+    /** Reveal the redacted Command log file in the OS file manager. */
+    openLogLocation(): Promise<void>
+  }
   /** Remote-connection operations, each forwarded to a `remote:*` IPC channel. */
   readonly remote: {
     /** Preflight a Remote URL against the user's existing git credentials. */

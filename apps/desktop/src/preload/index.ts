@@ -46,6 +46,14 @@ const api: DotdenApi = {
       }) as ReturnType<DotdenApi['window']['close']>
     },
   },
+  diagnostics: {
+    // → IPC channel 'diagnostics:open-log-location' (reveal redacted log file under userData)
+    openLogLocation() {
+      return ipcRenderer.invoke('diagnostics:open-log-location', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['diagnostics']['openLogLocation']>
+    },
+  },
   remote: {
     // → IPC channel 'remote:preflight'
     preflight(url) {

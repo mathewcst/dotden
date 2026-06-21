@@ -9,6 +9,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { CommandFailedError, runCommand } from '../platform/process.js'
 import { resolveContainedPath } from '../platform/path-safety.js'
+import type { DiagnosticsSink } from '../diagnostics/command-log.js'
 
 /**
  * Field separator for {@link GitTransport.log}'s machine-parsable output.
@@ -76,6 +77,8 @@ export interface GitTransportOptions {
   readonly gitBin: string
   /** Working directory of the repo to operate on (chezmoi's source dir). */
   readonly repoDir: string
+  /** Optional redacted command diagnostics sink. */
+  readonly diagnosticsSink?: DiagnosticsSink
 }
 
 /**
@@ -528,7 +531,10 @@ export class GitTransport {
    */
   private async git(args: readonly string[]) {
     await mkdir(this.options.repoDir, { recursive: true })
-    return runCommand(this.options.gitBin, args, { cwd: this.options.repoDir })
+    return runCommand(this.options.gitBin, args, {
+      cwd: this.options.repoDir,
+      ...(this.options.diagnosticsSink ? { diagnosticsSink: this.options.diagnosticsSink } : {}),
+    })
   }
 }
 

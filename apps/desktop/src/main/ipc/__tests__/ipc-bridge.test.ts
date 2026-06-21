@@ -27,6 +27,52 @@ function fakeRegistrar() {
 }
 
 describe('IpcBridge', () => {
+  it('routes diagnostics open-log-location and asserts _trace (PRD4 issue 4-03)', async () => {
+    const openDiagnosticsLogLocation = vi.fn(async () => undefined)
+    const { registrar, handlers } = fakeRegistrar()
+    registerIpcBridge(registrar, {
+      remoteClient: async () => ({}) as never,
+      denService: async () => ({}) as never,
+      discoveryScanner: async () => ({}) as never,
+      environmentRegistry: async () => ({}) as never,
+      getAutomationLevel: async () => 'manual' as const,
+      setAutomationLevel: async () => undefined,
+      claimEnvironment: async () => undefined,
+      getUnsubscribeDisposition: async () => 'keep' as const,
+      setUnsubscribeDisposition: async () => undefined,
+      getSyncSettings: async () => ({
+        pollerEnabled: true,
+        cadence: 'fast' as const,
+        startOnLogin: false,
+      }),
+      setSyncSettings: async (settings) => settings,
+      getPrivacySettings: async () => ({
+        analyticsEnabled: false,
+        crashReportsEnabled: false,
+        diagnosticLogsEnabled: false,
+      }),
+      setPrivacySettings: async (settings) => settings,
+      launchState: async () => ({ status: 'ready' as const }),
+      getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
+      checkForUpdates: async () => ({
+        status: 'unavailable' as const,
+        currentVersion: '1.2.0',
+        latestVersion: null,
+        detail: 'No update feed is configured for this build yet.',
+      }),
+      openDiagnosticsLogLocation,
+    })
+
+    await handlers.get('diagnostics:open-log-location')?.({}, {
+      _trace: { traceId: 'diag-1' },
+    } as never)
+
+    expect(openDiagnosticsLogLocation).toHaveBeenCalledTimes(1)
+    await expect(handlers.get('diagnostics:open-log-location')?.({}, {} as never)).rejects.toThrow(
+      'without a _trace envelope',
+    )
+  })
+
   it('forwards the _trace id into the DenService on every den:* channel', async () => {
     const den = {
       trackFile: vi.fn(async () => undefined),

@@ -12,6 +12,7 @@
 import type { EnvironmentEntry } from '../../../shared/environments.js'
 import type { OperationTracer } from '../platform/operation-tracer.js'
 import type { AutomationLevel } from '../../../shared/apply.js'
+import type { DiagnosticsSink } from '../diagnostics/command-log.js'
 
 /** Construction wiring for a {@link import('./den-service.js').DenService}, bound to one environment's dirs. */
 export interface DenServiceOptions {
@@ -62,6 +63,8 @@ export interface DenServiceOptions {
    * reports "no preference").
    */
   readonly userDataDir?: string
+  /** Shared redacted command diagnostics sink for the chezmoi/git wrappers. */
+  readonly diagnosticsSink?: DiagnosticsSink
 }
 
 /**

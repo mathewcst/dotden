@@ -20,6 +20,7 @@ import {
 } from '../platform/process.js'
 import type { TraceEnvelope, PreflightResult, ConnectResult } from '../../../shared/remote.js'
 import type { RemoteDiagnostics } from '../../../shared/remote.js'
+import type { DiagnosticsSink } from '../diagnostics/command-log.js'
 
 /**
  * Construction options for {@link RemoteClient}.
@@ -41,6 +42,8 @@ export interface RemoteClientOptions {
   readonly timeoutMs?: number
   /** Test seam for the low-level child-process runner; production uses {@link runCommand}. */
   readonly run?: typeof runCommand
+  /** Optional redacted command diagnostics sink. */
+  readonly diagnosticsSink?: DiagnosticsSink
 }
 
 /**
@@ -198,6 +201,9 @@ export class RemoteClient {
         {
           timeoutMs: this.timeoutMs,
           signal: request.signal,
+          ...(this.options.diagnosticsSink
+            ? { diagnosticsSink: this.options.diagnosticsSink }
+            : {}),
         },
       )
     } catch (error) {
@@ -258,7 +264,13 @@ export class RemoteClient {
       const result = await this.run(
         this.options.chezmoiBin,
         ['--no-tty', 'execute-template', '{{ .chezmoi.config.git.command }}'],
-        { timeoutMs: this.timeoutMs, signal },
+        {
+          timeoutMs: this.timeoutMs,
+          signal,
+          ...(this.options.diagnosticsSink
+            ? { diagnosticsSink: this.options.diagnosticsSink }
+            : {}),
+        },
       )
       const configured = result.stdout.trim()
       if (configured && configured !== '<no value>') return configured
@@ -275,7 +287,11 @@ export class RemoteClient {
     signal?: AbortSignal,
   ): Promise<CommandResult> {
     // Intentionally omit `env`: runCommand will inherit process.env unchanged, preserving credential hooks.
-    return this.run(command, args, { timeoutMs: this.timeoutMs, signal })
+    return this.run(command, args, {
+      timeoutMs: this.timeoutMs,
+      signal,
+      ...(this.options.diagnosticsSink ? { diagnosticsSink: this.options.diagnosticsSink } : {}),
+    })
   }
 }
 

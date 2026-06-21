@@ -149,6 +149,8 @@ export interface IpcBridgeDeps {
     event: unknown,
     action: 'minimize' | 'toggle-maximize' | 'close',
   ) => Promise<boolean | void>
+  /** Reveal the redacted diagnostics Command log in the OS file manager. */
+  readonly openDiagnosticsLogLocation?: () => Promise<void>
 }
 
 /**
@@ -156,6 +158,7 @@ export interface IpcBridgeDeps {
  * each call's `_trace` id through to the foundation.
  *
  * Channels (all payloads carry `_trace`):
+ * - `diagnostics:open-log-location` → reveal the persisted redacted Command log
  * - `remote:preflight` / `remote:connect` / `remote:latest-sha` → {@link RemoteClient}
  * - `den:track` / `den:scan-commit` / `den:allowlist-secret` / `den:get-commit-template` /
  *   `den:set-commit-template` / `den:get-appearance` / `den:set-appearance` /
@@ -189,6 +192,15 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     traceId(payload)
     if (!deps.controlWindow) throw new Error('Window control IPC is not wired')
     return deps.controlWindow(event, 'close')
+  })
+
+  // ── Diagnostics channels (PRD4): edge-only shell/file actions over the redacted local log ──
+  registrar.handle('diagnostics:open-log-location', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    if (!deps.openDiagnosticsLogLocation) {
+      throw new Error('Diagnostics log-location IPC is not wired')
+    }
+    return deps.openDiagnosticsLogLocation()
   })
 
   // ── Remote channels (issue 1-03), kept here so ALL IPC carries _trace uniformly ──

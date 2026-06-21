@@ -23,6 +23,7 @@ import {
   readAutomationLevel,
   writeAutomationLevel,
 } from './foundation/apply/automation-settings.js'
+import { PersistentCommandLog } from './diagnostics/command-log-store.js'
 import { DenService } from './foundation/den-service/den-service.js'
 import { DiscoveryScanner } from './foundation/environments/discovery-scanner.js'
 import {
@@ -61,6 +62,22 @@ import { registerIpcBridge } from './ipc/ipc-bridge.js'
  * the IpcBridge threads each call's `_trace` id into it via the DenService.
  */
 const tracer = new OperationTracer()
+
+/** Process-wide redacted Command log, persisted under Electron `userData` (ADR 0030). */
+let diagnosticsLog: Promise<PersistentCommandLog> | undefined
+
+/** Load the shared restart-safe Command log for this app run. */
+async function getDiagnosticsLog(): Promise<PersistentCommandLog> {
+  diagnosticsLog ??= PersistentCommandLog.load(app.getPath('userData'), {
+    redaction: {
+      homeDir: app.getPath('home'),
+    },
+  }).catch((error: unknown) => {
+    diagnosticsLog = undefined
+    throw error
+  })
+  return diagnosticsLog
+}
 
 /**
  * Lazily-built, process-wide {@link RemoteClient}.
@@ -118,11 +135,13 @@ function chezmoiConfigPath(): string {
 /** Resolve bundled tools and construct a {@link RemoteClient} for this environment. */
 async function buildRemoteClient(): Promise<RemoteClient> {
   const tools = await resolveBundledTools()
+  const diagnosticsSink = await getDiagnosticsLog()
   return new RemoteClient({
     chezmoiBin: tools.chezmoi,
     gitBin: tools.git,
     sourceDir: sourceDir(),
     destinationDir: app.getPath('home'),
+    diagnosticsSink,
   })
 }
 
@@ -148,6 +167,7 @@ async function getDenService(): Promise<DenService> {
 async function buildDenService(): Promise<DenService> {
   const tools = await resolveBundledTools()
   const identity = await loadEnvironmentIdentity(app.getPath('userData'))
+  const diagnosticsSink = await getDiagnosticsLog()
   // The DenService's AutomationPolicy is fixed at construction, so it is built with THIS
   // environment's current rung (issue 1-12). Changing the level rebuilds the service (see
   // setAutomationLevel) so a later Commit uses the new auto-push decision.
@@ -161,6 +181,7 @@ async function buildDenService(): Promise<DenService> {
     environment: { id: identity.id, label: identity.label, os: identity.os },
     tracer,
     automationLevel,
+    diagnosticsSink,
     // Environment-local "Remember my choice" PM preference (issue 2-05) lives under userData,
     // never synced (ADR 0024) — same store dir as the automation level + identity.
     userDataDir: app.getPath('userData'),
@@ -404,6 +425,12 @@ async function controlWindow(
  */
 function checkForUpdates(): Promise<UpdateCheckResult> {
   return runUpdateCheck(app.getVersion(), noFeed)
+}
+
+/** Reveal the persisted, redacted Command log in the OS file manager (PRD4 issue 4-03). */
+async function openDiagnosticsLogLocation(): Promise<void> {
+  const log = await getDiagnosticsLog()
+  shell.showItemInFolder(log.filePath)
 }
 
 /**
@@ -699,6 +726,7 @@ if (!app.requestSingleInstanceLock()) {
       getAppInfo,
       checkForUpdates,
       controlWindow,
+      openDiagnosticsLogLocation,
     })
     createWindow()
 
