@@ -4,8 +4,8 @@
  *
  * ADR 0024's governing rule for the three appearance settings (theme, default Apply behaviour,
  * notification flags): each SYNCED value is a **shared default**, and an environment **may override
- * it locally** without changing it everywhere. The synced default lives in the synced `.myenv/`
- * directory (issue 2-10, {@link import('./myenv-store.js').MyenvStore.readAppearanceSettings}); the
+ * it locally** without changing it everywhere. The synced default lives in the synced `.dotden/`
+ * directory (issue 2-10, {@link import('./den-store.js').DenStore.readAppearanceSettings}); the
  * per-environment override that SHADOWS it lives HERE — in Electron `userData`, and **never** enters
  * the synced source tree — so pinning a local override never mutates the value other environments
  * read (the load-bearing guarantee this issue proves).
@@ -65,7 +65,7 @@ export async function readAppearanceOverride(userDataDir: string): Promise<Appea
  * that case rather than leaving an empty `{}` behind (a subsequent read returns the same empty
  * override either way, so the behaviour is identical).
  *
- * This NEVER writes to the synced `.myenv/` directory — it is environment-local by ADR 0024, so the
+ * This NEVER writes to the synced `.dotden/` directory — it is environment-local by ADR 0024, so the
  * synced default other environments read is never mutated by pinning (or clearing) a local override.
  *
  * @param userDataDir Electron's `app.getPath('userData')`; a tempdir in tests.

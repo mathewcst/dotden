@@ -5,7 +5,7 @@
  * git commit message is produced from a named template so the UI can show both the
  * *resolved* message and *which template* produced it (issue 1-04 acceptance:
  * "template message shown, with which template"). The synced default template is
- * stored in `.myenv/` (ADR 0024 "commit-message template"); a later Settings slice
+ * stored in `.dotden/` (ADR 0024 "commit-message template"); a later Settings slice
  * (2-09) lets the user edit it.
  *
  * Critically, this renderer is a **pure, no-shell, no-network function** over its
@@ -19,7 +19,7 @@
  *
  * `id` is what the UI surfaces as "which template" produced the message; `body`
  * is the template text with `{{placeholder}}` tokens. The default lives in
- * `.myenv/`; v1 ships exactly the built-in default below.
+ * `.dotden/`; v1 ships exactly the built-in default below.
  */
 export interface CommitMessageTemplate {
   /** Stable template identifier shown in the UI (e.g. `default`). */
@@ -59,7 +59,7 @@ export interface RenderedCommitMessage {
 /**
  * dotden's built-in default Commit-message template.
  *
- * Exported so onboarding can seed it into `.myenv/` and tests can assert against
+ * Exported so onboarding can seed it into `.dotden/` and tests can assert against
  * it. The body uses the closed placeholder set understood by {@link renderCommitMessage}.
  */
 export const DEFAULT_COMMIT_TEMPLATE: CommitMessageTemplate = {

@@ -12,7 +12,7 @@
  * The remembered default is **environment-local** (a property of how THIS machine likes to
  * handle orphans, never a shared decision), so — exactly like the automation level and the
  * environment identity — it lives in Electron `userData` and never enters the synced
- * `.myenv/` (ADR 0024's synced-vs-local split). Electron-free (ADR 0023): it takes the
+ * `.dotden/` (ADR 0024's synced-vs-local split). Electron-free (ADR 0023): it takes the
  * userData dir as a path so the round-trip is unit-testable in plain Node.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises'

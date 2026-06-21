@@ -113,8 +113,8 @@ describe('ChezmoiAdapter faithful verb mapping', () => {
     // …the linux-scoped File is NOT…
     expect(contents).not.toContain('.zshrc')
     // …and the generated file is the SINGLE writer of `.chezmoiignore`, so it always
-    // re-emits the `.myenv/` rule (dotden metadata is never a managed target, ADR 0024).
-    expect(contents).toContain('.myenv/')
+    // re-emits the `.dotden/` rule (dotden metadata is never a managed target, ADR 0024).
+    expect(contents).toContain('.dotden/')
 
     // A universally-scoped File (null) is never ignored on any OS.
     expect(

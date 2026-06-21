@@ -8,7 +8,7 @@
  * per-File loop, so it is tested here directly.
  *
  * The seam under test is the loop, not chezmoi itself — so we drive a real DenService
- * (with a real synced `.myenv/` so the witness gate is genuine) but swap the
+ * (with a real synced `.dotden/` so the witness gate is genuine) but swap the
  * ChezmoiAdapter's `apply` for a stub that fails for ONE chosen path. That proves the
  * loop continues past a failure, records the right per-File outcomes, and re-applies
  * just the failed path on retry — without depending on a flaky way to make real chezmoi
@@ -21,7 +21,7 @@ import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DenService } from '../den-service.js'
 import { GitTransport } from '../git-transport.js'
-import { MyenvStore } from '../myenv-store.js'
+import { DenStore } from '../den-store.js'
 import { OperationTracer } from '../operation-tracer.js'
 import { runCommand } from '../process.js'
 
@@ -114,7 +114,7 @@ describe('applyIncoming per-file atomicity (issue 1-09)', () => {
   it('a path that turned non-applicable is reported as a non-retryable failure, not silently dropped', async () => {
     const env = await seedTwoFileDen()
     // Narrow this environment's subscription so `.broken` no longer applies here.
-    const store = new MyenvStore(env.source)
+    const store = new DenStore(env.source)
     await store.registerEnvironment({
       id: 'env-self',
       label: 'this-mac',

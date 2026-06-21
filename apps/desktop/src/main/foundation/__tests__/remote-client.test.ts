@@ -134,7 +134,7 @@ describe('RemoteClient', () => {
         if (command === '/bin/chezmoi' && args.includes('execute-template'))
           return result(command, args, '')
         if (command === '/bin/chezmoi' && args.includes('init')) {
-          await mkdir(join(source, '.myenv'), { recursive: true })
+          await mkdir(join(source, '.dotden'), { recursive: true })
         }
         return result(command, args)
       }, source)

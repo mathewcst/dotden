@@ -15,7 +15,7 @@
  * "applied to a non-applicable File" *unrepresentable* (ADR 0008's "cannot express
  * the unsafe state"), not merely "remembered to check".
  */
-import type { EnvironmentEntry, WorkspacesDoc } from './myenv-store.js'
+import type { EnvironmentEntry, WorkspacesDoc } from './den-store.js'
 import { effectiveScope, narrowScope, scopeAppliesOn, type Os, type Scope } from './os-scope.js'
 
 /**
@@ -53,7 +53,7 @@ export interface NotApplicable {
   readonly targetPath: string
   /**
    * Machine-readable reason, for UI copy and tests:
-   * - `unplaced` — the File has no `.myenv/` placement, so its Workspace is unknown;
+   * - `unplaced` — the File has no `.dotden/` placement, so its Workspace is unknown;
    * - `not-subscribed` — the File's Workspace is one this environment does not subscribe to
    *   (the access axis, invariant #3);
    * - `out-of-scope` — the File's **OS Scope** does not include this environment's OS (the
@@ -79,7 +79,7 @@ export function isAppliesHere(result: ApplicabilityResult): result is AppliesHer
  * model, and mints the {@link AppliesHere} witness for those that do.
  *
  * Construct one per applicability question with the current environment entry and
- * the current Workspace/placement doc (both read from `.myenv/`). It performs no
+ * the current Workspace/placement doc (both read from `.dotden/`). It performs no
  * I/O — it is a pure function over the synced model, which is what lets `SyncEngine`
  * exercise it in fast property tests.
  */
@@ -134,7 +134,7 @@ export class ApplicabilityResolver {
 
   /**
    * Compute a File's EFFECTIVE OS Scope by folding the Workspace → Group chain → the File's
-   * own Scope (issue 1-15). Mirrors {@link import('./myenv-store.js').MyenvStore.effectiveScopeOf}
+   * own Scope (issue 1-15). Mirrors {@link import('./den-store.js').DenStore.effectiveScopeOf}
    * but operates on the in-memory synced doc the resolver already holds, so the resolver stays
    * a pure function (no I/O) and can be exercised in `SyncEngine`'s property tests.
    *

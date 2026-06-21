@@ -27,7 +27,7 @@
 import { access } from 'node:fs/promises'
 import { join } from 'node:path'
 import { readLocalIdentity } from './environment-identity.js'
-import { MyenvStore } from './myenv-store.js'
+import { DenStore } from './den-store.js'
 
 /** The three launch states the gate distinguishes (ADR 0026). */
 export type LaunchStatus = 'fresh' | 'incomplete' | 'ready'
@@ -80,7 +80,7 @@ export async function computeLaunchState(inputs: LaunchStateInputs): Promise<Lau
   if (id && cloned) {
     // Read the synced registry directly (degrades to an empty list when absent) and look this
     // environment up by its stable id — the same predicate as a non-null `self()` entry.
-    const { environments } = await new MyenvStore(inputs.sourceDir).readEnvironments()
+    const { environments } = await new DenStore(inputs.sourceDir).readEnvironments()
     if (environments.some((entry) => entry.id === id)) return { status: 'ready' }
   }
   return { status: cloned ? 'incomplete' : 'fresh' }

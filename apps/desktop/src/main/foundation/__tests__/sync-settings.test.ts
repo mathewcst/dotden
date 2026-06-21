@@ -5,7 +5,7 @@
  * Round-trips through a real tempdir (the userData stand-in) to prove the three Sync
  * preferences (poller on/off · cadence profile · start-on-login) persist LOCALLY and that a
  * missing/corrupt/partial file always degrades to the SAFE defaults — never to a surprising
- * state, and (critically) NEVER into the synced `.myenv/` directory (ADR 0024 keeps these
+ * state, and (critically) NEVER into the synced `.dotden/` directory (ADR 0024 keeps these
  * environment-local: a per-machine override, not user-authored organization).
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -49,14 +49,14 @@ describe('sync-settings (environment-local, ADR 0024)', () => {
     expect(await readSyncSettings(dir)).toEqual(DEFAULT_SYNC_SETTINGS)
   })
 
-  it('persists to userData only — writes nothing into a synced .myenv/ tree', async () => {
+  it('persists to userData only — writes nothing into a synced .dotden/ tree', async () => {
     // The store is handed the userData dir; it must write its own file there and create NO
-    // `.myenv/` directory (that boundary is the whole point of ADR 0024 — poller/autostart
+    // `.dotden/` directory (that boundary is the whole point of ADR 0024 — poller/autostart
     // are per-environment facts that must never become merge-churning synced state).
     await writeSyncSettings(dir, { pollerEnabled: false, cadence: 'relaxed', startOnLogin: true })
     const entries = await readdir(dir)
     expect(entries).toContain('sync-settings.json')
-    expect(entries).not.toContain('.myenv')
+    expect(entries).not.toContain('.dotden')
   })
 
   it('falls back to safe defaults on corrupt JSON (never fail silently)', async () => {

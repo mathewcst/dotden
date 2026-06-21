@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight, Folder, FolderPlus, Plus } from 'lucide-react'
-import type { Group, Workspace } from '../../../../main/foundation/myenv-store'
+import type { Group, Workspace } from '../../../../main/foundation/den-store'
 import type { FileTreeEntry } from '../../../../main/foundation/den-service'
 import { cn } from '@/shared/lib/utils'
 
@@ -20,7 +20,7 @@ import { cn } from '@/shared/lib/utils'
  * each; the actual File rows (with their `@pierre/trees` git-status decorations) are
  * rendered by the parent via {@link WorkspaceSidebarProps.renderFiles}, scoped to the
  * Workspace/Group whose Files belong there. The whole tree is read from / written to the
- * synced `.myenv/` over IPC by the parent — nothing here is a fixture.
+ * synced `.dotden/` over IPC by the parent — nothing here is a fixture.
  */
 export interface WorkspaceSidebarProps {
   /** Every Workspace in the Den (each carrying its nested Group tree), from `den:tree`. */

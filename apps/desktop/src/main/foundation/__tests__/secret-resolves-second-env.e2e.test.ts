@@ -149,7 +149,7 @@ describe('Secret reference resolves on a second environment (real chezmoi/git + 
     await writeFile(join(a.home, '.token'), `token = ${RAW_SECRET}\n`)
     await a.den.trackFile('.token', 'a-track')
     await a.registry.registerWithSubscription()
-    // convertSecret Commits the reference AND stages the synced `.myenv/` (registry entry written
+    // convertSecret Commits the reference AND stages the synced `.dotden/` (registry entry written
     // by registerWithSubscription above) in the same commit, so env B reconstructs the Den on clone.
     await a.den.convertSecret(
       { targetPath: '.token', manager: 'op', reference: 'op://Work/token/credential' },

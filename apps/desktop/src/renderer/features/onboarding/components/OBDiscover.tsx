@@ -19,7 +19,7 @@ function metaFor(suggestion: DiscoverySuggestion): string {
  * the found config Files for Tracking, **grouped by the tool** they belong to so the
  * suggestions read as relevant (grounded, not a blind sweep — ADR 0022). The user
  * checks the ones to manage; advancing Tracks each pick through the 1-04 path
- * (`window.dotden.den.track` → `chezmoi add` + a `.myenv/` placement), which also
+ * (`window.dotden.den.track` → `chezmoi add` + a `.dotden/` placement), which also
  * seeds the **default Workspace automatically** (no organization asked up front).
  *
  * Files the scan missed are still manageable: a **drag-in / browse** affordance lets

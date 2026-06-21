@@ -5,7 +5,7 @@
  * The Sync tab controls three preferences, all of which are **environment-local facts**
  * (paths/runtime/per-machine behavior), NOT user-authored organization — so by ADR 0024's
  * synced-vs-local split they live in Electron `userData` and **never** enter the synced
- * `.myenv/` directory:
+ * `.dotden/` directory:
  *
  * - **`pollerEnabled`** — whether the always-on TrayPoller watches the Remote at all. Each
  *   environment decides whether it wants the background watcher running (a shared/locked-down

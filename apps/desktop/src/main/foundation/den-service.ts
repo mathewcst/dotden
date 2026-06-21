@@ -31,12 +31,12 @@ import {
 } from './commit-message-renderer.js'
 import {
   DEFAULT_WORKSPACE_ID,
-  MyenvStore,
+  DenStore,
   type EnvironmentEntry,
   type Group,
   type Workspace,
   type WorkspacesDoc,
-} from './myenv-store.js'
+} from './den-store.js'
 import type { OperationTracer } from './operation-tracer.js'
 import { SyncEngine, type AutoApplyHoldReason, type IncomingFile } from './sync-engine.js'
 import type { ApplyChangeKind } from './apply-planner.js'
@@ -85,7 +85,7 @@ export interface DenServiceOptions {
   readonly chezmoiBin: string
   /** Path to the bundled git binary. */
   readonly gitBin: string
-  /** chezmoi source dir = the git-tracked Den repo, holding `.myenv/` + source state. */
+  /** chezmoi source dir = the git-tracked Den repo, holding `.dotden/` + source state. */
   readonly sourceDir: string
   /** Destination/home dir where applied Files land (`~/.zshrc`, …). */
   readonly destinationDir: string
@@ -96,7 +96,7 @@ export interface DenServiceOptions {
    * during Apply. Omitted in tests that do not exercise subscription templates.
    */
   readonly configPath?: string
-  /** This environment's identity, label and OS (its subscriptions live in `.myenv/`). */
+  /** This environment's identity, label and OS (its subscriptions live in `.dotden/`). */
   readonly environment: Pick<EnvironmentEntry, 'id' | 'label' | 'os'>
   /** Shared tracer so each Operation emits one wide event (ADR 0007); optional in tests. */
   readonly tracer?: OperationTracer
@@ -197,7 +197,7 @@ export interface CommitResult {
   readonly queued: boolean
   /**
    * `true` when the Commit was a **legitimate no-op**: staging the chosen Files plus the
-   * `.myenv/` metadata left the index byte-for-byte equal to HEAD, so there was nothing to
+   * `.dotden/` metadata left the index byte-for-byte equal to HEAD, so there was nothing to
    * record (e.g. the Files were already Committed and the tree status was stale). A plain
    * `git commit` exits non-zero ("nothing to commit") here; we treat it as a clean no-op
    * instead of a failure (mirrors {@link GitTransport.commitIfChanged} — never fail loudly
@@ -301,7 +301,7 @@ export interface CommitTemplateState {
  * - **`effective`** — what this environment actually renders/uses: the synced defaults overlaid by
  *   this environment's local override ({@link resolveAppearanceSettings} — local field beats synced).
  *   This is what the tab binds its controls to.
- * - **`synced`** — the shared defaults from `.myenv/` (what a fresh environment inherits, what
+ * - **`synced`** — the shared defaults from `.dotden/` (what a fresh environment inherits, what
  *   editing "for everyone" changes). Carried so the tab can show "synced default: X" next to a
  *   pinned field and offer "reset to the synced default".
  * - **`override`** — this environment's sparse LOCAL override (only the fields it pinned). Carried so
@@ -312,7 +312,7 @@ export interface CommitTemplateState {
 export interface AppearanceState {
   /** The resolved settings this environment renders (synced overlaid by the local override). */
   readonly effective: AppearanceSettings
-  /** The shared synced defaults from `.myenv/` (what a fresh environment inherits). */
+  /** The shared synced defaults from `.dotden/` (what a fresh environment inherits). */
   readonly synced: AppearanceSettings
   /** This environment's sparse local override (only the fields pinned here; `{}` = follow synced). */
   readonly override: AppearanceOverride
@@ -335,7 +335,7 @@ export type RemoteAxisMarker = 'incoming' | 'conflict'
 export interface IncomingReviewItem {
   /** Destination-relative File path arriving from the Remote (e.g. `.zshrc`). */
   readonly targetPath: string
-  /** Workspace the File belongs to, from the synced `.myenv/` placements. */
+  /** Workspace the File belongs to, from the synced `.dotden/` placements. */
   readonly workspaceId: string
   /**
    * The Remote-axis marker for this File (issue 1-09). The incoming-clean path always
@@ -600,7 +600,7 @@ export interface SubscriptionState {
 export interface ConflictReviewItem {
   /** Destination-relative File path in Conflict (e.g. `.zshrc`). */
   readonly targetPath: string
-  /** Workspace the File belongs to, from the synced `.myenv/` placements. */
+  /** Workspace the File belongs to, from the synced `.dotden/` placements. */
   readonly workspaceId: string
   /** **Keep mine** bytes — what this environment Committed (git ours/HEAD). */
   readonly current: string
@@ -635,7 +635,7 @@ export interface ConflictReview {
 export interface FileTreeEntry {
   /** Destination-relative File path (e.g. `.zshrc`) — the `@pierre/trees` row id. */
   readonly targetPath: string
-  /** The Workspace this File belongs to, from the synced `.myenv/` placements. */
+  /** The Workspace this File belongs to, from the synced `.dotden/` placements. */
   readonly workspaceId: string
   /**
    * The Group within {@link FileTreeEntry.workspaceId} this File is filed under, or
@@ -685,14 +685,14 @@ export interface FileTreeView {
  *
  * One instance is bound to a single environment's source/destination dirs. It holds
  * a {@link ChezmoiAdapter}, a {@link GitTransport} (over the same source dir), and a
- * {@link MyenvStore} for the synced metadata. Pure owners ({@link SyncEngine},
+ * {@link DenStore} for the synced metadata. Pure owners ({@link SyncEngine},
  * {@link renderCommitMessage}) are constructed per call from the current synced
- * model so they always see the latest `.myenv/`.
+ * model so they always see the latest `.dotden/`.
  */
 export class DenService {
   private readonly chezmoi: ChezmoiAdapter
   private readonly git: GitTransport
-  private readonly store: MyenvStore
+  private readonly store: DenStore
   private readonly tracer?: OperationTracer
   /**
    * The automation-ladder gate for THIS environment (ADR 0008, issue 1-12). DenService
@@ -719,12 +719,12 @@ export class DenService {
       configPath: options.configPath,
     })
     this.git = new GitTransport({ gitBin: options.gitBin, repoDir: options.sourceDir })
-    this.store = new MyenvStore(options.sourceDir)
+    this.store = new DenStore(options.sourceDir)
     this.tracer = options.tracer
     this.automation = new AutomationPolicy(options.automationLevel ?? DEFAULT_AUTOMATION_LEVEL)
     // The outbox is environment-local connectivity state, so it must NOT live inside the
     // synced source/git tree. Default it to a sibling of the source dir (still per-Den, but
-    // outside version control + outside `.myenv/`) when the caller does not pass an explicit
+    // outside version control + outside `.dotden/`) when the caller does not pass an explicit
     // userData path. The PushQueue creates the file/dir on first write.
     this.pushQueue = new PushQueue(
       options.pushOutboxPath ?? resolve(options.sourceDir, '..', '.dotden-push-outbox.json'),
@@ -765,7 +765,7 @@ export class DenService {
 
   /**
    * First-run seeding: register this environment and the default Workspace in the
-   * synced `.myenv/` registry, so a second environment can later reconstruct the Den
+   * synced `.dotden/` registry, so a second environment can later reconstruct the Den
    * (ADR 0024). Idempotent.
    *
    * @param traceId Correlation id for the onboarding wide event.
@@ -786,7 +786,7 @@ export class DenService {
    * **Track** a File: start managing it and record its Workspace placement.
    *
    * Maps to `chezmoi add <file>` (the Track verb, CONTEXT.md) plus a synced
-   * placement in `.myenv/` so a second environment knows the File exists and which
+   * placement in `.dotden/` so a second environment knows the File exists and which
    * Workspace owns it. The placement is what makes the File show up as incoming on
    * env B after a Sync.
    *
@@ -797,7 +797,7 @@ export class DenService {
     const span = this.tracer?.startOperation('track', traceId)
     try {
       // Ensure the default Workspace + this environment's registry entry + the
-      // `.chezmoiignore` rule for `.myenv/` exist before placing a File — Track is
+      // `.chezmoiignore` rule for `.dotden/` exist before placing a File — Track is
       // env A's first action, so it doubles as first-run seeding (idempotent).
       await this.store.seedDefault(this.options.environment)
       await this.chezmoi.track(targetPath)
@@ -805,7 +805,7 @@ export class DenService {
       // Keep the generated `.chezmoiignore` in lock-step with the new placement so the
       // committed file is always the live templated ignore (issue 1-13): when a `configPath`
       // is present it carries the subscription template that a second environment relies on,
-      // so it must TRAVEL with the Commit (not the stale `.myenv/`-only file `seedDefault`
+      // so it must TRAVEL with the Commit (not the stale `.dotden/`-only file `seedDefault`
       // wrote). No-op net change for a subscribe-all single-Workspace Den.
       await this.regenerateOsScopeIgnore()
       span?.setAttribute('fileCount', 1)
@@ -825,7 +825,7 @@ export class DenService {
    * commit) this does NOT push: {@link CommitResult.pushed} is `false`, and the UI
    * tells the user the Commit is local until they Sync now.
    *
-   * The `.myenv/` metadata (placements/registry) is committed alongside the Files so
+   * The `.dotden/` metadata (placements/registry) is committed alongside the Files so
    * the synced model travels with the Commit.
    *
    * @param targetPaths The Files to record (must already be Tracked or new on disk).
@@ -851,7 +851,7 @@ export class DenService {
         template,
       )
       // chezmoi.commit re-adds/adds the chosen Files then commits exactly their
-      // source-state paths; we stage the `.myenv/` metadata in the same commit so
+      // source-state paths; we stage the `.dotden/` metadata in the same commit so
       // the synced Workspace tree + registry travel with the recorded Files.
       // `recorded` stays true unless the staged tree matched HEAD — a legitimate no-op
       // (the Files were already Committed; the renderer's tree status was stale). We use
@@ -861,11 +861,11 @@ export class DenService {
       await this.chezmoi.commit(targetPaths, rendered.message, {
         commit: async (sourcePaths, message) => {
           // Stage the chosen Files' source paths PLUS the synced metadata
-          // (`.myenv/` registry+placements and the `.chezmoiignore` that keeps
-          // `.myenv/` out of chezmoi's managed set) so the model travels with the
+          // (`.dotden/` registry+placements and the `.chezmoiignore` that keeps
+          // `.dotden/` out of chezmoi's managed set) so the model travels with the
           // Commit and a second environment can reconstruct the Den.
           recorded = await this.git.commitIfChanged(
-            [...sourcePaths, '.myenv', '.chezmoiignore'],
+            [...sourcePaths, '.dotden', '.chezmoiignore'],
             message,
           )
         },
@@ -951,7 +951,7 @@ export class DenService {
    *
    * **The synced allowlist filter (issue 2-04).** A finding the user previously dismissed via
    * "Don't warn me about this File again" is filtered OUT here, so an already-judged-safe File
-   * stops nagging on subsequent Commits — and because the allowlist syncs through `.myenv/`
+   * stops nagging on subsequent Commits — and because the allowlist syncs through `.dotden/`
    * (ADR 0024), a File allowlisted on one environment is not re-warned on another. The filter is
    * scoped **per File + the specific match** ({@link partitionFindings}), so a NEW/different
    * secret in the same File still warns — the allowlist never silently re-enables a real leak.
@@ -1012,8 +1012,8 @@ export class DenService {
    * **Allowlist a flagged secret** — the persistence half of the "Don't warn me about this File
    * again" checkbox the user ticks under Commit-anyway (issue 2-04, story 16).
    *
-   * Records the dismissed finding into the SYNCED `.myenv/secret-allowlist.json` so the warn
-   * step stops opening for THIS specific match on every future Commit — and, because `.myenv/`
+   * Records the dismissed finding into the SYNCED `.dotden/secret-allowlist.json` so the warn
+   * step stops opening for THIS specific match on every future Commit — and, because `.dotden/`
    * syncs (ADR 0024), on every environment. The decision is scoped **per File + match**
    * ({@link import('./secret-allowlist.js').addAllowlistEntry}), never a blanket per-File mute,
    * so a different/new secret in the same File still warns (a real leak is never silently
@@ -1021,7 +1021,7 @@ export class DenService {
    *
    * The renderer calls this BEFORE {@link commitTracked} when the user ticks the box, so the
    * allowlist edit is staged into the SAME Commit that records the Files (DenService stages
-   * `.myenv/` alongside every Commit) — the decision then travels with the next Sync. Recording
+   * `.dotden/` alongside every Commit) — the decision then travels with the next Sync. Recording
    * the allowlist NEVER prevents the Commit (warn-not-block, ADR 0001).
    *
    * @param finding The flagged finding the user judged safe (the scanner's shape).
@@ -1076,7 +1076,7 @@ export class DenService {
   /**
    * **Persist the Commit tab's template** (issue 2-09) — the editor's save and "Reset to default".
    *
-   * Writes `.myenv/commit-template.json` then commits the `.myenv/` change LOCALLY (ADR 0006) so it
+   * Writes `.dotden/commit-template.json` then commits the `.dotden/` change LOCALLY (ADR 0006) so it
    * travels to every environment on the next Sync (it is a synced default — user-authored
    * presentation, ADR 0024). Idempotent: re-saving the same template records nothing (no git churn).
    * An empty template falls back to the built-in default rather than persisting a blank message
@@ -1091,7 +1091,7 @@ export class DenService {
     try {
       const next = template.length > 0 ? template : DEFAULT_COMMIT_MESSAGE_TEMPLATE
       await this.store.writeCommitTemplate(next)
-      // `.myenv/`-only edit → commit just that (no-op when unchanged), exactly like the other
+      // `.dotden/`-only edit → commit just that (no-op when unchanged), exactly like the other
       // synced-metadata writes; the next Sync carries the new default to other environments.
       await this.commitMetadata('Update commit-message template')
       span?.end('ok')
@@ -1105,7 +1105,7 @@ export class DenService {
   // ── Appearance: synced defaults overlaid by a per-environment local override (issues 2-10 + 2-17) ──
   // The Settings → Appearance tab's three settings — app theme · preferred default Apply behaviour ·
   // which cross-environment events notify — follow ADR 0024's synced-vs-local split: each value SYNCS
-  // through `.myenv/` as a SHARED DEFAULT (issue 2-10), and an environment MAY OVERRIDE it LOCALLY
+  // through `.dotden/` as a SHARED DEFAULT (issue 2-10), and an environment MAY OVERRIDE it LOCALLY
   // (issue 2-17) in `userData` without changing it everywhere. The effective value an environment
   // renders is the synced default overlaid by its local override (local field beats synced —
   // `resolveAppearanceSettings`). None of these gates an invariant: the AutomationPolicy/ApplyPlanner
@@ -1115,7 +1115,7 @@ export class DenService {
    * Read this environment's LOCAL appearance override (issue 2-17, ADR 0024).
    *
    * The override is **environment-local** — it lives in Electron `userData`, never the synced
-   * `.myenv/`. When the service was constructed without a `userDataDir` (tests/contexts that don't
+   * `.dotden/`. When the service was constructed without a `userDataDir` (tests/contexts that don't
    * exercise the per-environment override), there is no override store to read, so the environment
    * simply follows the synced defaults (the EMPTY override) — never an error.
    *
@@ -1170,7 +1170,7 @@ export class DenService {
    * **Persist the SYNCED appearance defaults** (issue 2-10) — the theme picker + default-Apply +
    * notification toggles, edited "for every environment".
    *
-   * Writes `.myenv/appearance-settings.json` then commits the `.myenv/` change LOCALLY (ADR 0006) so
+   * Writes `.dotden/appearance-settings.json` then commits the `.dotden/` change LOCALLY (ADR 0006) so
    * it travels to every environment on the next Sync (a synced default, ADR 0024). Idempotent. This
    * changes the SHARED default; it does NOT touch this environment's local override — so a field this
    * environment has pinned locally still resolves to the pin (local beats synced). The returned state
@@ -1187,7 +1187,7 @@ export class DenService {
     const span = this.tracer?.startOperation('commit', traceId)
     try {
       await this.store.writeAppearanceSettings(settings)
-      // `.myenv/`-only edit → commit just that (no-op when unchanged), like the other synced
+      // `.dotden/`-only edit → commit just that (no-op when unchanged), like the other synced
       // metadata writes; the next Sync carries the new defaults to other environments.
       await this.commitMetadata('Update appearance + default Apply/notification preferences')
       span?.end('ok')
@@ -1202,7 +1202,7 @@ export class DenService {
    * **Persist this environment's LOCAL appearance override** (issue 2-17, ADR 0024) — the per-field
    * pins that SHADOW the synced defaults on THIS environment only.
    *
-   * Writes the sparse override to Electron `userData` (NEVER the synced `.myenv/`), so it never
+   * Writes the sparse override to Electron `userData` (NEVER the synced `.dotden/`), so it never
    * mutates the synced value other environments read — the load-bearing guarantee: an override
    * shadows a default without changing it everywhere. Writing the EMPTY override clears all local
    * pins (this environment follows the synced defaults again). No git Commit, no Sync — a local
@@ -1226,7 +1226,7 @@ export class DenService {
         )
       }
       await writeAppearanceOverride(this.options.userDataDir, override)
-      // Environment-local only — NO `.myenv/` write, NO Commit, NO Sync: a local override never travels.
+      // Environment-local only — NO `.dotden/` write, NO Commit, NO Sync: a local override never travels.
       span?.end('ok')
       return this.appearanceState(traceId)
     } catch (error) {
@@ -1241,7 +1241,7 @@ export class DenService {
    * (acceptance criteria 2–4): dotden bundles chezmoi but not the password manager, so it detects +
    * guides. 1Password is offered as a ready (default-selected) option automatically when `op` is
    * detected (acceptance criterion 3). Detected-CLI presence is **environment-local, never synced**
-   * (acceptance criterion 10) — it is computed live each time and never written to `.myenv/`.
+   * (acceptance criterion 10) — it is computed live each time and never written to `.dotden/`.
    *
    * Read-only feature-detection (a `which`/`where` lookup per CLI, no shell, no vault unlock): it
    * never executes the manager itself, so it can't trigger a credential prompt. The probe is
@@ -1287,7 +1287,7 @@ export class DenService {
    * entry ({@link ChezmoiAdapter.convertToSecretReference}) — the raw secret is never written, only
    * the reference; (2) optionally remember the chosen manager as this environment's default
    * (environment-local, never synced); (3) Commit the converted File so ONLY the reference enters
-   * the Den ({@link commitTracked} stages exactly the File's source path + `.myenv/`). The committed
+   * the Den ({@link commitTracked} stages exactly the File's source path + `.dotden/`). The committed
    * source therefore contains the template call, never the value — verified at the ChezmoiAdapter
    * seam by scanning the written bytes (the issue's acceptance criterion). At Apply time chezmoi
    * re-fetches the value from the user's vault so configs still work (issue 2-06).
@@ -1432,7 +1432,7 @@ export class DenService {
    * **env B** — fetch the Remote and present incoming Files for a reviewed Apply
    * (incoming-clean creates + first-class incoming deletions), ADR 0008.
    *
-   * Maps to `git fetch` + `chezmoi status` + the synced `.myenv/` placements, then routes
+   * Maps to `git fetch` + `chezmoi status` + the synced `.dotden/` placements, then routes
    * through {@link SyncEngine} → {@link ApplyPlanner}: only Files applicable to this
    * environment (an {@link import('./applicability-resolver.js').AppliesHere} witness is
    * minted for each) appear for review. Conflicting or non-subscribed Files are deferred,
@@ -2085,7 +2085,7 @@ export class DenService {
    * every environment (CONTEXT.md "Untrack"; the non-destructive removal).
    *
    * Maps to `chezmoi forget <file>` (source state entry removed, destination copy
-   * kept) plus dropping the File's synced `.myenv/` placement so a second environment
+   * kept) plus dropping the File's synced `.dotden/` placement so a second environment
    * no longer sees it as incoming. The source removal + the placement removal are
    * committed together so the Untrack travels through the Remote — otherwise the File
    * would silently reappear on the next Sync. Per ADR 0006 this Commit is LOCAL until
@@ -2105,13 +2105,13 @@ export class DenService {
       await this.chezmoi.untrack(targetPath)
       // 2) Drop the synced placement so env B stops seeing the File as incoming.
       await this.store.removePlacement(targetPath)
-      // 3) Commit the forget + the `.myenv/` placement removal together (LOCAL until
+      // 3) Commit the forget + the `.dotden/` placement removal together (LOCAL until
       //    pushed, ADR 0006) so the Untrack travels and the File does not reappear.
       //    `commitAll` (git add --all) is required, not a path-scoped commit: the forget
       //    *removed* the source-state file, and that DELETION must be staged too —
       //    otherwise the source file would still be committed in the Remote and re-appear
       //    on the next Sync. At this point the only dirty paths are exactly the forget's
-      //    deletion plus the `.myenv/` placement edit, so add --all records just those.
+      //    deletion plus the `.dotden/` placement edit, so add --all records just those.
       await this.git.commitAll(`Untrack ${targetPath}`)
       span?.setAttribute('fileCount', 1)
       span?.end('ok')
@@ -2127,7 +2127,7 @@ export class DenService {
    * always confirmed).
    *
    * Maps to `chezmoi destroy --force <file>` (source state AND destination removed)
-   * plus dropping the File's synced `.myenv/` placement, committed together so the
+   * plus dropping the File's synced `.dotden/` placement, committed together so the
    * deletion travels: when another environment next Applies, chezmoi removes the real
    * path there too. This is a DISTINCT verb from {@link untrackFile} so the destructive
    * intent is separate; the confirm names every affected environment (see
@@ -2144,13 +2144,13 @@ export class DenService {
       await this.chezmoi.deleteEverywhere(targetPath)
       // 2) Drop the synced placement so the File leaves the Den entirely.
       await this.store.removePlacement(targetPath)
-      // 3) Commit the destroy + the `.myenv/` placement removal together (LOCAL until
+      // 3) Commit the destroy + the `.dotden/` placement removal together (LOCAL until
       //    pushed, ADR 0006) so the deletion travels and reaches every environment.
       //    `commitAll` (git add --all) is required, not a path-scoped commit: the destroy
       //    *removed* the source-state file, and that DELETION must be staged so the
       //    removal is recorded — otherwise another environment would still receive (and
       //    re-apply) the File on Sync. The only dirty paths here are exactly the destroy's
-      //    deletion plus the `.myenv/` placement edit, so add --all records just those.
+      //    deletion plus the `.dotden/` placement edit, so add --all records just those.
       await this.git.commitAll(`Delete ${targetPath} everywhere`)
       span?.setAttribute('fileCount', 1)
       span?.end('ok')
@@ -2371,11 +2371,11 @@ export class DenService {
    * Faithful composition over chezmoi (ADR 0003): the File set is `chezmoi managed
    * --include files`, the local status axis is {@link parseChezmoiStatus} over
    * `chezmoi status`, the muted set is `chezmoi ignored`, and the Workspace placement
-   * comes from the synced `.myenv/`. Read-only — it mutates nothing and is therefore
+   * comes from the synced `.dotden/`. Read-only — it mutates nothing and is therefore
    * NOT a traced Operation (the IpcBridge still asserts the `_trace` envelope so the
    * call is correlated; the `traceId` is accepted to keep the IPC surface uniform).
    *
-   * Files that have never been placed (managed on disk but missing from `.myenv/`)
+   * Files that have never been placed (managed on disk but missing from `.dotden/`)
    * still appear, defaulted to the default Workspace, so a managed File never silently
    * disappears from the tree (never fail silently).
    *
@@ -2383,7 +2383,7 @@ export class DenService {
    * generated `.chezmoiignore`, and chezmoi treats an ignored File as **unmanaged here** —
    * so it drops out of `chezmoi managed`. If the tree were built from `managed` alone, a
    * scoped-out File would *vanish* rather than show **muted**. So the row set is the UNION
-   * of `chezmoi managed` (applies here) and the synced `.myenv/` placements (the Den's known
+   * of `chezmoi managed` (applies here) and the synced `.dotden/` placements (the Den's known
    * Files): a placed File missing from `managed` is exactly a scoped-out File, rendered muted
    * (it appears in `chezmoi ignored`). The muted flag stays FAITHFUL — it is membership in
    * `chezmoi ignored`, OR (for the scoped-out, hence unmanaged, File) placed-but-not-managed.
@@ -2574,12 +2574,12 @@ export class DenService {
         DEFAULT_COMMIT_TEMPLATE,
       )
       const restoreMessage = `Restore ${targetPath} to ${shortSha(sha)} (${rendered.message})`
-      // Stage the source file PLUS `.myenv`/`.chezmoiignore` for parity with commitTracked,
+      // Stage the source file PLUS `.dotden`/`.chezmoiignore` for parity with commitTracked,
       // though a restore changes only the File's bytes. commitIfChanged returns whether a
       // commit was actually recorded: restoring the Current version onto itself stages no
       // change, so it is a clean no-op (no empty commit invented) → committed=false.
       const committed = await this.git.commitIfChanged(
-        [sourcePath, '.myenv', '.chezmoiignore'],
+        [sourcePath, '.dotden', '.chezmoiignore'],
         restoreMessage,
       )
       span?.setAttribute('fileCount', 1)
@@ -2613,8 +2613,8 @@ export class DenService {
 
   // ── Workspaces + nested Groups (issue 1-14) ──
   // The user-authored organization layer chezmoi has no notion of, persisted in the
-  // synced `.myenv/` (ADR 0024, "no chezmoi equivalent"). Creating/moving here mutates
-  // ONLY `.myenv/workspaces.json`; it never touches chezmoi source state or any file on
+  // synced `.dotden/` (ADR 0024, "no chezmoi equivalent"). Creating/moving here mutates
+  // ONLY `.dotden/workspaces.json`; it never touches chezmoi source state or any file on
   // disk. So these commit the metadata edit LOCALLY (ADR 0006) — like the other verbs,
   // the change travels only on the next Sync, which is what lets a second environment
   // reconstruct the same Workspace/Group tree.
@@ -2685,7 +2685,7 @@ export class DenService {
    * **File a managed File under a Group** (or back to the Workspace root) — the
    * organize-only move (issue 1-14). This edits ONLY the placement's `groupId`; the
    * File's `workspaceId` (access) and `targetPath` (on-disk path) are left unchanged
-   * (the ADR 0005 invariant, owned and enforced in {@link MyenvStore.moveFileToGroup}).
+   * (the ADR 0005 invariant, owned and enforced in {@link DenStore.moveFileToGroup}).
    *
    * @param targetPath The managed File to re-file (must already be placed).
    * @param groupId Target Group id, or `null` to move it to the Workspace root.
@@ -2737,7 +2737,7 @@ export class DenService {
   // ── OS Scope (issue 1-15) ──
   // Scope is the OS-applicability axis (CONTEXT.md "Scope"): the OSes a File/Folder applies
   // on, inherited Workspace → Group → File and narrowable but never broadenable. The intent
-  // is user-authored, stored in `.myenv/`; the realized rules are native `.chezmoiignore`
+  // is user-authored, stored in `.dotden/`; the realized rules are native `.chezmoiignore`
   // (ADR 0024). Setting a Scope (1) clamps the request under the inherited ceiling in the
   // store (the narrowing invariant), then (2) re-compiles `.chezmoiignore` from the WHOLE
   // Den's effective Scopes so chezmoi ignores exactly the out-of-OS Files here, then (3)
@@ -2748,9 +2748,9 @@ export class DenService {
    * applied where it doesn't belong.
    *
    * Maps faithfully to per-OS `.chezmoiignore` (ADR 0003, CONTEXT.md mapping). The request is
-   * **clamped to the File's inherited Folder/Workspace Scope** by {@link MyenvStore.setFileScope}
+   * **clamped to the File's inherited Folder/Workspace Scope** by {@link DenStore.setFileScope}
    * (narrowable, never broadenable — issue 1-15), then the generated `.chezmoiignore` is
-   * re-compiled from every File's effective Scope and committed with the `.myenv/` intent. The
+   * re-compiled from every File's effective Scope and committed with the `.dotden/` intent. The
    * Commit is LOCAL until the next Sync (ADR 0006), which carries the Scope to other environments.
    *
    * @param targetPath The managed File to scope (must already be placed).
@@ -2766,7 +2766,7 @@ export class DenService {
       const effective = await this.store.setFileScope(targetPath, scope)
       // 2) Re-compile the native `.chezmoiignore` from the WHOLE Den's effective Scopes.
       await this.regenerateOsScopeIgnore()
-      // 3) Commit the intent (`.myenv/`) + the regenerated ignore LOCALLY so the Scope travels.
+      // 3) Commit the intent (`.dotden/`) + the regenerated ignore LOCALLY so the Scope travels.
       await this.commitMetadata(`Scope ${targetPath}`)
       span?.setAttribute('fileCount', 1)
       span?.end('ok')
@@ -2815,8 +2815,8 @@ export class DenService {
    * Scopes (issue 1-15) AND the per-environment Workspace subscription (issue 1-13).
    *
    * Reads every placement, folds each File's inheritance into an effective Scope
-   * ({@link MyenvStore.effectiveScopeOf}), and hands the set to one of two single-writer
-   * adapter methods so the OS-scope, subscription, and `.myenv/` concerns share ONE generated
+   * ({@link DenStore.effectiveScopeOf}), and hands the set to one of two single-writer
+   * adapter methods so the OS-scope, subscription, and `.dotden/` concerns share ONE generated
    * file (never clobber each other, never drift):
    *
    * - When this environment has a `configPath` (so `[data].dotden_env_id` is in scope —
@@ -2854,10 +2854,10 @@ export class DenService {
   }
 
   /**
-   * Commit a `.myenv/`-only metadata edit LOCALLY (ADR 0006).
+   * Commit a `.dotden/`-only metadata edit LOCALLY (ADR 0006).
    *
-   * The Workspace/Group/Scope operations touch only `.myenv/workspaces.json` and the
-   * generated `.chezmoiignore` (which keeps `.myenv/` out of chezmoi's managed set AND
+   * The Workspace/Group/Scope operations touch only `.dotden/workspaces.json` and the
+   * generated `.chezmoiignore` (which keeps `.dotden/` out of chezmoi's managed set AND
    * carries the OS-Scope rules, issue 1-15) — never chezmoi source state or any file on
    * disk. Staging just those paths keeps the commit scoped to the change. Local until the
    * next Sync, which is what carries the tree + Scope to a second environment (ADR 0024).
@@ -2869,7 +2869,7 @@ export class DenService {
     // synced model byte-for-byte unchanged (a request to broaden past a Folder is clamped to
     // the existing Scope, issue 1-15), so there may be nothing to record. A plain commit
     // would fail "nothing to commit"; the idempotent variant makes that a clean no-op.
-    await this.git.commitIfChanged(['.myenv', '.chezmoiignore'], message)
+    await this.git.commitIfChanged(['.dotden', '.chezmoiignore'], message)
   }
 
   /** Read the synced model (this environment's registry entry + the Workspace doc). */
@@ -2894,7 +2894,7 @@ export class DenService {
    * Classify incoming Files for the incoming-clean + incoming-deletion paths.
    *
    * Two signals are merged:
-   * - **incoming-clean creates** — every placed File in `.myenv/` that is NOT yet present
+   * - **incoming-clean creates** — every placed File in `.dotden/` that is NOT yet present
    *   on this environment's disk (no local copy → no Conflict). Reading placements is what
    *   lets env B discover Files it has never seen.
    * - **incoming deletions** (issue 1-10) — Files `chezmoi status` reports as

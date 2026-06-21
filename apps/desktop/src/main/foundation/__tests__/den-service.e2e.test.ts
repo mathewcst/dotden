@@ -8,7 +8,7 @@
  *   env B:  clone the Den → list incoming (incoming-clean only) → Apply → File on disk
  *
  * It also asserts the two cross-cutting properties this slice stands up: the synced
- * `.myenv/` (default Workspace + environment registry) travels through the Remote,
+ * `.dotden/` (default Workspace + environment registry) travels through the Remote,
  * and a non-applicable File is never applied on env B.
  */
 /* eslint-disable turbo/no-undeclared-env-vars -- integration test discovers local chezmoi/git binaries. */
@@ -19,7 +19,7 @@ import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { cloneRepo, GitTransport } from '../git-transport.js'
 import { DenService } from '../den-service.js'
-import { MyenvStore } from '../myenv-store.js'
+import { DenStore } from '../den-store.js'
 import { readAppearanceOverride } from '../appearance-override.js'
 import { OperationTracer } from '../operation-tracer.js'
 import { parseIncomingDeletions } from '../chezmoi-status.js'
@@ -72,8 +72,8 @@ describe('DenService end-to-end thread (real chezmoi/git)', () => {
     expect(commit.message).toBe('Commit 1 file(s) from this-mac: .zshrc')
     expect(commit.committedFiles).toEqual(['.zshrc'])
 
-    // The synced .myenv/ exists in the Den BEFORE pushing.
-    const aStore = new MyenvStore(aSource)
+    // The synced .dotden/ exists in the Den BEFORE pushing.
+    const aStore = new DenStore(aSource)
     expect((await aStore.readEnvironments()).environments.map((e) => e.id)).toEqual(['env-a'])
     expect((await aStore.readWorkspaces()).placements).toContainEqual({
       targetPath: '.zshrc',
@@ -109,7 +109,7 @@ describe('DenService end-to-end thread (real chezmoi/git)', () => {
     // The synced model travelled through the Remote: env B sees env A's registry
     // entry, the default Workspace, and the File placement — this is how a second
     // environment reconstructs the Den (ADR 0024).
-    const bStore = new MyenvStore(bSource)
+    const bStore = new DenStore(bSource)
     expect((await bStore.readEnvironments()).environments[0]?.id).toBe('env-a')
     expect((await bStore.readWorkspaces()).workspaces[0]?.id).toBe('personal')
 
@@ -601,7 +601,7 @@ describe('DenService end-to-end thread (real chezmoi/git)', () => {
     const bSource = join(root, 'b-source')
     await mkdir(bHome, { recursive: true })
     await cloneRepo(gitBin, remote, bSource)
-    const bStore = new MyenvStore(bSource)
+    const bStore = new DenStore(bSource)
     // Register env B subscribed to a different Workspace than the File's ('personal').
     await bStore.registerEnvironment({
       id: 'env-b',
@@ -648,11 +648,11 @@ describe('DenService Untrack / Delete everywhere verbs (issue 1-08)', () => {
       tracer,
     })
 
-    // Track + Commit a File so it is managed and placed in the synced `.myenv/`.
+    // Track + Commit a File so it is managed and placed in the synced `.dotden/`.
     await writeFile(join(home, '.zshrc'), 'keep me on disk\n')
     await env.trackFile('.zshrc', 'trace-track')
     await env.commitTracked(['.zshrc'], 'trace-commit')
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     expect((await store.readWorkspaces()).placements).toContainEqual({
       targetPath: '.zshrc',
       workspaceId: 'personal',
@@ -701,8 +701,8 @@ describe('DenService Untrack / Delete everywhere verbs (issue 1-08)', () => {
     // destroy removes BOTH the source-state entry and the destination copy here…
     expect(existsSync(join(source, 'dot_zshrc'))).toBe(false)
     expect(existsSync(join(home, '.zshrc'))).toBe(false)
-    // …and the File leaves the synced `.myenv/` entirely so the deletion travels.
-    expect((await new MyenvStore(source).readWorkspaces()).placements).toEqual([])
+    // …and the File leaves the synced `.dotden/` entirely so the deletion travels.
+    expect((await new DenStore(source).readWorkspaces()).placements).toEqual([])
     // It is a recorded Operation, committed LOCALLY (clean source tree after).
     expect(tracer.events().map((e) => e.kind)).toContain('delete-everywhere')
     await expect(new GitTransport({ gitBin, repoDir: source }).status()).resolves.toBe('')
@@ -738,7 +738,7 @@ describe('DenService Untrack / Delete everywhere verbs (issue 1-08)', () => {
     // env B clones the Den AFTER the deletion travelled — it must not see the File at all.
     const bSource = join(root, 'b-source')
     await cloneRepo(gitBin, remote, bSource)
-    const bStore = new MyenvStore(bSource)
+    const bStore = new DenStore(bSource)
     // The placement is gone from the synced model…
     expect((await bStore.readWorkspaces()).placements).toEqual([])
     // …and the source-state file itself is absent from the cloned Den (the deletion
@@ -767,7 +767,7 @@ describe('DenService Untrack / Delete everywhere verbs (issue 1-08)', () => {
     // subscribers are in the destructive verb's blast radius (their access boundary).
     await writeFile(join(home, '.zshrc'), 'shared bytes\n')
     await env.trackFile('.zshrc', 'trace-track')
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.registerEnvironment({
       id: 'env-b',
       label: 'work-laptop',
@@ -796,7 +796,7 @@ describe('DenService Untrack / Delete everywhere verbs (issue 1-08)', () => {
 
 // Workspaces (access boundary) + nested Groups (organization), issue 1-14. Proves the
 // user-authored organization layer is real end to end: a created Workspace/Group is
-// persisted in the synced `.myenv/`, travels through the Remote to a second
+// persisted in the synced `.dotden/`, travels through the Remote to a second
 // environment, and — the load-bearing invariant — filing a File into a Group changes
 // NEITHER its access (Workspace) NOR its on-disk path.
 describe('DenService Workspaces + nested Groups (issue 1-14)', () => {
@@ -821,7 +821,7 @@ describe('DenService Workspaces + nested Groups (issue 1-14)', () => {
     await envA.trackFile('.zshrc', 'trace-track')
 
     // Capture the File's on-disk path + access BEFORE any organization.
-    const store = new MyenvStore(aSource)
+    const store = new DenStore(aSource)
     const before = (await store.readWorkspaces()).placements.find((p) => p.targetPath === '.zshrc')!
     expect(before).toMatchObject({ workspaceId: 'personal', groupId: null })
 
@@ -849,10 +849,10 @@ describe('DenService Workspaces + nested Groups (issue 1-14)', () => {
     await envA.commitTracked(['.zshrc'], 'trace-commit')
     await envA.syncPush('trace-push')
 
-    // ── env B clones and reconstructs the SAME Workspace/Group tree from `.myenv/`. ──
+    // ── env B clones and reconstructs the SAME Workspace/Group tree from `.dotden/`. ──
     const bSource = join(root, 'b-source')
     await cloneRepo(gitBin, remote, bSource)
-    const bDoc = await new MyenvStore(bSource).readWorkspaces()
+    const bDoc = await new DenStore(bSource).readWorkspaces()
 
     // Both Workspaces travelled…
     expect(bDoc.workspaces.map((w) => w.label).sort()).toEqual(['Personal', 'Work'])
@@ -932,7 +932,7 @@ describe('DenService Review & Apply surface (issue 1-09)', () => {
     const bSource = join(root, 'b-source')
     await mkdir(bHome, { recursive: true })
     await cloneRepo(gitBin, remote, bSource)
-    await new MyenvStore(bSource).registerEnvironment({
+    await new DenStore(bSource).registerEnvironment({
       id: 'env-b',
       label: 'work-laptop',
       os: process.platform,
@@ -1026,8 +1026,8 @@ describe('DenService Review & Apply surface (issue 1-09)', () => {
     // Save a custom template; the returned state reflects the new source of truth.
     const saved = await envA.setCommitTemplate('$environment synced $date', 'trace-ct-set')
     expect(saved.template).toBe('$environment synced $date')
-    // It persisted to the synced `.myenv/` metadata…
-    expect(await new MyenvStore(aSource).readCommitTemplate()).toBe('$environment synced $date')
+    // It persisted to the synced `.dotden/` metadata…
+    expect(await new DenStore(aSource).readCommitTemplate()).toBe('$environment synced $date')
 
     // Push the Commit that recorded the template change.
     await envA.syncPush('trace-ct-push')
@@ -1090,8 +1090,8 @@ describe('DenService appearance + Apply/notification preferences (issue 2-10, re
     expect(saved.synced).toEqual(next)
     expect(saved.effective).toEqual(next)
     expect(saved.override).toEqual({})
-    // It persisted to the synced `.myenv/` metadata…
-    expect(await new MyenvStore(aSource).readAppearanceSettings()).toEqual(next)
+    // It persisted to the synced `.dotden/` metadata…
+    expect(await new DenStore(aSource).readAppearanceSettings()).toEqual(next)
 
     // Push the Commit that recorded the appearance change.
     await envA.syncPush('trace-ap-push')
@@ -1144,11 +1144,11 @@ describe('DenService appearance + Apply/notification preferences (issue 2-10, re
     expect(stateAfterPin.synced).toEqual(syncedDefault)
     expect(stateAfterPin.override).toEqual({ theme: 'blue' })
 
-    // The synced `.myenv/` value is UNCHANGED — the override only shadowed it, never mutated it.
-    expect(await new MyenvStore(aSource).readAppearanceSettings()).toEqual(syncedDefault)
+    // The synced `.dotden/` value is UNCHANGED — the override only shadowed it, never mutated it.
+    expect(await new DenStore(aSource).readAppearanceSettings()).toEqual(syncedDefault)
     // The override lives ONLY in env A's local userData (never the synced source tree).
     expect(await readAppearanceOverride(aUserData)).toEqual({ theme: 'blue' })
-    expect(existsSync(join(aSource, '.myenv', 'appearance-override.json'))).toBe(false)
+    expect(existsSync(join(aSource, '.dotden', 'appearance-override.json'))).toBe(false)
 
     // ── env B clones: it inherits the SYNCED default, NOT env A's local override (it never travels) ──
     const bSource = join(root, 'b-source')
@@ -1586,10 +1586,10 @@ describe('DenService OS Scope + inheritance (issue 1-15, real chezmoi/git)', () 
     expect(scopedOut?.scope).toEqual([otherOs])
     expect(view.files.find((f) => f.targetPath === '.zshrc')?.muted).toBe(false)
 
-    // The generated `.chezmoiignore` lists the out-of-OS File AND still keeps `.myenv/` out.
+    // The generated `.chezmoiignore` lists the out-of-OS File AND still keeps `.dotden/` out.
     const ignore = await readFile(join(source, '.chezmoiignore'), 'utf8')
     expect(ignore).toContain('.other-os-file')
-    expect(ignore).toContain('.myenv/')
+    expect(ignore).toContain('.dotden/')
   })
 
   it('the OS Scope intent travels through Sync to a second environment', async () => {
@@ -1617,11 +1617,11 @@ describe('DenService OS Scope + inheritance (issue 1-15, real chezmoi/git)', () 
     await envA.setFileScope('.scoped-file', [otherOs], 'trace-scope')
     await envA.syncPush('trace-push')
 
-    // env B clones the Den — the Scope INTENT travelled in `.myenv/`, so env B reads the
+    // env B clones the Den — the Scope INTENT travelled in `.dotden/`, so env B reads the
     // same effective Scope (the Scope is synced user-authored data, ADR 0024).
     const bSource = join(root, 'b-source')
     await cloneRepo(gitBin, remote, bSource)
-    const bDoc = await new MyenvStore(bSource).readWorkspaces()
+    const bDoc = await new DenStore(bSource).readWorkspaces()
     const placement = bDoc.placements.find((p) => p.targetPath === '.scoped-file')
     expect(placement?.scope).toEqual([otherOs])
   })
@@ -1772,12 +1772,12 @@ describe('DenService commit-anyway + synced "don\'t warn" allowlist (issue 2-04)
     // The user picks "Commit anyway" + "Don't warn me about this File again": allowlist it.
     const allowlist = await env.allowlistSecret(first[0]!, 'trace-allow')
     expect(allowlist.entries).toHaveLength(1)
-    // The synced allowlist landed in `.myenv/` — never the raw secret, only the masked preview.
-    const raw = await readFile(join(source, '.myenv', 'secret-allowlist.json'), 'utf8')
+    // The synced allowlist landed in `.dotden/` — never the raw secret, only the masked preview.
+    const raw = await readFile(join(source, '.dotden', 'secret-allowlist.json'), 'utf8')
     expect(raw).not.toContain('AKIAJQ4R7TZP2WBN5KCD')
     expect(JSON.parse(raw).entries[0].file).toBe('.aws/credentials')
 
-    // Commit it (the allowlist edit + the File travel in the same Commit — `.myenv/` is staged).
+    // Commit it (the allowlist edit + the File travel in the same Commit — `.dotden/` is staged).
     await env.commitTracked(['.aws/credentials'], 'trace-commit-1')
 
     // A LATER scan of the SAME File + SAME key no longer warns (acceptance criterion 3).
@@ -1844,8 +1844,8 @@ describe('DenService commit-anyway + synced "don\'t warn" allowlist (issue 2-04)
     })
 
     // The synced allowlist travelled through the Remote (acceptance criterion 4): env B reads
-    // env A's "don't warn" decision out of `.myenv/`.
-    const bStore = new MyenvStore(bSource)
+    // env A's "don't warn" decision out of `.dotden/`.
+    const bStore = new DenStore(bSource)
     expect((await bStore.readSecretAllowlist()).entries).toHaveLength(1)
 
     // On env B the user edits the SAME File with the SAME (already-allowlisted) value, then a

@@ -38,9 +38,9 @@ describe('computeLaunchState (ADR 0026 launch gate)', () => {
   }
   /** Write the synced registry with the given environment ids. */
   async function seedRegistry(ids: readonly string[]): Promise<void> {
-    await mkdir(join(sourceDir, '.myenv'), { recursive: true })
+    await mkdir(join(sourceDir, '.dotden'), { recursive: true })
     await writeFile(
-      join(sourceDir, '.myenv', 'environments.json'),
+      join(sourceDir, '.dotden', 'environments.json'),
       JSON.stringify({
         environments: ids.map((id) => ({
           id,

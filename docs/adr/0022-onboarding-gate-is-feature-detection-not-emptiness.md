@@ -4,9 +4,9 @@
 
 **Decision:** When the user connects a Remote, dotden decides what to do by **detecting which chezmoi features the repo uses**, not by checking whether it is empty. After preflight, a repo falls into one of four buckets:
 
-- **A — empty** (`git ls-remote` returns no refs): greenfield init, write the `.myenv/` marker.
-- **B — dotden-managed** (clone shows `.myenv/`): second/returning environment, normal multi-env flow.
-- **C1 — non-empty, no `.myenv/`, only benign files** (plain `dot_*`, `README`, `LICENSE`, `.gitignore`): **the user picks which existing files to track** (lightweight adopt).
+- **A — empty** (`git ls-remote` returns no refs): greenfield init, write the `.dotden/` marker.
+- **B — dotden-managed** (clone shows `.dotden/`): second/returning environment, normal multi-env flow.
+- **C1 — non-empty, no `.dotden/`, only benign files** (plain `dot_*`, `README`, `LICENSE`, `.gitignore`): **the user picks which existing files to track** (lightweight adopt).
 - **C2 — non-empty with foreign chezmoi features dotden doesn't expose** (`run_*` scripts, logic templates, `encrypted_*`, `.chezmoiexternal`, complex `.chezmoiignore`): **hard-refuse** with a specific reason — "this repo uses chezmoi features dotden doesn't manage yet; full adoption is v2 — connect an empty repo or use the chezmoi CLI for now."
 
 **v1 proper ships only A + B.** The C1/C2 classifier is **v1.1**: it has no UI designs yet, and during v1 the sole user/designer simply connects empty repos.
@@ -19,7 +19,7 @@
 
 - v1.1 onboarding gains a post-clone scan for the unsupported-construct set above; C2 detection must be conservative (refuse on any unrecognized feature) so nothing dangerous slips through as C1.
 - C1 adopt is **opt-in per file**, not auto-track-everything — dotden must not silently start managing a stray `README` as a dotfile.
-- The `.myenv/` marker is load-bearing for bucket B; greenfield init (bucket A) must write it.
+- The `.dotden/` marker is load-bearing for bucket B; greenfield init (bucket A) must write it.
 
 **Rejected alternatives:**
 

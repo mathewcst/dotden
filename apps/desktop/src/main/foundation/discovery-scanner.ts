@@ -17,7 +17,7 @@
  * `node:fs/promises`, so the whole scan is testable in plain Node against a temp
  * home dir. It performs **no chezmoi/git work** — it only *finds candidate Files*;
  * Tracking the picks is the existing 1-04 {@link import('./den-service.js').DenService.trackFile}
- * path (`chezmoi add` + a `.myenv/` placement), which onboarding calls per pick.
+ * path (`chezmoi add` + a `.dotden/` placement), which onboarding calls per pick.
  */
 import { stat } from 'node:fs/promises'
 import { isAbsolute, resolve } from 'node:path'
@@ -120,7 +120,7 @@ export interface DiscoveryScanResult {
  * The scanner is intentionally **read-only and side-effect-free**: it never runs
  * chezmoi/git and never writes anything. It answers exactly one question — "which
  * catalog-known config paths exist here?" — so the rest of onboarding (Track via the
- * 1-04 path, default Workspace via {@link import('./myenv-store.js').MyenvStore.seedDefault})
+ * 1-04 path, default Workspace via {@link import('./den-store.js').DenStore.seedDefault})
  * stays in its own owner.
  */
 export class DiscoveryScanner {

@@ -30,7 +30,7 @@ import {
 import { ApplicabilityResolver, isAppliesHere } from './applicability-resolver.js'
 import type { AutomationPolicy } from './automation-policy.js'
 import { isResolvedConflict, type ResolvedConflict } from './conflict-model.js'
-import type { EnvironmentEntry, WorkspacesDoc } from './myenv-store.js'
+import type { EnvironmentEntry, WorkspacesDoc } from './den-store.js'
 import type { OperationTracer } from './operation-tracer.js'
 
 /**
@@ -160,9 +160,9 @@ export interface YoloPreMergeRouting {
 
 /** Construction dependencies for {@link SyncEngine}. */
 export interface SyncEngineOptions {
-  /** This environment's registry entry (its subscriptions), from `.myenv/`. */
+  /** This environment's registry entry (its subscriptions), from `.dotden/`. */
   readonly environment: EnvironmentEntry
-  /** The synced Workspace tree + File placements, from `.myenv/`. */
+  /** The synced Workspace tree + File placements, from `.dotden/`. */
   readonly workspaces: WorkspacesDoc
   /** Tracer used to emit one wide event per routed Sync (ADR 0007); optional. */
   readonly tracer?: OperationTracer

@@ -7,17 +7,17 @@
 import { describe, expect, it } from 'vitest'
 import {
   IGNORE_EVERYTHING_RULE,
-  MYENV_IGNORE_RULE,
+  DEN_IGNORE_RULE,
   renderSubscriptionIgnore,
 } from '../subscription-ignore.js'
 
 describe('renderSubscriptionIgnore', () => {
-  it('always emits the `.myenv/` rule first so dotden metadata is never applied (ADR 0024)', () => {
+  it('always emits the `.dotden/` rule first so dotden metadata is never applied (ADR 0024)', () => {
     const out = renderSubscriptionIgnore({ osScopedOutPaths: [] })
     const firstRule = out
       .split('\n')
       .find((line) => line.length > 0 && !line.startsWith('#') && !line.startsWith('{{'))
-    expect(firstRule).toBe(MYENV_IGNORE_RULE)
+    expect(firstRule).toBe(DEN_IGNORE_RULE)
   })
 
   it('folds the per-OS scoped-out paths in as static lines (issue 1-15 + 1-13 share one file)', () => {
@@ -34,8 +34,8 @@ describe('renderSubscriptionIgnore', () => {
     const out = renderSubscriptionIgnore({ osScopedOutPaths: [] })
     expect(out).toContain('.dotden_env_id')
     // Reads BOTH synced docs through chezmoi include+fromJson (the spike-proven functions).
-    expect(out).toContain('include ".myenv/environments.json"')
-    expect(out).toContain('include ".myenv/workspaces.json"')
+    expect(out).toContain('include ".dotden/environments.json"')
+    expect(out).toContain('include ".dotden/workspaces.json"')
     expect(out).toContain('fromJson')
   })
 

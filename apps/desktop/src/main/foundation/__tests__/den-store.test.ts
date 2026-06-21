@@ -1,32 +1,32 @@
 /**
- * MyenvStore unit tests — the synced `.myenv/` metadata seam (ADR 0024).
+ * DenStore unit tests — the synced `.dotden/` metadata seam (ADR 0024).
  *
  * Asserts the store seeds a default Workspace + this environment's registry entry,
  * records File placements idempotently, upserts environments by stable id, and keeps
- * `.myenv/` chezmoi-ignored. Uses a real tempdir (no mocking of fs) since the whole
+ * `.dotden/` chezmoi-ignored. Uses a real tempdir (no mocking of fs) since the whole
  * point is the on-disk JSON a second environment will clone and read.
  */
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { DEFAULT_WORKSPACE_ID, MyenvStore } from '../myenv-store.js'
+import { DEFAULT_WORKSPACE_ID, DenStore } from '../den-store.js'
 import { DEFAULT_COMMIT_MESSAGE_TEMPLATE } from '../../../shared/commit-template.js'
 import { DEFAULT_APPEARANCE_SETTINGS } from '../../../shared/appearance-settings.js'
 
 let source: string
 
 beforeEach(async () => {
-  source = await mkdtemp(join(tmpdir(), 'dotden-myenv-'))
+  source = await mkdtemp(join(tmpdir(), 'dotden-den-'))
 })
 
 afterEach(async () => {
   await rm(source, { recursive: true, force: true })
 })
 
-describe('MyenvStore', () => {
-  it('seeds a default Workspace + this environment, and chezmoi-ignores .myenv/', async () => {
-    const store = new MyenvStore(source)
+describe('DenStore', () => {
+  it('seeds a default Workspace + this environment, and chezmoi-ignores .dotden/', async () => {
+    const store = new DenStore(source)
 
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
 
@@ -46,11 +46,11 @@ describe('MyenvStore', () => {
     ])
 
     const ignore = await readFile(join(source, '.chezmoiignore'), 'utf8')
-    expect(ignore).toContain('.myenv/')
+    expect(ignore).toContain('.dotden/')
   })
 
   it('records File placements idempotently', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
 
     await store.placeFile('.zshrc')
@@ -65,7 +65,7 @@ describe('MyenvStore', () => {
   })
 
   it('upserts environments by stable id without duplicating', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-1', label: 'old-label', os: 'linux' })
 
     await store.registerEnvironment({
@@ -86,29 +86,29 @@ describe('MyenvStore', () => {
     expect(environments.find((e) => e.id === 'env-1')?.label).toBe('new-label')
   })
 
-  it('does not duplicate the .myenv/ ignore rule across seeds', async () => {
-    const store = new MyenvStore(source)
+  it('does not duplicate the .dotden/ ignore rule across seeds', async () => {
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
 
     const ignore = await readFile(join(source, '.chezmoiignore'), 'utf8')
-    const occurrences = ignore.split(/\r?\n/).filter((line) => line === '.myenv/').length
+    const occurrences = ignore.split(/\r?\n/).filter((line) => line === '.dotden/').length
     expect(occurrences).toBe(1)
   })
 
   it('forward-loads a legacy workspaces.json (no groups / no groupId / no scope) into the canonical shape', async () => {
-    // A `.myenv/` written by a dotden from before the 1-14 Group / 1-15 Scope slices has
+    // A `.dotden/` written by a dotden from before the 1-14 Group / 1-15 Scope slices has
     // neither `groups`/`scope` on the Workspace nor `groupId`/`scope` on placements.
     // readWorkspaces must still load it cleanly, defaulting all of them — the synced
     // metadata is forward-compatible, and a missing Scope is the universal Scope (`null`,
     // "applies everywhere") so an old File is never silently scoped out (issue 1-15).
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
     const legacy = JSON.stringify({
       workspaces: [{ id: DEFAULT_WORKSPACE_ID, label: 'Personal' }],
       placements: [{ targetPath: '.zshrc', workspaceId: DEFAULT_WORKSPACE_ID }],
     })
-    await writeFile(join(source, '.myenv', 'workspaces.json'), legacy, 'utf8')
+    await writeFile(join(source, '.dotden', 'workspaces.json'), legacy, 'utf8')
 
     const doc = await store.readWorkspaces()
     expect(doc.workspaces).toEqual([
@@ -128,9 +128,9 @@ describe('MyenvStore', () => {
  * load-bearing invariant — that Groups are PURE organization: moving a File between
  * Groups changes neither its access (`workspaceId`) nor its on-disk path (`targetPath`).
  */
-describe('MyenvStore — Workspaces + nested Groups (1-14)', () => {
+describe('DenStore — Workspaces + nested Groups (1-14)', () => {
   it('createWorkspace adds a second, separate Workspace with a stable id and no Groups', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
 
     const work = await store.createWorkspace('Work')
@@ -145,7 +145,7 @@ describe('MyenvStore — Workspaces + nested Groups (1-14)', () => {
   })
 
   it('createGroup nests Groups inside a Workspace (top-level and child)', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
 
     const shell = await store.createGroup(DEFAULT_WORKSPACE_ID, 'Shell')
@@ -158,7 +158,7 @@ describe('MyenvStore — Workspaces + nested Groups (1-14)', () => {
   })
 
   it('createGroup refuses a Workspace that does not exist, and a cross-Workspace parent', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
     const work = await store.createWorkspace('Work')
     const personalGroup = await store.createGroup(DEFAULT_WORKSPACE_ID, 'Shell')
@@ -170,7 +170,7 @@ describe('MyenvStore — Workspaces + nested Groups (1-14)', () => {
   })
 
   it('moveFileToGroup is organization-ONLY: access (workspaceId) and path (targetPath) are unchanged', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
     await store.placeFile('.zshrc')
     const shell = await store.createGroup(DEFAULT_WORKSPACE_ID, 'Shell')
@@ -196,7 +196,7 @@ describe('MyenvStore — Workspaces + nested Groups (1-14)', () => {
   })
 
   it('moveFileToGroup refuses a Group from a DIFFERENT Workspace (no cross-boundary filing)', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
     await store.placeFile('.zshrc') // in 'personal'
     const work = await store.createWorkspace('Work')
@@ -207,7 +207,7 @@ describe('MyenvStore — Workspaces + nested Groups (1-14)', () => {
   })
 
   it('setFileWorkspace DOES change access and resets the Group (a Group belongs to one Workspace)', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
     await store.placeFile('.zshrc')
     const shell = await store.createGroup(DEFAULT_WORKSPACE_ID, 'Shell')
@@ -228,7 +228,7 @@ describe('MyenvStore — Workspaces + nested Groups (1-14)', () => {
   })
 
   it('re-Tracking a File keeps it in its Group (organization is sticky within a Workspace)', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
     await store.placeFile('.zshrc')
     const shell = await store.createGroup(DEFAULT_WORKSPACE_ID, 'Shell')
@@ -247,15 +247,15 @@ describe('MyenvStore — Workspaces + nested Groups (1-14)', () => {
 /**
  * OS Scope + inheritance (issue 1-15, CONTEXT.md "Scope").
  *
- * Scope is the OS-applicability axis stored in the synced `.myenv/` (intent) and realized
+ * Scope is the OS-applicability axis stored in the synced `.dotden/` (intent) and realized
  * as native `.chezmoiignore` by the adapter. These cover the store half: a File can declare
  * an own Scope, a Folder (Group) Scope is inherited by its Files, and the load-bearing
  * invariant — a child narrows but NEVER broadens past its parent's Scope (clamped by the
  * store, not just the pure math).
  */
-describe('MyenvStore — OS Scope + inheritance (1-15)', () => {
+describe('DenStore — OS Scope + inheritance (1-15)', () => {
   it('a freshly placed File is universally scoped (null = applies everywhere)', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
     await store.placeFile('.zshrc')
 
@@ -266,7 +266,7 @@ describe('MyenvStore — OS Scope + inheritance (1-15)', () => {
   })
 
   it('setFileScope narrows a File to specific OSes', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
     await store.placeFile('.config/powershell/profile.ps1')
 
@@ -278,7 +278,7 @@ describe('MyenvStore — OS Scope + inheritance (1-15)', () => {
   })
 
   it("a File inherits its Group's (Folder's) Scope", async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
     await store.placeFile('.zshrc')
     const macOnly = await store.createGroup(DEFAULT_WORKSPACE_ID, 'macOS')
@@ -291,7 +291,7 @@ describe('MyenvStore — OS Scope + inheritance (1-15)', () => {
   })
 
   it('a File can NARROW within its Group but can NEVER broaden past it (clamped by the store)', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
     await store.placeFile('.zshrc')
     const desktop = await store.createGroup(DEFAULT_WORKSPACE_ID, 'Desktop')
@@ -310,7 +310,7 @@ describe('MyenvStore — OS Scope + inheritance (1-15)', () => {
   })
 
   it('narrowing a Group narrows every File under it (Folder Scope inherited by children)', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
     await store.placeFile('.a')
     await store.placeFile('.b')
@@ -328,7 +328,7 @@ describe('MyenvStore — OS Scope + inheritance (1-15)', () => {
   })
 
   it('a Group cannot broaden past its parent Group (deep inheritance is clamped)', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
     const outer = await store.createGroup(DEFAULT_WORKSPACE_ID, 'Outer')
     await store.setGroupScope(DEFAULT_WORKSPACE_ID, outer.id, ['darwin'])
@@ -340,7 +340,7 @@ describe('MyenvStore — OS Scope + inheritance (1-15)', () => {
   })
 
   it('setFileScope refuses an unplaced File (never fail silently)', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
     await expect(store.setFileScope('.nope', ['linux'])).rejects.toThrow(/not placed/)
   })
@@ -348,7 +348,7 @@ describe('MyenvStore — OS Scope + inheritance (1-15)', () => {
   // ── Per-environment Workspace subscription (issue 1-13) ──
 
   it('setSubscriptions creates this env entry if absent (the registry-entry ordering guard)', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-a', label: 'this-mac', os: 'darwin' })
     const work = await store.createWorkspace('Work')
 
@@ -367,7 +367,7 @@ describe('MyenvStore — OS Scope + inheritance (1-15)', () => {
   })
 
   it('setSubscriptions dedupes + drops non-existent Workspaces (no stale ids linger)', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-a', label: 'mac', os: 'darwin' })
     const entry = await store.setSubscriptions(
       { id: 'env-a', label: 'mac', os: 'darwin' },
@@ -378,7 +378,7 @@ describe('MyenvStore — OS Scope + inheritance (1-15)', () => {
   })
 
   it('setSubscriptions preserves a user-edited label when the entry already exists', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-a', label: 'mac', os: 'darwin' })
     // Rename, then change subscription using the ORIGINAL default label — the rename survives.
     await store.registerEnvironment({
@@ -394,18 +394,18 @@ describe('MyenvStore — OS Scope + inheritance (1-15)', () => {
   })
 
   // ── Secret-scan "don't warn" allowlist (issue 2-04) ──
-  // The allowlist is user-authored organization-of-trust, so it SYNCS through `.myenv/`
+  // The allowlist is user-authored organization-of-trust, so it SYNCS through `.dotden/`
   // (ADR 0024). These tests pin the write/read seam the acceptance criteria name: the
-  // decision lands in `.myenv/secret-allowlist.json`, scoped per File+match, never raw.
+  // decision lands in `.dotden/secret-allowlist.json`, scoped per File+match, never raw.
 
   it('reads an empty allowlist before any finding is dismissed', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-a', label: 'mac', os: 'darwin' })
     expect(await store.readSecretAllowlist()).toEqual({ entries: [] })
   })
 
-  it('persists a dismissed finding to .myenv/secret-allowlist.json (synced), scoped per File+match', async () => {
-    const store = new MyenvStore(source)
+  it('persists a dismissed finding to .dotden/secret-allowlist.json (synced), scoped per File+match', async () => {
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-a', label: 'mac', os: 'darwin' })
 
     const list = await store.addSecretAllowlistEntry({
@@ -425,15 +425,15 @@ describe('MyenvStore — OS Scope + inheritance (1-15)', () => {
     })
     expect(list.entries[0]?.fingerprint).toBeTruthy()
 
-    // It landed in the SYNCED .myenv/ directory — the file a second environment clones + reads.
-    const raw = await readFile(join(source, '.myenv', 'secret-allowlist.json'), 'utf8')
+    // It landed in the SYNCED .dotden/ directory — the file a second environment clones + reads.
+    const raw = await readFile(join(source, '.dotden', 'secret-allowlist.json'), 'utf8')
     expect(JSON.parse(raw).entries).toHaveLength(1)
     // And it is re-read identically through the store (round-trip).
     expect(await store.readSecretAllowlist()).toEqual(list)
   })
 
   it('de-duplicates a re-dismissed finding (idempotent write, no git churn)', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-a', label: 'mac', os: 'darwin' })
     const finding = {
       file: '.aws/credentials',
@@ -447,37 +447,37 @@ describe('MyenvStore — OS Scope + inheritance (1-15)', () => {
   })
 })
 
-describe('MyenvStore — commit-message template (2-09)', () => {
+describe('DenStore — commit-message template (2-09)', () => {
   it('returns the built-in default before anything is written', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     expect(await store.readCommitTemplate()).toBe(DEFAULT_COMMIT_MESSAGE_TEMPLATE)
   })
 
-  it('round-trips a written template through the synced .myenv/ file', async () => {
-    const store = new MyenvStore(source)
+  it('round-trips a written template through the synced .dotden/ file', async () => {
+    const store = new DenStore(source)
     await store.writeCommitTemplate('$environment · $date')
     expect(await store.readCommitTemplate()).toBe('$environment · $date')
     // It lives in the chezmoi-ignored synced metadata dir (so it travels with the Den).
-    const raw = await readFile(join(source, '.myenv', 'commit-template.json'), 'utf8')
+    const raw = await readFile(join(source, '.dotden', 'commit-template.json'), 'utf8')
     expect(JSON.parse(raw)).toEqual({ template: '$environment · $date' })
   })
 
   it('falls back to the default for an empty or malformed file (never a blank message)', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     // An empty string is meaningless as a commit message → default.
     await store.writeCommitTemplate('')
     expect(await store.readCommitTemplate()).toBe(DEFAULT_COMMIT_MESSAGE_TEMPLATE)
   })
 })
 
-describe('MyenvStore — appearance + Apply/notification preferences (2-10)', () => {
+describe('DenStore — appearance + Apply/notification preferences (2-10)', () => {
   it('returns the safe defaults before anything is written', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     expect(await store.readAppearanceSettings()).toEqual(DEFAULT_APPEARANCE_SETTINGS)
   })
 
-  it('round-trips written settings through the synced .myenv/ file', async () => {
-    const store = new MyenvStore(source)
+  it('round-trips written settings through the synced .dotden/ file', async () => {
+    const store = new DenStore(source)
     const next = {
       theme: 'blue' as const,
       defaultApply: 'apply-all' as const,
@@ -486,17 +486,17 @@ describe('MyenvStore — appearance + Apply/notification preferences (2-10)', ()
     await store.writeAppearanceSettings(next)
     expect(await store.readAppearanceSettings()).toEqual(next)
     // It lives in the chezmoi-ignored synced metadata dir (so it travels with the Den).
-    const raw = await readFile(join(source, '.myenv', 'appearance-settings.json'), 'utf8')
+    const raw = await readFile(join(source, '.dotden', 'appearance-settings.json'), 'utf8')
     expect(JSON.parse(raw)).toEqual(next)
   })
 
   it('normalizes a partial/forward-incompatible file to coherent settings on read', async () => {
-    const store = new MyenvStore(source)
-    // Create `.myenv/` first (via the store), then overwrite the file with a partial /
+    const store = new DenStore(source)
+    // Create `.dotden/` first (via the store), then overwrite the file with a partial /
     // older-or-newer-schema payload: only some fields, and a bad theme.
     await store.writeAppearanceSettings(DEFAULT_APPEARANCE_SETTINGS)
     await writeFile(
-      join(source, '.myenv', 'appearance-settings.json'),
+      join(source, '.dotden', 'appearance-settings.json'),
       JSON.stringify({ theme: 'rainbow', notifyOn: { applied: true } }),
       'utf8',
     )
@@ -507,11 +507,11 @@ describe('MyenvStore — appearance + Apply/notification preferences (2-10)', ()
     })
   })
 
-  it('ensures .myenv/ is chezmoi-ignored when it writes (so the file never applies to home)', async () => {
-    const store = new MyenvStore(source)
+  it('ensures .dotden/ is chezmoi-ignored when it writes (so the file never applies to home)', async () => {
+    const store = new DenStore(source)
     await store.writeAppearanceSettings(DEFAULT_APPEARANCE_SETTINGS)
     const ignore = await readFile(join(source, '.chezmoiignore'), 'utf8')
-    expect(ignore).toContain('.myenv/')
+    expect(ignore).toContain('.dotden/')
   })
 })
 
@@ -521,9 +521,9 @@ describe('MyenvStore — appearance + Apply/notification preferences (2-10)', ()
  * (unioning subscriptions) — the pure registry mutations the EnvironmentRegistry guards
  * sit on top of. "Who/when" is git-log-derived, so these never read or write attribution.
  */
-describe('MyenvStore — environment lifecycle (2-15)', () => {
+describe('DenStore — environment lifecycle (2-15)', () => {
   /** Seed a registry with three environments for the lifecycle tests. */
-  async function seedThree(store: MyenvStore): Promise<void> {
+  async function seedThree(store: DenStore): Promise<void> {
     await store.seedDefault({ id: 'env-a', label: 'a', os: 'linux' })
     await store.createWorkspace('Work') // a 2nd Workspace so the union has something to union
     await store.registerEnvironment({
@@ -542,7 +542,7 @@ describe('MyenvStore — environment lifecycle (2-15)', () => {
   }
 
   it('removeEnvironment drops exactly the named entry, leaving the rest intact', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await seedThree(store)
 
     const remaining = await store.removeEnvironment('env-b')
@@ -553,7 +553,7 @@ describe('MyenvStore — environment lifecycle (2-15)', () => {
   })
 
   it('removeEnvironment is an idempotent no-op for an absent id', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await seedThree(store)
     const before = (await store.readEnvironments()).environments
     const remaining = await store.removeEnvironment('env-does-not-exist')
@@ -561,7 +561,7 @@ describe('MyenvStore — environment lifecycle (2-15)', () => {
   })
 
   it('reassignEnvironment folds the duplicate into the keeper, UNIONing subscriptions', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await seedThree(store)
     // Give the keeper a real Workspace subscription so the union is observable.
     const work = (await store.readWorkspaces()).workspaces.find((w) => w.label === 'Work')
@@ -585,7 +585,7 @@ describe('MyenvStore — environment lifecycle (2-15)', () => {
   })
 
   it('reassignEnvironment rejects a missing from/into id and a self-merge', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await seedThree(store)
     await expect(store.reassignEnvironment('env-missing', 'env-b')).rejects.toThrow()
     await expect(store.reassignEnvironment('env-dup', 'env-missing')).rejects.toThrow()
@@ -593,11 +593,11 @@ describe('MyenvStore — environment lifecycle (2-15)', () => {
   })
 
   it('never writes attribution fields into the registry (git-log-derived only, ADR 0024)', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await seedThree(store)
     await store.reassignEnvironment('env-dup', 'env-b')
     await store.removeEnvironment('env-a')
-    const fileText = await readFile(join(source, '.myenv', 'environments.json'), 'utf8')
+    const fileText = await readFile(join(source, '.dotden', 'environments.json'), 'utf8')
     expect(fileText).not.toMatch(/lastAuthor|lastActivity|commitCount|lastSubject/)
     // Each surviving entry still holds exactly the four registry keys.
     const { environments } = await store.readEnvironments()

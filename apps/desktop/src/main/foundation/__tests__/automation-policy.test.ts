@@ -22,7 +22,7 @@ import {
 } from '../automation-policy.js'
 import { ApplicabilityResolver, isAppliesHere } from '../applicability-resolver.js'
 import { planIncoming, type ApplyChangeKind } from '../apply-planner.js'
-import type { EnvironmentEntry, WorkspacesDoc } from '../myenv-store.js'
+import type { EnvironmentEntry, WorkspacesDoc } from '../den-store.js'
 
 /** A one-Workspace synced model the test environment subscribes to. */
 const WORKSPACES: WorkspacesDoc = {

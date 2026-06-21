@@ -29,11 +29,11 @@
  *     reads these flags; this slice only authors them.
  *
  * Like the commit template, BOTH of these are **user-authored organization-of-presentation /
- * preference**, so by ADR 0024's synced-vs-local split they live in the synced `.myenv/`
+ * preference**, so by ADR 0024's synced-vs-local split they live in the synced `.dotden/`
  * directory and travel with the Den as **defaults** (an environment may later override locally
  * — issue 2-17). This module is the SINGLE source of truth for their shape, defaults, and
  * normalization, shared by the renderer (the tab + the live theme application) and the main
- * process (the `.myenv/` store), so neither end can drift.
+ * process (the `.dotden/` store), so neither end can drift.
  *
  * **Authoring only (the load-bearing scope rule):** setting either control sends nothing across
  * environments by itself and changes no behaviour beyond the local theme paint — the
@@ -49,7 +49,7 @@
  * maps the id to the `:root` class that re-binds the tokens. `ember` is first and is the default.
  */
 export interface AppTheme {
-  /** Stable id persisted in `.myenv/` + used as the radio value. */
+  /** Stable id persisted in `.dotden/` + used as the radio value. */
   readonly id: ThemeId
   /** The tab's option label (dotden vocabulary). */
   readonly label: string
@@ -153,7 +153,7 @@ export interface NotifyOn {
 
 /**
  * The synced appearance + default Apply/notification preferences (issue 2-10, story 54). All
- * three fields sync as DEFAULTS via `.myenv/` (ADR 0024); an environment may later override
+ * three fields sync as DEFAULTS via `.dotden/` (ADR 0024); an environment may later override
  * locally (issue 2-17).
  */
 export interface AppearanceSettings {
@@ -221,7 +221,7 @@ export function normalizeAppearanceSettings(value: unknown): AppearanceSettings 
 // issue TDDs: a present local field beats the synced default; an absent local field falls through
 // to the synced value. The override is a per-environment PARTIAL (only the fields the user pinned
 // locally), stored in Electron `userData` (issue 2-17's store), so shadowing a default never
-// mutates the synced `.myenv/` value other environments read.
+// mutates the synced `.dotden/` value other environments read.
 
 /**
  * A per-environment LOCAL override of the synced appearance defaults (issue 2-17, ADR 0024).
@@ -293,11 +293,11 @@ export function normalizeAppearanceOverride(value: unknown): AppearanceOverride 
  * > a present local field beats the synced default; an absent local field inherits the synced value.
  *
  * Resolution NEVER mutates either input — it returns a fresh object — so reading the effective
- * settings can never change the synced `.myenv/` value (the load-bearing guarantee: an override
+ * settings can never change the synced `.dotden/` value (the load-bearing guarantee: an override
  * shadows a default without changing it everywhere). With an empty override, the result equals the
  * synced defaults exactly (a fresh environment inherits everything).
  *
- * @param synced The shared synced defaults (from `.myenv/`, already normalized).
+ * @param synced The shared synced defaults (from `.dotden/`, already normalized).
  * @param override This environment's local override (from `userData`, already normalized/sparse).
  * @returns The effective settings to render/use on this environment (local-wins, then synced).
  */

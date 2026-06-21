@@ -88,7 +88,7 @@ After a successful clone dotden inspects the source dir and routes:
   adds the non-dot benign files (`README*`/`LICENSE*`) to the **generated `.chezmoiignore`** so chezmoi
   never tries to write `~/README.md`. _(Verified: chezmoi treats non-dot source files as managed
   targets unless ignored; the canonical fix is a `.chezmoiignore` entry — chezmoi docs, June 2026.)_
-- **Already has a Den** _(`.myenv/` + chezmoi source present)_ → this is really a **returning**
+- **Already has a Den** _(`.dotden/` + chezmoi source present)_ → this is really a **returning**
   environment → hand off to the [returning flow](./returning-environment.md) (Find your Den → Choose
   Workspaces → Review & Apply). The first/second-environment split is decided **here, by content**, not
   by an upfront question.

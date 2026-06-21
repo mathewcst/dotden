@@ -1,9 +1,9 @@
 /**
- * MyenvStore — the synced `.myenv/` metadata seam (ADR 0024).
+ * DenStore — the synced `.dotden/` metadata seam (ADR 0024).
  *
  * dotden splits its data into two tiers: **user-authored organization/identity**
  * syncs through the Remote; **environment-local facts** stay local. The synced
- * tier lives in a single **chezmoi-ignored `.myenv/` directory** in the repo so
+ * tier lives in a single **chezmoi-ignored `.dotden/` directory** in the repo so
  * chezmoi never treats it as a managed target (ADR 0024). This store reads and
  * writes the MVP slice of that directory:
  *
@@ -11,11 +11,11 @@
  * - the **environment registry** `{ id, label, os, subscribedWorkspaces }`
  *   (`environments.json`).
  *
- * It also keeps `.myenv/` out of chezmoi's managed set by appending a
- * `.chezmoiignore` rule, because `.myenv/` is dotden metadata, never a dotfile.
+ * It also keeps `.dotden/` out of chezmoi's managed set by appending a
+ * `.chezmoiignore` rule, because `.dotden/` is dotden metadata, never a dotfile.
  *
  * This is the synced metadata that lets a *second* environment reconstruct the
- * Den: env B clones the Remote, reads `.myenv/` through this store, and learns
+ * Den: env B clones the Remote, reads `.dotden/` through this store, and learns
  * which Workspaces exist and which Files belong to them.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -49,11 +49,11 @@ export const DEFAULT_WORKSPACE_ID = 'personal'
  * Groups are **purely organizational**: they nest, carry NO access control and NO
  * Scope, and — critically — **moving a File between Groups never changes its
  * filesystem path or its access** (CONTEXT.md "Group"; ADR 0005). A Group therefore
- * has no chezmoi equivalent and lives only here in the chezmoi-ignored `.myenv/`.
+ * has no chezmoi equivalent and lives only here in the chezmoi-ignored `.dotden/`.
  *
  * Stored flat (each node naming its `parentId`) rather than as a recursive tree so a
  * move is a one-field edit and produces a small, merge-friendly git diff in
- * `.myenv/workspaces.json`. The tree shape is reconstructed by the renderer from the
+ * `.dotden/workspaces.json`. The tree shape is reconstructed by the renderer from the
  * `parentId` links.
  */
 export interface Group {
@@ -73,7 +73,7 @@ export interface Group {
    * ({@link import('./os-scope.js').narrowScope}). UNLIKE access (Workspace) and on-disk
    * path, Scope is an applicability axis: a Group's Scope changes WHERE its Files apply,
    * not which Workspace owns them or where they land. Defaults to `null` for a Group
-   * written before this slice (forward-compat in {@link MyenvStore.readWorkspaces}).
+   * written before this slice (forward-compat in {@link DenStore.readWorkspaces}).
    */
   readonly scope: Scope
 }
@@ -83,7 +83,7 @@ export interface Group {
  *
  * This is dotden's organization metadata, NOT a chezmoi concept — Workspace/Group
  * has "no chezmoi equivalent" (CONTEXT.md mapping table), so it is stored here in
- * the chezmoi-ignored `.myenv/` directory rather than in chezmoi's source state.
+ * the chezmoi-ignored `.dotden/` directory rather than in chezmoi's source state.
  *
  * Two fields, two very different roles (ADR 0005):
  * - **`workspaceId`** is the **access boundary** — an environment applies a File iff
@@ -107,7 +107,7 @@ export interface FilePlacement {
    * universal Scope (issue 1-15). This is the File's *requested* Scope; its EFFECTIVE
    * Scope is this **narrowed by** every ancestor Folder/Workspace Scope it inherits, so a
    * File can restrict itself further than its Folder but never broaden past it
-   * ({@link MyenvStore.effectiveScopeOf}). Defaults to `null` (applies everywhere) — dotden
+   * ({@link DenStore.effectiveScopeOf}). Defaults to `null` (applies everywhere) — dotden
    * never silently scopes a freshly Tracked File out. Forward-compat: a placement written
    * before this slice has no `scope` and reads back as `null`.
    */
@@ -169,42 +169,42 @@ export interface EnvironmentsDoc {
   readonly environments: readonly EnvironmentEntry[]
 }
 
-/** Relative path (within the source dir) of the chezmoi-ignored `.myenv/` directory. */
-const MYENV_DIR = '.myenv'
-const WORKSPACES_FILE = join(MYENV_DIR, 'workspaces.json')
-const ENVIRONMENTS_FILE = join(MYENV_DIR, 'environments.json')
+/** Relative path (within the source dir) of the chezmoi-ignored `.dotden/` directory. */
+const DEN_DIR = '.dotden'
+const WORKSPACES_FILE = join(DEN_DIR, 'workspaces.json')
+const ENVIRONMENTS_FILE = join(DEN_DIR, 'environments.json')
 /**
- * The synced secret-scan "don't warn" allowlist (issue 2-04, ADR 0024). Lives in `.myenv/`
+ * The synced secret-scan "don't warn" allowlist (issue 2-04, ADR 0024). Lives in `.dotden/`
  * so a File the user judged safe stops nagging on EVERY environment — the decision is
  * user-authored organization-of-trust, so it travels with the Den (never re-answered per machine).
  */
-const SECRET_ALLOWLIST_FILE = join(MYENV_DIR, 'secret-allowlist.json')
+const SECRET_ALLOWLIST_FILE = join(DEN_DIR, 'secret-allowlist.json')
 /**
  * The synced commit-message template (issue 2-09, ADR 0024). The template is **user-authored**
  * organization-of-presentation (how the user wants their `git log` to read), so by ADR 0024 it
- * syncs through `.myenv/` as a **default** — every environment shares it unless a later local
+ * syncs through `.dotden/` as a **default** — every environment shares it unless a later local
  * override (PRD2#17) narrows it per machine. Maps to chezmoi's `git.commitMessageTemplate`.
  */
-const COMMIT_TEMPLATE_FILE = join(MYENV_DIR, 'commit-template.json')
+const COMMIT_TEMPLATE_FILE = join(DEN_DIR, 'commit-template.json')
 /**
  * The synced appearance + default Apply/notification preferences (issue 2-10, ADR 0024). Like
  * the commit template these are **user-authored** preference/presentation, so by ADR 0024 they
- * sync through `.myenv/` as **defaults** every environment shares (until a later local override,
+ * sync through `.dotden/` as **defaults** every environment shares (until a later local override,
  * issue 2-17). Shape/defaults/normalization live in `shared/appearance-settings.ts`.
  */
-const APPEARANCE_FILE = join(MYENV_DIR, 'appearance-settings.json')
+const APPEARANCE_FILE = join(DEN_DIR, 'appearance-settings.json')
 
 /**
- * Reads/writes the synced `.myenv/` metadata inside a chezmoi source dir.
+ * Reads/writes the synced `.dotden/` metadata inside a chezmoi source dir.
  *
- * All paths are resolved under {@link MyenvStore.sourceDir}, which is chezmoi's
- * source state (the git-tracked repo). Because `.myenv/` is chezmoi-ignored, these
+ * All paths are resolved under {@link DenStore.sourceDir}, which is chezmoi's
+ * source state (the git-tracked repo). Because `.dotden/` is chezmoi-ignored, these
  * files travel with the Den through git (Sync) but are never written to the user's
  * home directory by `chezmoi apply`.
  */
-export class MyenvStore {
+export class DenStore {
   /**
-   * @param sourceDir chezmoi source-state directory (the git repo) that holds `.myenv/`.
+   * @param sourceDir chezmoi source-state directory (the git repo) that holds `.dotden/`.
    */
   constructor(private readonly sourceDir: string) {}
 
@@ -214,7 +214,7 @@ export class MyenvStore {
    *
    * Writes `workspaces.json` (one default Workspace, no placements yet) and
    * `environments.json` (this environment subscribed to the default Workspace), and
-   * ensures `.myenv/` is chezmoi-ignored. Idempotent on the Workspace doc: if one
+   * ensures `.dotden/` is chezmoi-ignored. Idempotent on the Workspace doc: if one
    * already exists it is left intact and only the environment is registered.
    *
    * @param env This environment's registry entry (id/label/os; subscription defaulted).
@@ -280,7 +280,7 @@ export class MyenvStore {
    * A new Workspace starts with NO subscribers other than environments the user later
    * opts in (subscription is exercised in issue 1-13) and no Groups. This is the
    * access-boundary creation step (ADR 0005); placing Files into it uses
-   * {@link MyenvStore.setFileWorkspace}.
+   * {@link DenStore.setFileWorkspace}.
    *
    * @param label User-facing Workspace label (e.g. "Work").
    * @returns The created Workspace (with its freshly minted stable id).
@@ -370,7 +370,7 @@ export class MyenvStore {
 
   /**
    * Move a managed File into a different **Workspace** — the access-boundary move
-   * (issue 1-14). DISTINCT from {@link MyenvStore.moveFileToGroup}: changing the
+   * (issue 1-14). DISTINCT from {@link DenStore.moveFileToGroup}: changing the
    * Workspace DOES change which environments apply the File (ADR 0005), so it resets
    * the File's Group (a Group belongs to one Workspace) back to the Workspace root.
    *
@@ -398,7 +398,7 @@ export class MyenvStore {
   // Scope is the OS-applicability axis (CONTEXT.md "Scope"): the set of OSes a File or
   // Folder applies on, inherited down the Workspace → Group → File chain and narrowable
   // but never broadenable. The realized rules are native `.chezmoiignore` (ADR 0024); the
-  // user-authored intent lives here in `.myenv/`. The narrowing math lives in os-scope.ts.
+  // user-authored intent lives here in `.dotden/`. The narrowing math lives in os-scope.ts.
 
   /**
    * Set a managed File's **OS Scope**, clamped so it can NARROW but never BROADEN past the
@@ -480,7 +480,7 @@ export class MyenvStore {
    * the single source of "which OSes does this File actually apply on?", consumed by the
    * scope→`.chezmoiignore` translation and the `appliesHere` OS clause.
    *
-   * An unplaced File (managed on disk but missing from `.myenv/`) is treated as universally
+   * An unplaced File (managed on disk but missing from `.dotden/`) is treated as universally
    * scoped (`null`) so it never silently disappears from a Scope-aware surface.
    *
    * @param doc The current Workspace doc (read once by the caller, passed in to avoid re-I/O).
@@ -536,7 +536,7 @@ export class MyenvStore {
    * **Untrack** (`forget`) and **Delete everywhere** (`destroy`) verbs (CONTEXT.md).
    *
    * Both verbs stop dotden managing the File, so its placement must leave the synced
-   * `.myenv/` too, otherwise a second environment would still see the (now removed)
+   * `.dotden/` too, otherwise a second environment would still see the (now removed)
    * File as incoming. No-op when the path is not placed, so calling it twice — or
    * after chezmoi already forgot/destroyed the source — is idempotent.
    *
@@ -546,7 +546,7 @@ export class MyenvStore {
     const doc = await this.readWorkspaces()
     const placements = doc.placements.filter((p) => p.targetPath !== targetPath)
     // Skip the write entirely when nothing changed so an idempotent call produces no
-    // git churn in `.myenv/workspaces.json`.
+    // git churn in `.dotden/workspaces.json`.
     if (placements.length === doc.placements.length) return
     await this.writeWorkspaces({ ...doc, placements })
   }
@@ -675,7 +675,7 @@ export class MyenvStore {
    * Read the Workspace tree + placements, returning an empty doc when absent.
    *
    * Normalizes the on-disk shape so callers always see the canonical model regardless
-   * of when the `.myenv/` file was written: a Workspace from before the 1-14 Group
+   * of when the `.dotden/` file was written: a Workspace from before the 1-14 Group
    * slice has no `groups`, and a placement from before it has no `groupId`. Defaulting
    * them here (to `[]` / `null`) means a Den synced by an older dotden still loads
    * cleanly — the metadata is forward-compatible (never fail silently on old data).
@@ -708,7 +708,7 @@ export class MyenvStore {
   // ── Secret-scan "don't warn" allowlist (issue 2-04) ──
   // The synced half of the Commit-anyway path: a File the user consciously judged safe (its
   // specific flagged value) stops triggering the warn step — on EVERY environment, because the
-  // decision is user-authored organization-of-trust and so syncs through `.myenv/` (ADR 0024).
+  // decision is user-authored organization-of-trust and so syncs through `.dotden/` (ADR 0024).
   // The model + the per-File+match scoping (which prevents a NEW secret being silently
   // re-enabled) live in secret-allowlist.ts; this is only the synced read/write seam.
 
@@ -717,7 +717,7 @@ export class MyenvStore {
    * before any finding has been dismissed). A Den synced by an older dotden that never wrote
    * this file simply reads back empty — forward-compatible, never fail silently.
    *
-   * @returns The synced {@link SecretAllowlist} (`.myenv/secret-allowlist.json`).
+   * @returns The synced {@link SecretAllowlist} (`.dotden/secret-allowlist.json`).
    */
   async readSecretAllowlist(): Promise<SecretAllowlist> {
     return (await this.readJson<SecretAllowlist>(SECRET_ALLOWLIST_FILE)) ?? EMPTY_SECRET_ALLOWLIST
@@ -728,10 +728,10 @@ export class MyenvStore {
    * "Don't warn me about this File again" checkbox (issue 2-04).
    *
    * Delegates the scoping to {@link addAllowlistEntry} (per File + match, idempotent) so a real
-   * leak is never silently re-enabled, then writes `.myenv/secret-allowlist.json`. Only the
+   * leak is never silently re-enabled, then writes `.dotden/secret-allowlist.json`. Only the
    * **masked** preview is ever stored — the raw secret never enters the synced file. The write
    * is skipped when the entry already exists, so re-dismissing produces no git churn. The Commit
-   * that records this allowlist change is the one that staged `.myenv/` (DenService), so the
+   * that records this allowlist change is the one that staged `.dotden/` (DenService), so the
    * decision travels to every environment with the next Sync.
    *
    * @param finding The finding the user judged safe (the scanner's shape; `line` is ignored by
@@ -742,7 +742,7 @@ export class MyenvStore {
     const current = await this.readSecretAllowlist()
     const next = addAllowlistEntry(current, finding)
     // Idempotent: addAllowlistEntry returns the SAME reference when nothing changed, so skip
-    // the write to avoid churning `.myenv/secret-allowlist.json`.
+    // the write to avoid churning `.dotden/secret-allowlist.json`.
     if (next !== current) await this.writeJson(SECRET_ALLOWLIST_FILE, next)
     return next
   }
@@ -768,15 +768,15 @@ export class MyenvStore {
 
   /**
    * Persist the synced commit-message template — the write half of the Commit tab's editor +
-   * "Reset to default". Stores `.myenv/commit-template.json`; the Commit that stages `.myenv/`
+   * "Reset to default". Stores `.dotden/commit-template.json`; the Commit that stages `.dotden/`
    * (DenService) carries it, so the choice travels to every environment on the next Sync.
    *
    * @param template The template text to store (e.g. `[$os-sync-$year-$month-$day]`).
    */
   async writeCommitTemplate(template: string): Promise<void> {
     await this.writeJson(COMMIT_TEMPLATE_FILE, { template })
-    // Guarantee `.myenv/` is chezmoi-ignored (creating `.chezmoiignore` if this is the first
-    // `.myenv/` write on a never-seeded Den), so the metadata Commit can always stage it — and
+    // Guarantee `.dotden/` is chezmoi-ignored (creating `.chezmoiignore` if this is the first
+    // `.dotden/` write on a never-seeded Den), so the metadata Commit can always stage it — and
     // so the template file is never applied to the user's home (it is dotden metadata, ADR 0024).
     await this.ensureIgnored()
   }
@@ -802,7 +802,7 @@ export class MyenvStore {
 
   /**
    * Persist the synced appearance + default Apply/notification preferences — the write half of
-   * the Appearance tab. Stores `.myenv/appearance-settings.json`; the Commit that stages `.myenv/`
+   * the Appearance tab. Stores `.dotden/appearance-settings.json`; the Commit that stages `.dotden/`
    * (DenService) carries it, so the choice travels to every environment on the next Sync. Writes
    * the normalized object so the file is always coherent.
    *
@@ -810,7 +810,7 @@ export class MyenvStore {
    */
   async writeAppearanceSettings(settings: AppearanceSettings): Promise<void> {
     await this.writeJson(APPEARANCE_FILE, normalizeAppearanceSettings(settings))
-    // Guarantee `.myenv/` is chezmoi-ignored (mirrors writeCommitTemplate) so the metadata Commit
+    // Guarantee `.dotden/` is chezmoi-ignored (mirrors writeCommitTemplate) so the metadata Commit
     // can always stage it and the file is never applied to the user's home (it is dotden metadata).
     await this.ensureIgnored()
   }
@@ -826,9 +826,9 @@ export class MyenvStore {
   }
 
   /**
-   * Ensure `.myenv/` is listed in the source dir's `.chezmoiignore`.
+   * Ensure `.dotden/` is listed in the source dir's `.chezmoiignore`.
    *
-   * `.myenv/` is dotden metadata, not a dotfile, so chezmoi must never apply it to
+   * `.dotden/` is dotden metadata, not a dotfile, so chezmoi must never apply it to
    * the user's home. Appended idempotently (only if not already present) so we do
    * not clobber OS-Scope ignore rules a later slice writes to the same file.
    */
@@ -838,12 +838,12 @@ export class MyenvStore {
     try {
       current = await readFile(ignorePath, 'utf8')
     } catch {
-      // No ignore file yet — we will create it with just the .myenv/ rule.
+      // No ignore file yet — we will create it with just the .dotden/ rule.
     }
-    if (current.split(/\r?\n/).includes(`${MYENV_DIR}/`)) return
+    if (current.split(/\r?\n/).includes(`${DEN_DIR}/`)) return
     const next = current.length > 0 && !current.endsWith('\n') ? `${current}\n` : current
     await mkdir(this.sourceDir, { recursive: true })
-    await writeFile(ignorePath, `${next}${MYENV_DIR}/\n`, 'utf8')
+    await writeFile(ignorePath, `${next}${DEN_DIR}/\n`, 'utf8')
   }
 
   /** Read+parse a JSON file under the source dir, or null when it does not exist. */
@@ -860,7 +860,7 @@ export class MyenvStore {
   private async writeJson(relativePath: string, value: unknown): Promise<void> {
     const absolute = join(this.sourceDir, relativePath)
     await mkdir(dirname(absolute), { recursive: true })
-    // Pretty-print so `.myenv/` JSON produces readable, mergeable git diffs.
+    // Pretty-print so `.dotden/` JSON produces readable, mergeable git diffs.
     await writeFile(absolute, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
   }
 }

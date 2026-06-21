@@ -1,12 +1,14 @@
 # 0024 — Synced vs. local data architecture
 
-**Status:** accepted · 2026-06-15
+**Status:** accepted · 2026-06-15 · _amended 2026-06-20_
+
+> **Amendment (2026-06-20):** the synced metadata directory was renamed `.myenv/` → **`.dotden/`** (and the code seam `MyenvStore` → `DenStore`, file `den-store.ts`). "myenv" was a pre-rename working name (cf. the local `menv` clone dir; see `CONTEXT.md` _Avoid_ list). Pre-v1, single-machine, no shipped dens — done as a clean cut with **no back-compat detection** of the old name.
 
 dotden splits the data it owns into two tiers by a single governing principle: **_user-authored data_** (the organization and identity labels the user creates) **syncs through the repo**; **_environment-local facts_** (paths, installed tools, tokens, runtime state) **stay local**. This ADR fixes that boundary, the on-repo metadata layout, and the environment-registry/identity model that rides on it.
 
-## Synced — the chezmoi-ignored `.myenv/` directory
+## Synced — the chezmoi-ignored `.dotden/` directory
 
-Everything dotden syncs lives in a single chezmoi-ignored `.myenv/` directory in the repo (plus native chezmoi constructs), so chezmoi never treats it as a managed target:
+Everything dotden syncs lives in a single chezmoi-ignored `.dotden/` directory in the repo (plus native chezmoi constructs), so chezmoi never treats it as a managed target:
 
 - Workspace/Group tree + File/Folder placements + per-environment Workspace subscriptions
 - Environment registry `{ id, label, os, subscribedWorkspaces }`
@@ -28,7 +30,7 @@ A synced setting acts as the _default_; an environment may override it locally.
 
 ## Environment registry & lifecycle
 
-The registry (in the chezmoi-ignored `.myenv/` metadata) holds per-environment `{ id, label, os, subscribedWorkspaces }`, written on first run, on rename, and when Workspace subscriptions change. **Identity is the stable random ID, never the hostname** (hostnames collide and change). "Who changed this" / last-sync / activity is **derived from git log**, never written to the registry, to avoid merge churn.
+The registry (in the chezmoi-ignored `.dotden/` metadata) holds per-environment `{ id, label, os, subscribedWorkspaces }`, written on first run, on rename, and when Workspace subscriptions change. **Identity is the stable random ID, never the hostname** (hostnames collide and change). "Who changed this" / last-sync / activity is **derived from git log**, never written to the registry, to avoid merge churn.
 
 **Identity setup mechanics (issue 1-05).** The stable ID is a generated token minted once at setup into environment-local state (Electron `userData`), alongside the **hostname captured at setup** — used only as the returning-claim match hint (issue 1-13), never as the identity, so a later rename still resolves the match. That own ID is also mirrored into the **environment-local chezmoi config as `[data].dotden_env_id`** (never synced): a templated `.chezmoiignore` self-identifies with `{{ .dotden_env_id }}` and looks up `registry[.dotden_env_id].subscribedWorkspaces`, which is the per-environment subscription seam (proven by a `.chezmoiignore` spike — flipping `dotden_env_id` flips which Files are managed). Renaming the label edits only the `label` field (a one-line diff); the ID and all git-log attribution survive. Attribution is computed live by joining `git log` author name to the environment label, so the registry never stores activity fields.
 
@@ -40,7 +42,7 @@ Keeping user-authored organization in the repo is what lets a second environment
 
 ## Related
 
-- [ADR 0003](0003-faithful-chezmoi-wrapper.md) — Workspace/Group is the one dotden addition with no chezmoi equivalent, stored in the chezmoi-ignored `.myenv/` file.
+- [ADR 0003](0003-faithful-chezmoi-wrapper.md) — Workspace/Group is the one dotden addition with no chezmoi equivalent, stored in the chezmoi-ignored `.dotden/` file.
 - [ADR 0005](0005-workspaces-as-environment-access-boundaries.md) — Workspace subscription is the access boundary the registry records.
 - [ADR 0020](0020-provider-agnostic-pure-git-floor-v1-lean-auth.md) — why v1 holds no credential locally.
 - [ADR 0007](0007-observability-wide-events-local-traces.md) — the local observability sink and telemetry sampling state.

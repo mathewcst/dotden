@@ -5,7 +5,7 @@
  * Round-trips through a real tempdir (the userData stand-in) to prove the per-environment override
  * persists LOCALLY (sparse — only pinned fields), that a missing/corrupt file degrades to the EMPTY
  * override (follow synced defaults), that clearing all pins removes the file, and (critically) that
- * the store NEVER writes into the synced `.myenv/` directory — so pinning a local override never
+ * the store NEVER writes into the synced `.dotden/` directory — so pinning a local override never
  * mutates the synced value other environments read (ADR 0024's local-shadows-synced guarantee).
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -54,11 +54,11 @@ describe('appearance-override (environment-local pin over the synced default, AD
     expect(await readAppearanceOverride(dir)).toEqual({})
   })
 
-  it('persists to userData only — writes nothing into a synced .myenv/ tree', async () => {
+  it('persists to userData only — writes nothing into a synced .dotden/ tree', async () => {
     await writeAppearanceOverride(dir, { theme: 'blue' })
     const entries = await readdir(dir)
     expect(entries).toContain('appearance-override.json')
-    expect(entries).not.toContain('.myenv')
+    expect(entries).not.toContain('.dotden')
   })
 
   it('degrades to the EMPTY override on corrupt JSON (never a surprising local pin)', async () => {

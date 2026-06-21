@@ -25,7 +25,7 @@ The faithful predicate is **"is this environment registered in the Den?"** = `En
 
 ## v1 routes `incomplete → landing`, not a resume
 
-`self()` reads `.myenv/environments.json`, which is absent until cloned, so `self() == null` covers **both** `fresh` and `incomplete`; distinguishing them needs a separate clone check (`sourceExists`).
+`self()` reads `.dotden/environments.json`, which is absent until cloned, so `self() == null` covers **both** `fresh` and `incomplete`; distinguishing them needs a separate clone check (`sourceExists`).
 
 A would-be _returning_ environment that abandons setup after `connect` but before claiming sits in `incomplete`. Auto-routing it into the app would let `env:list` self-register it as a **brand-new** environment — minting a fresh id instead of **claiming** its existing registry entry — breaking ADR 0024's continuous-history guarantee. So `incomplete` routes to `landing` for an explicit New/Connect re-choice.
 

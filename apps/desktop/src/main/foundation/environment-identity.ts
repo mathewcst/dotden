@@ -11,7 +11,7 @@
  *    entry by OS + the hostname captured at the *original* setup.
  *
  * The id itself is environment-LOCAL state (it lives in Electron `userData`, never
- * synced); only the registry *entry* keyed by it is synced into `.myenv/`. This
+ * synced); only the registry *entry* keyed by it is synced into `.dotden/`. This
  * module mints and persists that local id (plus the setup-time hostname, so the
  * match hint survives a later hostname change), and derives the default label.
  *
@@ -42,7 +42,7 @@ export interface EnvironmentIdentity {
   readonly hostnameAtSetup: string
 }
 
-/** On-disk shape of the local identity file (everything synced lives in `.myenv/`, not here). */
+/** On-disk shape of the local identity file (everything synced lives in `.dotden/`, not here). */
 interface PersistedIdentity {
   /** Stable random id minted at setup. */
   readonly id: string

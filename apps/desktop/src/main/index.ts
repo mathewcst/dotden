@@ -328,7 +328,7 @@ function getPrivacySettings(): Promise<PrivacySettings> {
 /**
  * Persist this environment's telemetry consent (issue 2-14). CONTROL SURFACE ONLY: unlike
  * {@link setSyncSettings} this has NO side effects — it only writes the consent flag to
- * `userData` (never the synced `.myenv/`, ADR 0024). No telemetry SDK is loaded and no network
+ * `userData` (never the synced `.dotden/`, ADR 0024). No telemetry SDK is loaded and no network
  * connection is opened here; the consumers gated behind this consent are PRD 3 (issues
  * 3-09/3-10), which read it. Returns the persisted consent so the Privacy tab re-renders from
  * the source of truth.

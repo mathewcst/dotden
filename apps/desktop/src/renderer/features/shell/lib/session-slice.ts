@@ -17,7 +17,7 @@
  */
 import type { DotdenApi } from '../../../../shared/ipc-api'
 import type { AffectedEnvironment, FileTreeEntry } from '../../../../main/foundation/den-service'
-import type { Workspace as WorkspaceModel } from '../../../../main/foundation/myenv-store'
+import type { Workspace as WorkspaceModel } from '../../../../main/foundation/den-store'
 import type { Scope } from '../../../../main/foundation/os-scope'
 import type { AutomationLevel } from '../../../../main/foundation/automation-policy'
 import type { FileTreeRenameEvent } from '@pierre/trees'
@@ -62,7 +62,7 @@ export interface SessionSlice {
   readonly role: Role
   /** env A: the managed File tree read from the main process (the real chezmoi view). */
   files: readonly FileTreeEntry[]
-  /** The Workspace/Group tree (issue 1-14), read from the synced `.myenv/` over `den:tree`. */
+  /** The Workspace/Group tree (issue 1-14), read from the synced `.dotden/` over `den:tree`. */
   workspaces: readonly WorkspaceModel[]
   /** The single source of truth for the selected File — the tree, diff, and inspector follow it. */
   selected: string | null

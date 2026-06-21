@@ -387,8 +387,8 @@ export class ChezmoiAdapter {
    *
    * The file is **fully generated and overwritten** on every call (its header warns against
    * hand-editing), and it is the SINGLE writer of `.chezmoiignore`: it always re-emits the
-   * `.myenv/` rule (dotden metadata is never a managed target, ADR 0024) PLUS the
-   * scoped-out paths, so it never clobbers `MyenvStore`'s `.myenv/` rule and the two
+   * `.dotden/` rule (dotden metadata is never a managed target, ADR 0024) PLUS the
+   * scoped-out paths, so it never clobbers `DenStore`'s `.dotden/` rule and the two
    * concerns can't drift. The scoped-out set is computed by {@link scopedOutPaths} from each
    * path's EFFECTIVE Scope (inheritance pre-folded by the caller).
    *
@@ -403,7 +403,7 @@ export class ChezmoiAdapter {
   }
 
   /**
-   * Compile the FULL `.chezmoiignore` — `.myenv/` rule + static OS-scope lines + the
+   * Compile the FULL `.chezmoiignore` — `.dotden/` rule + static OS-scope lines + the
    * dynamic **per-environment Workspace subscription** template (issue 1-13).
    *
    * This SUPERSEDES {@link writeOsScopeIgnore} as the single writer once a Den has more than
@@ -564,7 +564,7 @@ function ensureTrailingNewline(text: string): string {
 }
 
 /** The relative path dotden's chezmoi-ignored synced-metadata directory lives at (ADR 0024). */
-const MYENV_IGNORE_RULE = '.myenv/'
+const DEN_IGNORE_RULE = '.dotden/'
 
 /**
  * One entry of the OS Scope feature: a managed dotfile/Folder and its **effective** Scope
@@ -597,7 +597,7 @@ export interface OsScopeIgnore {
  *
  * Emits, in order:
  * 1. a generated-file header warning the file is dotden-owned and must not be hand-edited;
- * 2. the `.myenv/` rule (dotden's synced metadata is never a managed target, ADR 0024), so
+ * 2. the `.dotden/` rule (dotden's synced metadata is never a managed target, ADR 0024), so
  *    this renderer can be the SINGLE writer of `.chezmoiignore` without dropping that rule;
  * 3. exactly the paths whose effective Scope does NOT include {@link OsScopeIgnore.currentOs}
  *    ({@link scopedOutPaths}), so chezmoi skips them in this environment.
@@ -618,7 +618,7 @@ export function renderOsScopeIgnore(scope: OsScopeIgnore): string {
     '# dotden owns this file: it keeps its synced metadata out of chezmoi, and lists',
     "# the Files/Folders scoped to other operating systems than this environment's.",
     // The synced-metadata rule ALWAYS comes first so it survives every regeneration.
-    MYENV_IGNORE_RULE,
+    DEN_IGNORE_RULE,
     ...ignored,
     '',
   ].join('\n')

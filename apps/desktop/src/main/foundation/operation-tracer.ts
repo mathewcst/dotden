@@ -69,7 +69,7 @@ export type OperationKind =
   | 'untrack'
   | 'delete-everywhere'
   // The user-authored organization edits (issue 1-14): create a Workspace/Group or
-  // re-file a File between Groups/Workspaces. Each mutates only the synced `.myenv/`
+  // re-file a File between Groups/Workspaces. Each mutates only the synced `.dotden/`
   // metadata, never chezmoi source state or any file on disk.
   | 'organize'
   | 'onboarding'

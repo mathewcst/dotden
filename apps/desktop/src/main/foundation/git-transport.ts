@@ -141,7 +141,7 @@ export class GitTransport {
    * the idempotent metadata-commit primitive (issue 1-15).
    *
    * Identical to {@link commit} but tolerant of a no-op: an OS-Scope edit can be a
-   * *clamp* that leaves the synced `.myenv/` + generated `.chezmoiignore` byte-for-byte
+   * *clamp* that leaves the synced `.dotden/` + generated `.chezmoiignore` byte-for-byte
    * unchanged (e.g. a request to broaden past a Folder is clamped to the existing Scope),
    * so there is nothing to record. A plain `git commit` would exit non-zero ("nothing to
    * commit") and surface as a spurious failure; this checks `git diff --cached --quiet`
@@ -437,7 +437,7 @@ export class GitTransport {
    * Maps to `git log --pretty=<fmt> [--max-count=<n>] [-- <path>]`. This is the
    * attribution source for the environment registry: "who changed this" / last-sync
    * / activity are **derived from git log, never written to the registry** (ADR 0024),
-   * so the synced `.myenv/` registry stays small and merge-friendly.
+   * so the synced `.dotden/` registry stays small and merge-friendly.
    *
    * The format is `%H` (full SHA), `%an` (author name), `%ae` (author email),
    * `%aI` (author date, strict ISO-8601), `%s` (subject) joined by an ASCII Unit

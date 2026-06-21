@@ -19,16 +19,16 @@ import {
  * The three appearance settings — app theme, preferred default Apply behaviour, and which
  * cross-environment events notify — follow ADR 0024's synced-vs-local split:
  *
- * - Each value SYNCS through `.myenv/` as a **shared default** (issue 2-10), so a fresh computer
+ * - Each value SYNCS through `.dotden/` as a **shared default** (issue 2-10), so a fresh computer
  *   inherits it.
  * - An environment MAY **override it locally** (issue 2-17) without changing it everywhere.
  *
  * The tab surfaces that split with a **scope switch** ("All my computers" vs "Just this computer"):
  *
- * - **All my computers** edits the SYNCED default (`setAppearanceSettings`) — Commits the `.myenv/`
+ * - **All my computers** edits the SYNCED default (`setAppearanceSettings`) — Commits the `.dotden/`
  *   change LOCALLY (ADR 0006) and it travels on the next Sync.
  * - **Just this computer** pins a LOCAL override (`setAppearanceOverride`) — written to `userData`
- *   only, NEVER `.myenv/`, so it shadows the default without changing it for the other computers.
+ *   only, NEVER `.dotden/`, so it shadows the default without changing it for the other computers.
  *
  * The controls always show the **effective** value (synced default overlaid by the local override —
  * local wins). A field that is overridden-here gets a "reset" affordance that clears just that local

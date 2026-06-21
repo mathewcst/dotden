@@ -7,7 +7,7 @@
  * a given computer uses is a property of *that* computer — the office laptop might have `op`, a
  * shared box only `pass` — so forcing one environment's choice onto another would be wrong. It
  * therefore lives in Electron `userData`, exactly like the automation level
- * ({@link import('./automation-settings.js')}), never in the synced `.myenv/`.
+ * ({@link import('./automation-settings.js')}), never in the synced `.dotden/`.
  *
  * Electron-free (ADR 0023): it takes the userData dir as a path, so the read/write round-trip is
  * unit-testable in plain Node; `index.ts` passes the real `app.getPath('userData')`.

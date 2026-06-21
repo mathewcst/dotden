@@ -3,7 +3,7 @@
  *
  * This module is the SINGLE source of truth for the shape, defaults, normalization, and the
  * theme→class mapping shared by the renderer (the tab + live theme paint) and the main process
- * (the synced `.myenv/` store) — so it is TDD'd here: the closed theme set, the default-base
+ * (the synced `.dotden/` store) — so it is TDD'd here: the closed theme set, the default-base
  * empty class, per-field normalization of a partial/garbage file (never throwing), and the safe
  * defaults exactly as the spec states.
  */
@@ -115,7 +115,7 @@ describe('appearance-settings — normalization (never fail silently)', () => {
 // ── Synced-vs-local override + precedence (issue 2-17, ADR 0024) ──
 // The load-bearing rule of the whole synced-vs-local model: a present LOCAL field beats the synced
 // default; an absent local field inherits the synced value. Resolution must never mutate an input
-// (so reading the effective settings can never change the synced `.myenv/` value others read).
+// (so reading the effective settings can never change the synced `.dotden/` value others read).
 
 describe('appearance override — sparse normalization (only validly-pinned fields kept)', () => {
   it('keeps the empty override empty (follow synced defaults for everything)', () => {

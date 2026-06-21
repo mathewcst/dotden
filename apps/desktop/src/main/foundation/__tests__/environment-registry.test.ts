@@ -9,7 +9,7 @@
  * - renaming the label is a one-line change that NEVER touches the id (no churn) and
  *   adds no attribution fields to the registry file;
  * - attribution (last author / activity / count) is computed LIVE from `git log` and is
- *   never persisted to `.myenv/environments.json`;
+ *   never persisted to `.dotden/environments.json`;
  * - the returning-claim fork suggests the likely entry by OS + setup-time hostname.
  */
 /* eslint-disable turbo/no-undeclared-env-vars -- integration test discovers local chezmoi/git binaries. */
@@ -19,7 +19,7 @@ import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { EnvironmentRegistry, type LocalIdentity } from '../environment-registry.js'
 import { GitTransport } from '../git-transport.js'
-import { MyenvStore } from '../myenv-store.js'
+import { DenStore } from '../den-store.js'
 import { runCommand } from '../process.js'
 
 let root: string
@@ -68,7 +68,7 @@ describe('EnvironmentRegistry', () => {
 
     // The synced registry holds exactly { id, label, os, subscribedWorkspaces } — no
     // attribution fields are persisted (ADR 0024).
-    const stored = (await new MyenvStore(source).readEnvironments()).environments[0]
+    const stored = (await new DenStore(source).readEnvironments()).environments[0]
     expect(Object.keys(stored ?? {}).sort()).toEqual(['id', 'label', 'os', 'subscribedWorkspaces'])
 
     // The own id is mirrored into the environment-local config, and chezmoi can read
@@ -99,7 +99,7 @@ describe('EnvironmentRegistry', () => {
     expect(renamed.label).toBe('Work MBP')
 
     // The on-disk registry shows the new label, the SAME id, and still no attribution.
-    const stored = (await new MyenvStore(source).readEnvironments()).environments[0]
+    const stored = (await new DenStore(source).readEnvironments()).environments[0]
     expect(stored).toEqual({
       id: 'env-self-1',
       label: 'Work MBP',
@@ -129,7 +129,7 @@ describe('EnvironmentRegistry', () => {
     expect(self?.attribution.lastActivityAt).toMatch(/^\d{4}-\d{2}-\d{2}T/) // ISO-8601
 
     // Re-reading the registry file shows attribution was NOT written into it.
-    const fileText = await readFile(join(source, '.myenv', 'environments.json'), 'utf8')
+    const fileText = await readFile(join(source, '.dotden', 'environments.json'), 'utf8')
     expect(fileText).not.toMatch(/lastAuthor|lastActivity|commitCount|lastSubject/)
   })
 
@@ -137,7 +137,7 @@ describe('EnvironmentRegistry', () => {
     const registry = registryFor()
     await registry.setupIdentity()
     // A different environment exists in the registry but never authored a commit.
-    await new MyenvStore(source).registerEnvironment({
+    await new DenStore(source).registerEnvironment({
       id: 'env-other',
       label: 'never-committed',
       os: 'darwin',
@@ -153,7 +153,7 @@ describe('EnvironmentRegistry', () => {
 
   it('suggests a returning-claim match by OS + setup-time hostname, never auto-merging', async () => {
     // Seed a registry that already contains a returning candidate matching our host.
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-existing', label: 'this-laptop', os: process.platform })
     await store.registerEnvironment({
       id: 'env-windows',
@@ -179,7 +179,7 @@ describe('EnvironmentRegistry', () => {
 
   it('registerWithSubscription defaults to ALL Workspaces and mirrors the env id', async () => {
     // Seed a Den with two Workspaces from a peer environment.
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-peer', label: 'peer', os: process.platform })
     const work = await store.createWorkspace('Work')
 
@@ -193,7 +193,7 @@ describe('EnvironmentRegistry', () => {
   })
 
   it('registerWithSubscription honors an explicit subset (the returning pick)', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-peer', label: 'peer', os: process.platform })
     await store.createWorkspace('Work')
 
@@ -203,7 +203,7 @@ describe('EnvironmentRegistry', () => {
   })
 
   it('workspaces() lists the Den’s Workspaces for the subscription pick', async () => {
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.seedDefault({ id: 'env-peer', label: 'peer', os: process.platform })
     await store.createWorkspace('Work')
     const list = await registryFor().workspaces()
@@ -215,7 +215,7 @@ describe('EnvironmentRegistry', () => {
   it('retire drops a decommissioned environment and commits the change so it travels', async () => {
     const registry = registryFor()
     await registry.setupIdentity() // env-self-1 is THIS environment
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.registerEnvironment({
       id: 'env-old',
       label: 'old-desktop',
@@ -227,7 +227,7 @@ describe('EnvironmentRegistry', () => {
     // The retired entry is gone; this environment remains in the returned (re-listed) data.
     expect(list.map((e) => e.id).sort()).toEqual(['env-self-1'])
 
-    // The removal was Committed (a `.myenv/` diff) so it travels on the next Sync.
+    // The removal was Committed (a `.dotden/` diff) so it travels on the next Sync.
     const log = await new GitTransport({ gitBin, repoDir: source }).log()
     expect(log).toContain('Retire environment env-old')
   })
@@ -247,7 +247,7 @@ describe('EnvironmentRegistry', () => {
   it('reassign folds a duplicate into the keeper (unioning subscriptions) and commits it', async () => {
     const registry = registryFor()
     await registry.setupIdentity()
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     const work = await store.createWorkspace('Work')
     // The keeper (this env) subscribes to Personal; the duplicate subscribed to Work.
     await store.setSubscriptions({ id: 'env-self-1', label: 'this-laptop', os: process.platform }, [
@@ -274,7 +274,7 @@ describe('EnvironmentRegistry', () => {
   it('reassign refuses to fold AWAY this running environment', async () => {
     const registry = registryFor()
     await registry.setupIdentity()
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.registerEnvironment({
       id: 'env-other',
       label: 'other',
@@ -287,7 +287,7 @@ describe('EnvironmentRegistry', () => {
   it('lifecycle ops never persist attribution into the registry (git-log-derived, ADR 0024)', async () => {
     const registry = registryFor()
     await registry.setupIdentity()
-    const store = new MyenvStore(source)
+    const store = new DenStore(source)
     await store.registerEnvironment({
       id: 'env-dup',
       label: 'dup',
@@ -303,7 +303,7 @@ describe('EnvironmentRegistry', () => {
     await registry.reassign('env-dup', 'env-self-1')
     await registry.retire('env-gone')
 
-    const fileText = await readFile(join(source, '.myenv', 'environments.json'), 'utf8')
+    const fileText = await readFile(join(source, '.dotden', 'environments.json'), 'utf8')
     expect(fileText).not.toMatch(/lastAuthor|lastActivity|commitCount|lastSubject/)
   })
 })

@@ -110,7 +110,7 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['commitTemplate']>
     },
-    // → IPC channel 'den:set-commit-template' (persist synced template + Commit `.myenv/`, issue 2-09)
+    // → IPC channel 'den:set-commit-template' (persist synced template + Commit `.dotden/`, issue 2-09)
     setCommitTemplate(template) {
       return ipcRenderer.invoke('den:set-commit-template', {
         template,
@@ -129,7 +129,7 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['den']['appearanceState']>
     },
-    // → IPC channel 'den:set-appearance' (persist SYNCED appearance defaults + Commit `.myenv/`, issue 2-10)
+    // → IPC channel 'den:set-appearance' (persist SYNCED appearance defaults + Commit `.dotden/`, issue 2-10)
     setAppearanceSettings(settings) {
       return ipcRenderer.invoke('den:set-appearance', {
         settings,

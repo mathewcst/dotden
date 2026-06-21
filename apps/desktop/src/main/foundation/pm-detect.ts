@@ -9,7 +9,7 @@
  *
  * Detected-CLI presence is **environment-local, never synced** (acceptance criterion 10): it is a
  * property of *this* computer's installed tools, so it is computed live and never written into the
- * synced `.myenv/` (ADR 0024). This module performs no persistence — it just probes.
+ * synced `.dotden/` (ADR 0024). This module performs no persistence — it just probes.
  *
  * The probe is **injectable** ({@link DetectPasswordManagersOptions.probe}) so the model is
  * unit-testable without depending on what is installed on the test box; production uses the real

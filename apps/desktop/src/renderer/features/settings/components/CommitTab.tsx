@@ -23,7 +23,7 @@ import {
  * - a one-click **Reset to default** that restores `[$os-sync-$year-$month-$day]`.
  *
  * The template is **user-authored organization-of-presentation**, so it syncs as a default through
- * `.myenv/` (ADR 0024); saving Commits the change LOCALLY (ADR 0006) and it travels on the next Sync.
+ * `.dotden/` (ADR 0024); saving Commits the change LOCALLY (ADR 0006) and it travels on the next Sync.
  *
  * **No shell reachable from the renderer (the load-bearing privacy rule, scope-v1):** the preview
  * is rendered by the SHARED pure {@link renderCommitTemplate} — the same function the real Commit

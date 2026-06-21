@@ -6,7 +6,7 @@
  * Under "Commit anyway" the user may tick **"Don't warn me about this File again"** so a File
  * they have consciously judged safe stops nagging on every future Commit (story 16). Because
  * that judgement is user-authored organization-of-trust, it **syncs** across the user's
- * environments through the chezmoi-ignored `.myenv/` directory (story 26, ADR 0024) — the same
+ * environments through the chezmoi-ignored `.dotden/` directory (story 26, ADR 0024) — the same
  * prompt is never re-answered on a second computer.
  *
  * The security-critical design constraint (the issue's headline): the allowlist must **not
@@ -22,8 +22,8 @@
  *   secret shifts its line, but it is the same value the user already judged safe.
  *
  * This module is PURE (no I/O, no shell) so the scoping invariant is trivially unit-testable at
- * the model seam. The synced persistence lives in {@link import('./myenv-store.js').MyenvStore}
- * (`.myenv/secret-allowlist.json`), and the commit-time filtering in
+ * the model seam. The synced persistence lives in {@link import('./den-store.js').DenStore}
+ * (`.dotden/secret-allowlist.json`), and the commit-time filtering in
  * {@link import('./den-service.js').DenService.scanCommit}.
  */
 import { createHash } from 'node:crypto'
@@ -47,7 +47,7 @@ export interface SecretAllowlistEntry {
   readonly fingerprint: string
 }
 
-/** The synced allowlist document (`.myenv/secret-allowlist.json`). Append-only in practice. */
+/** The synced allowlist document (`.dotden/secret-allowlist.json`). Append-only in practice. */
 export interface SecretAllowlist {
   /** Every match the user has judged safe across the Den (synced across environments). */
   readonly entries: readonly SecretAllowlistEntry[]

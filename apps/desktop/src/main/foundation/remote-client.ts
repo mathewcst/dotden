@@ -348,13 +348,13 @@ export class RemoteClient {
 /**
  * Classify the just-initialized source dir for ADR 0022's post-clone branch.
  *
- * This intentionally checks for dotden's synced `.myenv/` first: a dotden Den can still contain
- * normal chezmoi source files, but `.myenv/` is the v1 proof that this repo is ours.
+ * This intentionally checks for dotden's synced `.dotden/` first: a dotden Den can still contain
+ * normal chezmoi source files, but `.dotden/` is the v1 proof that this repo is ours.
  */
 async function classifyInitializedSource(
   sourceDir: string,
 ): Promise<ConnectResult['repositoryKind']> {
-  if (await exists(join(sourceDir, '.myenv'))) return 'dotden'
+  if (await exists(join(sourceDir, '.dotden'))) return 'dotden'
 
   const entries = await readdir(sourceDir, { withFileTypes: true })
   const visible = entries.filter((entry) => entry.name !== '.git')

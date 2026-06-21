@@ -194,7 +194,7 @@ describe('IpcBridge', () => {
       environment: 'this-mac',
     }
     const den = {
-      // get-commit-template is a read Operation; set-commit-template MUTATES `.myenv/` + Commits.
+      // get-commit-template is a read Operation; set-commit-template MUTATES `.dotden/` + Commits.
       commitTemplate: vi.fn(async () => state),
       setCommitTemplate: vi.fn(async () => state),
     }
@@ -258,7 +258,7 @@ describe('IpcBridge', () => {
     const state = { effective: settings, synced: settings, override: { theme: 'blue' as const } }
     const den = {
       // get-appearance reads the EFFECTIVE value; get-appearance-state reads the synced·override·
-      // effective triple. set-appearance MUTATES `.myenv/` (+ Commits); set-appearance-override
+      // effective triple. set-appearance MUTATES `.dotden/` (+ Commits); set-appearance-override
       // pins this env's LOCAL override in userData only (no Commit, never travels — issue 2-17).
       appearanceSettings: vi.fn(async () => settings),
       appearanceState: vi.fn(async () => state),
@@ -491,7 +491,7 @@ describe('IpcBridge', () => {
       _trace: { traceId: 'o6' },
     } as never)
 
-    // Each organize verb MUTATES `.myenv/`, so the bridge forwards its trace id.
+    // Each organize verb MUTATES `.dotden/`, so the bridge forwards its trace id.
     expect(den.createWorkspace).toHaveBeenCalledWith('Work', 'o1')
     expect(den.createGroup).toHaveBeenCalledWith('personal', 'Shell', null, 'o2')
     expect(den.moveFileToGroup).toHaveBeenCalledWith('.zshrc', 'grp-1', 'o3')

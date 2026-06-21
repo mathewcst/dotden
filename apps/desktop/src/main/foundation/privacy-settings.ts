@@ -21,7 +21,7 @@
  *
  * **Consent is environment-local (ADR 0024).** It is a per-machine decision — a shared or
  * locked-down environment must be able to refuse telemetry independently of the user's other
- * machines — so it lives in Electron `userData` and **never** enters the synced `.myenv/`
+ * machines — so it lives in Electron `userData` and **never** enters the synced `.dotden/`
  * directory. Mirrors {@link readSyncSettings}/{@link writeSyncSettings} exactly: Electron-free
  * (ADR 0023), it takes the userData dir as a path so the whole read/write round-trip is
  * unit-testable in plain Node; `index.ts` passes the real `app.getPath('userData')`.

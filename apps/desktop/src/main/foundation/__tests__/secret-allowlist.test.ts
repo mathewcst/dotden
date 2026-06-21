@@ -7,7 +7,7 @@
  * leak — it is scoped **per File + the specific match** (kind + masked value), so a DIFFERENT
  * or NEW secret appearing in the same File later still warns. These tests prove exactly that
  * scoping at the pure-model seam (no I/O); the synced persistence is proven in
- * myenv-store.test.ts and the cross-environment behavior in den-service.e2e.test.ts.
+ * den-store.test.ts and the cross-environment behavior in den-service.e2e.test.ts.
  */
 import { describe, expect, it } from 'vitest'
 import {

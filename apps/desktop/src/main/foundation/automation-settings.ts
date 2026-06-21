@@ -5,7 +5,7 @@
  * is "environment-local" by definition (CONTEXT.md "Auto-sync"), because each environment
  * decides for itself how hands-off it wants to be — turning Auto-sync on at the office
  * laptop must not force it on at a shared machine. So, exactly like the environment
- * identity, this lives in Electron `userData` and never enters the synced `.myenv/`
+ * identity, this lives in Electron `userData` and never enters the synced `.dotden/`
  * (ADR 0024's synced-vs-local split).
  *
  * It is Electron-free (ADR 0023): it takes the userData dir as a path so the whole

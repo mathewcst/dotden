@@ -21,7 +21,7 @@
  *    must list so chezmoi ignores them here (the muted/ignored rows of issue 1-07).
  *
  * Scope intent (which OSes a path is scoped to) is **user-authored data**, so it is stored
- * in the synced `.myenv/` (ADR 0024); the realized rules are native `.chezmoiignore`
+ * in the synced `.dotden/` (ADR 0024); the realized rules are native `.chezmoiignore`
  * (ADR 0024 "OS Scope rules live as native `.chezmoiignore`"). The compiler that writes
  * the file is {@link import('./chezmoi-adapter.js').ChezmoiAdapter.writeOsScopeIgnore},
  * which renders from {@link scopedOutPaths}.
@@ -63,7 +63,7 @@ export type Os =
  *   (e.g. a Linux-only child under a Windows-only Folder), never a silent error.
  *
  * Stored as a plain readonly array (not a Set) so it serializes directly into the synced
- * `.myenv/` JSON (ADR 0024) and produces small, human-readable git diffs.
+ * `.dotden/` JSON (ADR 0024) and produces small, human-readable git diffs.
  */
 export type Scope = readonly Os[] | null
 

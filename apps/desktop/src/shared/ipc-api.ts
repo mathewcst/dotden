@@ -48,7 +48,7 @@ import type { DetectedPasswordManager } from '../main/foundation/pm-detect.js'
 import type { PmPreference } from '../main/foundation/pm-preference.js'
 import type { FileVersion } from '../main/foundation/file-history.js'
 import type { ResolutionChoice } from '../main/foundation/conflict-model.js'
-import type { Group, Workspace } from '../main/foundation/myenv-store.js'
+import type { Group, Workspace } from '../main/foundation/den-store.js'
 import type { Scope } from '../main/foundation/os-scope.js'
 import type {
   ClaimSuggestion,
@@ -139,7 +139,7 @@ export interface DotdenApi {
     registerEnvironment(): Promise<void>
     /**
      * **Track** a File and record its Workspace placement (env A).
-     * Maps to `chezmoi add` + a synced `.myenv/` placement.
+     * Maps to `chezmoi add` + a synced `.dotden/` placement.
      */
     track(targetPath: string): Promise<void>
     /**
@@ -158,12 +158,12 @@ export interface DotdenApi {
     /**
      * **Allowlist a flagged secret** — persist the "Don't warn me about this File again"
      * checkbox the user ticks under Commit-anyway (issue 2-04, story 16). Records the dismissed
-     * finding into the SYNCED `.myenv/` allowlist so the warn step stops opening for THIS match
-     * on subsequent Commits, and — because `.myenv/` syncs (ADR 0024) — on every environment.
+     * finding into the SYNCED `.dotden/` allowlist so the warn step stops opening for THIS match
+     * on subsequent Commits, and — because `.dotden/` syncs (ADR 0024) — on every environment.
      * Scoped per File+match: a different/new secret in the same File still warns (a real leak is
      * never silently re-enabled). Only the masked preview is stored; the raw secret never syncs.
      * The renderer calls this just BEFORE {@link commit} when the box is ticked, so the decision
-     * is staged into the SAME Commit (which stages `.myenv/`) and travels with the next Sync.
+     * is staged into the SAME Commit (which stages `.dotden/`) and travels with the next Sync.
      */
     allowlistSecret(finding: SecretFinding): Promise<SecretAllowlist>
     /**
@@ -176,7 +176,7 @@ export interface DotdenApi {
     commitTemplate(): Promise<CommitTemplateState>
     /**
      * **Save the Commit tab's template** (issue 2-09) — the editor's save + "Reset to default".
-     * Persists the synced default (`.myenv/commit-template.json`) and Commits the `.myenv/` change
+     * Persists the synced default (`.dotden/commit-template.json`) and Commits the `.dotden/` change
      * LOCALLY (ADR 0006) so it travels on the next Sync; maps to chezmoi `git.commitMessageTemplate`.
      * Returns the refreshed state so the tab re-renders from the source of truth.
      */
@@ -191,7 +191,7 @@ export interface DotdenApi {
     appearanceSettings(): Promise<AppearanceSettings>
     /**
      * **Read the Appearance tab's full synced-vs-local state** (issue 2-17, story 54) — the synced
-     * defaults (`.myenv/`), this environment's sparse local override (`userData`), and the resolved
+     * defaults (`.dotden/`), this environment's sparse local override (`userData`), and the resolved
      * effective settings, in one read. The tab binds its controls to `effective` and uses
      * `synced`/`override` to mark which fields are pinned-here vs. inherited and to offer "reset to
      * the synced default". Reading never mutates the synced value (ADR 0024).
@@ -199,7 +199,7 @@ export interface DotdenApi {
     appearanceState(): Promise<AppearanceState>
     /**
      * **Save the SYNCED appearance defaults** (issue 2-10) — the theme picker + default-Apply +
-     * notification toggles edited "for every environment". Persists `.myenv/appearance-settings.json`
+     * notification toggles edited "for every environment". Persists `.dotden/appearance-settings.json`
      * and Commits the change LOCALLY (ADR 0006) so it travels on the next Sync. Gates no invariant
      * (the AutomationPolicy/ApplyPlanner owners still own the real Apply, ADR 0008). Does NOT touch
      * this environment's local override, so a field pinned here still resolves to the pin. Returns the
@@ -209,7 +209,7 @@ export interface DotdenApi {
     /**
      * **Pin (or clear) this environment's LOCAL appearance override** (issue 2-17, ADR 0024) — the
      * per-field pins that shadow the synced defaults on THIS environment only. Persists to `userData`
-     * (NEVER the synced `.myenv/`), so it never changes the value other environments read — a local
+     * (NEVER the synced `.dotden/`), so it never changes the value other environments read — a local
      * override shadows a default without changing it everywhere. The empty override `{}` clears all
      * pins (follow the synced defaults again). No Commit, no Sync — a local override never travels.
      * Returns the refreshed synced-vs-local state.
@@ -362,7 +362,7 @@ export interface DotdenApi {
      * Workspace placement, local-axis git status (M/A/D/R/U), and out-of-OS-Scope
      * muted flag. Read-only (no Operation/wide event), refreshed after each verb so
      * the tree, status decorations, and change dots stay live. Maps to
-     * `chezmoi managed`/`status`/`ignored` + the synced `.myenv/` placements.
+     * `chezmoi managed`/`status`/`ignored` + the synced `.dotden/` placements.
      */
     tree(): Promise<FileTreeView>
     /**
@@ -434,7 +434,7 @@ export interface DotdenApi {
     affectedEnvironments(targetPath: string): Promise<readonly AffectedEnvironment[]>
     /**
      * **Create a Workspace** (issue 1-14) — a new top-level access boundary the user
-     * adds to separate access (e.g. "Work"). Maps to a synced `.myenv/` write committed
+     * adds to separate access (e.g. "Work"). Maps to a synced `.dotden/` write committed
      * LOCALLY (ADR 0006); has no chezmoi equivalent. Creating the *second* Workspace is
      * what reveals the Workspace concept in the UI (it stays invisible while only the
      * default one exists).
@@ -587,7 +587,7 @@ export interface DotdenApi {
      * inherits the UNION of both Workspace subscriptions (a merge only ever widens access) and the
      * duplicate is dropped. The keeper's stable id is preserved, so its git-log attribution stays
      * continuous; dotden NEVER auto-merges — the user explicitly picks which entry folds into which.
-     * Commits the `.myenv/` change LOCALLY so it travels. Returns the refreshed list (with
+     * Commits the `.dotden/` change LOCALLY so it travels. Returns the refreshed list (with
      * attribution) so the Environments tab re-renders in one round-trip.
      */
     reassign(fromId: string, intoId: string): Promise<readonly EnvironmentWithAttribution[]>
@@ -596,7 +596,7 @@ export interface DotdenApi {
      * ADR 0024 lifecycle). Drops the entry keyed by `envId`; identity is the stable id, so this
      * never removes the wrong machine. Refuses to retire THIS running environment. Attribution is
      * never touched — the retired environment's past `git log` history stays readable. Commits the
-     * `.myenv/` change LOCALLY so it travels. Returns the refreshed list so the tab re-renders.
+     * `.dotden/` change LOCALLY so it travels. Returns the refreshed list so the tab re-renders.
      */
     retire(envId: string): Promise<readonly EnvironmentWithAttribution[]>
   }
@@ -625,7 +625,7 @@ export interface DotdenApi {
    * Like the automation level, these are **environment-local** (ADR 0024): each environment
    * decides whether the background TrayPoller runs, how aggressively it polls, and whether
    * dotden starts at login. They live in Electron `userData` and NEVER enter the synced
-   * `.myenv/` directory (paths/runtime/per-machine behavior are local facts, not user-authored
+   * `.dotden/` directory (paths/runtime/per-machine behavior are local facts, not user-authored
    * organization). Setting them re-arms the poller + applies the OS autostart preference.
    */
   readonly sync: {
@@ -646,7 +646,7 @@ export interface DotdenApi {
    * default**, so nothing leaves the environment unless the user opts in. Like the Sync settings,
    * consent is **environment-local** (ADR 0024): a per-machine decision — a shared/locked-down
    * machine refuses telemetry independently — so it lives in Electron `userData` and NEVER enters
-   * the synced `.myenv/` directory.
+   * the synced `.dotden/` directory.
    *
    * **Control surface only (issue 2-14):** `setSettings` persists a stored boolean and NOTHING
    * else — no network call, no SDK, no egress. The consumers that act on consent (the Sentry/Umami

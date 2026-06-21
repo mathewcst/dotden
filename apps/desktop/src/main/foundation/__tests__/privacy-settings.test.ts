@@ -6,7 +6,7 @@
  * (analytics · crash reports · diagnostic logs) persist LOCALLY, that they DEFAULT OFF, and that a
  * missing/corrupt/partial file always degrades to the SAFE all-off state — the consent gate must
  * fail CLOSED, never silently turn telemetry on, and (critically) NEVER write into the synced
- * `.myenv/` directory (ADR 0024 keeps consent environment-local: a per-machine decision, not
+ * `.dotden/` directory (ADR 0024 keeps consent environment-local: a per-machine decision, not
  * user-authored organization).
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -65,9 +65,9 @@ describe('privacy-settings (environment-local consent, ADR 0024)', () => {
     expect(await readPrivacySettings(dir)).toEqual(DEFAULT_PRIVACY_SETTINGS)
   })
 
-  it('persists to userData only — writes nothing into a synced .myenv/ tree', async () => {
+  it('persists to userData only — writes nothing into a synced .dotden/ tree', async () => {
     // The store is handed the userData dir; it must write its own file there and create NO
-    // `.myenv/` directory (ADR 0024 — telemetry consent is a per-environment decision that must
+    // `.dotden/` directory (ADR 0024 — telemetry consent is a per-environment decision that must
     // never become synced state another machine inherits).
     await writePrivacySettings(dir, {
       analyticsEnabled: true,
@@ -76,7 +76,7 @@ describe('privacy-settings (environment-local consent, ADR 0024)', () => {
     })
     const entries = await readdir(dir)
     expect(entries).toContain('privacy-settings.json')
-    expect(entries).not.toContain('.myenv')
+    expect(entries).not.toContain('.dotden')
   })
 
   it('fails CLOSED to all-off on corrupt JSON (never silently enable telemetry)', async () => {

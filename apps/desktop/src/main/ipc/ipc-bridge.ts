@@ -236,7 +236,7 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     return (await deps.denService()).scanCommit(targetPaths, traceId(payload))
   })
   // Allowlist a flagged secret (issue 2-04): persist the "Don't warn me about this File again"
-  // dismissal into the SYNCED `.myenv/` allowlist, scoped per File+match. Recording it never
+  // dismissal into the SYNCED `.dotden/` allowlist, scoped per File+match. Recording it never
   // blocks the Commit (warn-not-block, ADR 0001); the renderer calls it just before den:commit.
   registrar.handle('den:allowlist-secret', async (_event, payload: TracedPayload) => {
     const { finding } = payload as TracedPayload & { finding: SecretFinding }
@@ -245,7 +245,7 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   // Commit-message template (issue 2-09): the Settings → Commit tab. get-commit-template reads the
   // synced template + the chezmoi-sourced os/arch/hostname the live preview needs (no shell ever
   // reachable from the renderer). set-commit-template persists the synced default + Commits the
-  // `.myenv/` change LOCALLY (ADR 0006) so it travels on the next Sync; it returns the refreshed
+  // `.dotden/` change LOCALLY (ADR 0006) so it travels on the next Sync; it returns the refreshed
   // state so the tab re-renders from the source of truth.
   registrar.handle('den:get-commit-template', async (_event, payload: TracedPayload) => {
     return (await deps.denService()).commitTemplate(traceId(payload))
@@ -260,10 +260,10 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   //   App.tsx paints the live theme from.
   // - get-appearance-state returns the full synced-vs-local triple (synced · override · effective)
   //   the tab uses to mark pinned-here vs. inherited and offer "reset to the synced default".
-  // - set-appearance persists the SYNCED defaults + Commits the `.myenv/` change LOCALLY (ADR 0006)
+  // - set-appearance persists the SYNCED defaults + Commits the `.dotden/` change LOCALLY (ADR 0006)
   //   so they travel on the next Sync (edits "for everyone").
   // - set-appearance-override pins/clears this environment's LOCAL override in `userData` only — NO
-  //   `.myenv/` write, NO Commit, NO Sync: a local override shadows a default without changing it
+  //   `.dotden/` write, NO Commit, NO Sync: a local override shadows a default without changing it
   //   everywhere (the load-bearing ADR 0024 guarantee). None of these gates an invariant.
   registrar.handle('den:get-appearance', async (_event, payload: TracedPayload) => {
     return (await deps.denService()).appearanceSettings(traceId(payload))
@@ -438,7 +438,7 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
 
   // The Workspaces + nested Groups organization layer (issue 1-14): create a Workspace
   // (access boundary) / Group (organization), and re-file a File between Groups or
-  // Workspaces. Each MUTATES the synced `.myenv/` metadata, so its `_trace` id IS
+  // Workspaces. Each MUTATES the synced `.dotden/` metadata, so its `_trace` id IS
   // forwarded so the organize Operation emits a correlated wide event.
   registrar.handle('den:create-workspace', async (_event, payload: TracedPayload) => {
     const { label } = payload as TracedPayload & { label: string }
@@ -468,9 +468,9 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   })
 
   // The OS Scope verbs (issue 1-15): scope a File / Folder (Group) to specific OSes. Each
-  // MUTATES the synced `.myenv/` intent AND re-compiles the native `.chezmoiignore`, so its
+  // MUTATES the synced `.dotden/` intent AND re-compiles the native `.chezmoiignore`, so its
   // `_trace` id IS forwarded so the organize Operation emits a correlated wide event. The
-  // bridge never re-checks the narrowing invariant — MyenvStore clamps the request.
+  // bridge never re-checks the narrowing invariant — DenStore clamps the request.
   registrar.handle('den:set-file-scope', async (_event, payload: TracedPayload) => {
     const { targetPath, scope } = payload as TracedPayload & {
       targetPath: string
@@ -594,7 +594,7 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   })
   // The Environments-tab lifecycle (issue 2-15): reassign/merge a mistaken duplicate, and
   // retire a decommissioned machine. Unlike claim, neither changes THIS environment's local
-  // id, so there is NO re-arming — they are pure synced-registry mutations that Commit `.myenv/`
+  // id, so there is NO re-arming — they are pure synced-registry mutations that Commit `.dotden/`
   // (so the change travels) and return the refreshed list. The registry owns the self-protection
   // guards (cannot retire/fold-away self) + the never-auto-merge rule; the bridge never re-checks.
   registrar.handle('env:reassign', async (_event, payload: TracedPayload) => {

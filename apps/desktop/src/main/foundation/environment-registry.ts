@@ -2,14 +2,14 @@
  * EnvironmentRegistry — environment identity, labels, and git-log attribution
  * (issue 1-05, ADR 0024).
  *
- * The synced environment registry in `.myenv/` holds, per environment, exactly
+ * The synced environment registry in `.dotden/` holds, per environment, exactly
  * `{ id, label, os, subscribedWorkspaces }` — and **nothing else**. Critically,
  * "who changed this" / last-sync / activity is **derived from git log, never written
  * to the registry**, so the registry stays small and merge-friendly (renaming a label
  * is a one-line diff; activity never churns the file).
  *
  * This service composes the lower seams without re-owning any invariant:
- * - {@link MyenvStore} — the synced `.myenv/` registry/Workspace JSON;
+ * - {@link DenStore} — the synced `.dotden/` registry/Workspace JSON;
  * - {@link GitTransport} — `git log` over the same source repo, the attribution source;
  * - {@link ChezmoiAdapter} — mirrors this environment's own id into the
  *   environment-local chezmoi config (`[data].dotden_env_id`), the per-environment
@@ -28,7 +28,7 @@
  */
 import { GitTransport } from './git-transport.js'
 import { ChezmoiAdapter } from './chezmoi-adapter.js'
-import { MyenvStore, type EnvironmentEntry } from './myenv-store.js'
+import { DenStore, type EnvironmentEntry } from './den-store.js'
 
 /** This environment's local identity — the stable id, default label, OS, and claim hint. */
 export interface LocalIdentity {
@@ -44,7 +44,7 @@ export interface LocalIdentity {
 
 /** Construction wiring for an {@link EnvironmentRegistry}, bound to one environment's repo. */
 export interface EnvironmentRegistryOptions {
-  /** chezmoi source dir = the git-tracked Den repo holding `.myenv/`. */
+  /** chezmoi source dir = the git-tracked Den repo holding `.dotden/`. */
   readonly sourceDir: string
   /** Path to the bundled git binary, for `git log` attribution. */
   readonly gitBin: string
@@ -115,12 +115,12 @@ const LOG_FIELD_SEP = '\x1f'
  * Reads/writes the environment registry and derives attribution from git log.
  *
  * One instance is bound to a single environment's source repo + local identity. It
- * holds a {@link MyenvStore} (synced registry), a {@link GitTransport} (attribution),
+ * holds a {@link DenStore} (synced registry), a {@link GitTransport} (attribution),
  * and a {@link ChezmoiAdapter} (local-config id mirror). It never persists attribution
  * and never re-checks an owner's invariant (ADR 0008).
  */
 export class EnvironmentRegistry {
-  private readonly store: MyenvStore
+  private readonly store: DenStore
   private readonly git: GitTransport
   private readonly chezmoi: ChezmoiAdapter
 
@@ -128,7 +128,7 @@ export class EnvironmentRegistry {
    * @param options Source repo, binaries, dirs, config path, and this environment's identity.
    */
   constructor(private readonly options: EnvironmentRegistryOptions) {
-    this.store = new MyenvStore(options.sourceDir)
+    this.store = new DenStore(options.sourceDir)
     this.git = new GitTransport({ gitBin: options.gitBin, repoDir: options.sourceDir })
     this.chezmoi = new ChezmoiAdapter({
       chezmoiBin: options.chezmoiBin,
@@ -178,7 +178,7 @@ export class EnvironmentRegistry {
    * Read the Workspaces of the Den (id + label), for the returning flow's subscription pick
    * (issue 1-13). A second environment chooses which of these it subscribes to.
    *
-   * @returns Every Workspace in the synced `.myenv/` (the default Den seeds exactly one).
+   * @returns Every Workspace in the synced `.dotden/` (the default Den seeds exactly one).
    */
   async workspaces(): Promise<readonly { id: string; label: string }[]> {
     const { workspaces } = await this.store.readWorkspaces()
@@ -205,7 +205,7 @@ export class EnvironmentRegistry {
    * @returns This environment's registry entry as stored.
    */
   async registerWithSubscription(workspaceIds?: readonly string[]): Promise<EnvironmentEntry> {
-    // Ensure the Workspace doc + `.myenv/` ignore rule exist (idempotent), then default the
+    // Ensure the Workspace doc + `.dotden/` ignore rule exist (idempotent), then default the
     // subscription to ALL Workspaces (the issue's "defaulting to all") when none was chosen.
     const all = (await this.workspaces()).map((w) => w.id)
     const chosen = workspaceIds ?? all
@@ -227,7 +227,7 @@ export class EnvironmentRegistry {
    *
    * Renaming the label only changes the `label` field of this environment's entry; the
    * stable `id` is untouched, so identity (and all git-log attribution keyed on history)
-   * survives. Maps to a single {@link MyenvStore.registerEnvironment} upsert keyed by id.
+   * survives. Maps to a single {@link DenStore.registerEnvironment} upsert keyed by id.
    *
    * @param label The new, user-edited display label (trimmed; must be non-empty).
    * @returns The updated registry entry.
@@ -242,7 +242,7 @@ export class EnvironmentRegistry {
     }
     const updated: EnvironmentEntry = { ...entry, label: trimmed }
     await this.store.registerEnvironment(updated)
-    // Record the one-line `.myenv/` diff LOCALLY (ADR 0006) so the renamed label travels to
+    // Record the one-line `.dotden/` diff LOCALLY (ADR 0006) so the renamed label travels to
     // every environment on the next Sync — the registry is synced user-authored data (ADR 0024).
     await this.commitRegistry(`Rename environment to ${trimmed}`)
     return updated
@@ -332,7 +332,7 @@ export class EnvironmentRegistry {
       throw new Error(`Cannot retire: no environment with id ${envId}`)
     }
     await this.store.removeEnvironment(envId)
-    // The removal is a `.myenv/` diff — Commit LOCALLY so the retire travels (ADR 0006/0024).
+    // The removal is a `.dotden/` diff — Commit LOCALLY so the retire travels (ADR 0006/0024).
     await this.commitRegistry(`Retire environment ${envId}`)
     return this.list()
   }
@@ -341,7 +341,7 @@ export class EnvironmentRegistry {
    * **Reassign / merge** a mistaken duplicate environment entry into the correct one (issue 2-15,
    * ADR 0024 lifecycle "Reassign/merge folds a duplicate entry into the correct one").
    *
-   * Folds `fromId` (the duplicate) into `intoId` (the keeper) at the {@link MyenvStore} registry
+   * Folds `fromId` (the duplicate) into `intoId` (the keeper) at the {@link DenStore} registry
    * seam: the keeper inherits the UNION of both subscriptions (a merge only ever widens access)
    * and the duplicate entry is dropped. The keeper's stable id is preserved, so its git-log
    * attribution stays continuous; past commits authored under the duplicate's label stay readable
@@ -353,7 +353,7 @@ export class EnvironmentRegistry {
    * @param intoId The correct entry to keep.
    * @returns The full list (with attribution) AFTER the fold, so the UI re-renders in one round-trip.
    * @throws Error when `fromId` is THIS running environment, when the ids are equal, or when
-   *   either id is absent (delegated to {@link MyenvStore.reassignEnvironment}).
+   *   either id is absent (delegated to {@link DenStore.reassignEnvironment}).
    */
   async reassign(fromId: string, intoId: string): Promise<readonly EnvironmentWithAttribution[]> {
     if (fromId === this.options.identity.id) {
@@ -361,20 +361,20 @@ export class EnvironmentRegistry {
     }
     // The store validates existence + the self-into-self no-op and unions the subscriptions.
     await this.store.reassignEnvironment(fromId, intoId)
-    // The fold is a `.myenv/` diff — Commit LOCALLY so the merge travels (ADR 0006/0024).
+    // The fold is a `.dotden/` diff — Commit LOCALLY so the merge travels (ADR 0006/0024).
     await this.commitRegistry(`Reassign environment ${fromId} into ${intoId}`)
     return this.list()
   }
 
   /**
-   * Commit a `.myenv/`-only registry edit LOCALLY (ADR 0006), so a lifecycle change (rename /
+   * Commit a `.dotden/`-only registry edit LOCALLY (ADR 0006), so a lifecycle change (rename /
    * reassign / retire) travels to every environment on the next Sync. Uses `commitIfChanged`
    * (idempotent) so a no-op mutation — e.g. retiring an already-absent id — records nothing and
    * never fails "nothing to commit". Mirrors {@link DenService}'s `commitMetadata` pattern; the
    * registry is its own committer here so the lifecycle ops are self-contained and travel-correct.
    */
   private async commitRegistry(message: string): Promise<void> {
-    await this.git.commitIfChanged(['.myenv', '.chezmoiignore'], message)
+    await this.git.commitIfChanged(['.dotden', '.chezmoiignore'], message)
   }
 
   /** Read + parse the source repo's git log once, for attribution joins. */

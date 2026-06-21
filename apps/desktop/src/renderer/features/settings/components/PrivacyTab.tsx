@@ -29,7 +29,7 @@ import type { PrivacySettings } from '../../../../main/foundation/privacy-settin
  *
  * Consent is **environment-local** (ADR 0024): a per-machine decision — a shared/locked-down
  * machine refuses telemetry independently — so it lives in Electron `userData`, never the synced
- * `.myenv/`.
+ * `.dotden/`.
  *
  * Saving is optimistic-then-authoritative, mirroring the Sync/Appearance tabs: the UI flips
  * immediately, calls `window.dotden.privacy.setSettings`, and re-renders from the consent the main
