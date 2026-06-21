@@ -2,18 +2,7 @@ import { useState } from 'react'
 import { GitBranch, Loader2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/ui/button'
 import type { ConnectResult } from '@shared/remote'
-
-/**
- * The connect-URL preflight states, mirroring the design spec's `ConnectURL` `State`
- * variant (onboarding.md) and the 1-03 RemoteClient result shape.
- *
- * - `idle` — URL input, Connect disabled until non-empty.
- * - `checking` — `git ls-remote` running; input locked, Cancel available.
- * - `reachable` — brief ✓ before the flow auto-advances to Discover.
- * - `credential-error` — the ambiguous auth/host failure; enumerate likely causes,
- *   never assert one (ADR 0020). Recovery + sanitized Details.
- */
-type ConnectState = 'idle' | 'checking' | 'reachable' | 'credential-error'
+import { isConnectBusy, stateAfterConnectResult, type ConnectState } from '../lib/connect-state'
 
 /** Parsed host for the copy, derived locally so the UI never echoes the raw URL. */
 function hostFromRemote(url: string): string {
@@ -37,6 +26,9 @@ function hostFromRemote(url: string): string {
  * headline, an enumerated (never asserted) list of likely causes, a recovery line,
  * and a Details disclosure exposing only sanitized host/scheme/exit-code/stderr.
  * dotden never tries to fix auth itself and never auto-runs `gh auth switch`.
+ *
+ * On a reachable but incompatible repo (`foreign-chezmoi`), it refuses locally and returns the URL
+ * field to an editable state instead of leaving the shell in the initializing spinner.
  *
  * @param onConnected Called once the Remote is reachable AND `chezmoi init` succeeds,
  *   so the shell can advance to Discover.
@@ -82,6 +74,11 @@ export function OBConnectUrl({
       // Reachable → clone + initialize the Den, then hand off to Discover.
       setState('reachable')
       const connected = await window.dotden.remote.connect(url)
+      const nextState = stateAfterConnectResult(connected)
+      if (nextState === 'refused') {
+        setState(nextState)
+        return
+      }
       onConnected(connected)
     } catch (error) {
       // A rejected invoke (e.g. chezmoi init failed, bundled tools missing) must leave a
@@ -96,7 +93,7 @@ export function OBConnectUrl({
     }
   }
 
-  const busy = state === 'checking' || state === 'reachable'
+  const busy = isConnectBusy(state)
 
   return (
     <div className="flex max-w-xl flex-col gap-6">
@@ -170,12 +167,28 @@ export function OBConnectUrl({
         </div>
       ) : null}
 
+      {state === 'refused' ? (
+        <div
+          className="bg-dd-ember-950 text-dd-ember-300 border-dd-ember-400/30 grid gap-2 rounded-md border p-4 text-sm"
+          role="alert"
+        >
+          <div className="text-foreground flex items-center gap-2 font-medium">
+            <TriangleAlert className="text-dd-ember-300 size-4" />
+            This repo already has a chezmoi setup.
+          </div>
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            Full adoption is coming later. Connect an empty repo for now, or paste a different repo
+            URL and retry.
+          </p>
+        </div>
+      ) : null}
+
       <div className="flex items-center gap-2">
         <Button disabled={!url.trim() || busy} onClick={() => void connect()}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : <GitBranch className="size-4" />}
-          {state === 'credential-error' ? 'Retry' : 'Connect'}
+          {state === 'credential-error' || state === 'refused' ? 'Retry' : 'Connect'}
         </Button>
-        {state === 'checking' || state === 'credential-error' ? (
+        {state === 'checking' || state === 'reachable' || state === 'credential-error' ? (
           <Button
             variant="secondary"
             onClick={() => {
