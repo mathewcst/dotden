@@ -16,7 +16,7 @@ const OnboardingShell = lazy(() =>
   })),
 )
 const ReturningShell = lazy(() =>
-  import('@/features/returning/components/ReturningShell').then((module) => ({
+  import('@/features/onboarding/components/ReturningShell').then((module) => ({
     default: module.ReturningShell,
   })),
 )

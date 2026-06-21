@@ -11,6 +11,10 @@ catalog:
   '@eslint/js': ^10.0.1
   eslint: ^10.5.0
   eslint-config-prettier: ^10.1.8
+  # TS-path resolver for eslint-plugin-boundaries (ADR 0035): the renderer imports
+  # cross-module via the `@/*`/`@shared/*` tsconfig aliases, so the boundaries gate
+  # needs a resolver that maps those to files — node-only resolution can't see them.
+  eslint-import-resolver-typescript: ^4.4.5
   eslint-plugin-astro: ^1.7.0
   # Renderer layer-boundary gate (ADR 0035): the three-layer graph (ADR 0033) +
   # ui/den surface split (ADR 0036) as a lint rule. Flat-config, peer `eslint >=6`.
@@ -110,3 +114,6 @@ allowBuilds:
   '@swc/core': true
   electron-winstaller: true
   sharp: true
+  # Native (napi-rs) resolver behind eslint-import-resolver-typescript@4 — the
+  # boundaries gate's TS-path resolution (ADR 0035) needs its prebuilt binary.
+  unrs-resolver: true

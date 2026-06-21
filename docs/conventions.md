@@ -124,7 +124,7 @@ src/renderer/
     launch/  boot routing + LaunchProvider      shell/  DenWindow · panes · DialogLayer · TitleBar
     update/  root-mounted prompt
   features/                 # capabilities only — MAY import den-session + shared,
-    onboarding  returning  workspace  commit  sync  apply         NEVER app or another feature
+    onboarding  workspace  commit  sync  apply                    NEVER app or another feature
     secrets  settings  file-history  scope  diagnostics
     └─ each feature: components/  lib/  (+ hooks/ as needed) · per subdir its own __tests__/
   den-session/              # shared state leaf — store + slices + tree model (ADR 0034)
@@ -143,6 +143,14 @@ src/renderer/
   **user-facing capability a user would name**. App infrastructure — the shell frame, boot
   routing, the update prompt — is `app/`, not a feature. Diagnostics is a capability (the
   command-log viewer, ADR 0030), so it stays a feature.
+- **`onboarding` is one setup capability with two entry shells.** The boundaries gate surfaced
+  that the old `returning` feature was the _same_ setup domain split in two — both halves carried
+  the `OB*` (onboarding-step) vocabulary and `returning` reached sideways into `onboarding`'s
+  connect-repo screen. They were **merged into `onboarding`** (A5): `OnboardingShell` (first-run)
+  and `ReturningShell` (existing-Den, new-environment) are two entry components of one feature, so
+  the shared steps are now intra-feature. The launch routes (`onboarding`/`returning`) and the
+  landing chooser fork are unchanged — those are app-level routing in `app/launch`, not the
+  feature boundary. Supersedes ADR 0033's two-feature roster (reconciled there).
 - **The change-lifecycle split follows ADR 0006's seam:** `commit/` outbound, `sync/`
   transport, `apply/` inbound (Conflict folds in — it only exists during an Apply).
 - **Never overload a glossary term with a code name.** The old `Workspace.tsx` was the _den
@@ -150,8 +158,15 @@ src/renderer/
   god-component. The window is `app/shell/`; a domain Workspace is `features/workspace/`.
 - **Import direction is one-way and lint-gated (ADR 0035).** `app → features → {components,
 lib, hooks, den-session}`. A feature never imports `app/` or another feature's internals;
-  the shared leaves never import up. `eslint-plugin-boundaries` enforces it — the boundaries
-  config is the canonical, machine-checked statement of this graph.
+  the shared leaves never import up. **Live and green** via `eslint-plugin-boundaries@6` —
+  the canonical, machine-checked statement of this graph is
+  `packages/eslint-config/renderer-boundaries.js` (read its `boundaries/elements` + the
+  `boundaries/dependencies` rules as the architecture). Each feature folder is one boundaries
+  _instance_ (folder mode), so importing your own subtree is internal/unchecked while reaching
+  into another feature is a cross-instance dependency that fails the gate. `@/*`/`@shared/*`
+  aliases resolve through `eslint-import-resolver-typescript` so aliased cross-layer imports are
+  actually seen. (The gate already earned its keep on landing — it caught a misfiled `CommitRow`
+  and the `returning`/`onboarding` split a manual pass had missed.)
 - **Placement rule.** A module used by **one** feature lives in that feature; used by **2+**,
   it moves to a shared leaf (`components/den/` for components, `lib/` for utilities, a slice in
   `den-session/` for shared state). A single-consumer component that still carries den
@@ -186,12 +201,16 @@ lib, hooks, den-session}`. A feature never imports `app/` or another feature's i
   `TooltipProvider` today; sonner's `<Toaster/>` joins it in Phase B). It exists _because_ `App.tsx`
   is `app`-tier and may not import `ui/` — only `providers/` and `den/` may — so the lone `ui/`
   touch is quarantined there.
-- **Bespoke-native allowlist.** A few rows render native `<button>`/`<div>` for keyboard a11y
-  and are _not_ shadcn-migration targets: TreeRow/FileRow (`features/workspace/`), CommitRow
-  (`commit/`), SidebarItem, ListRow/SelectRow, DiffLine/DiffLineSplit/MergeHunk
-  (`file-history/`, `apply/`), WindowControls (`den/`). Each native element the
-  `no-restricted-syntax` gate would flag carries `// eslint-disable-next-line -- bespoke:
-<reason>` (ADR 0035); a stale one fails lint, so the list can't silently grow.
+- **Bespoke-native allowlist (the native-HTML gate is Phase B, not yet live).** A few rows render
+  native `<button>`/`<div>` for keyboard a11y and are _not_ shadcn-migration targets: TreeRow/FileRow
+  (`features/workspace/`), CommitRow (`file-history/`), SidebarItem, ListRow/SelectRow,
+  DiffLine/DiffLineSplit/MergeHunk (`file-history/`, `apply/`), WindowControls (`den/`). This is the
+  _planned_ allowlist for ADR 0035's native-HTML `no-restricted-syntax` gate — which is **not enabled
+  yet**: ~25 native-HTML sites remain, and most are settings/secrets/onboarding **form inputs** that
+  need a real `den/` shadcn migration (Phase B), not a `-- bespoke:` disable. Turning the rule on now
+  would force ~25 dishonest disables. When Phase B migrates those inputs, the rule lands and each
+  genuinely-bespoke element above gets its `// eslint-disable-next-line -- bespoke: <reason>` (a stale
+  one then fails lint, so the list can't silently grow). The **layer-graph** gate above _is_ live.
 - **Shared state is the scoped `den-session` store (ADR 0027 + 0034).** One Zustand store
   composed from slices in `den-session/slices/`, created by a factory and handed down through
   `<DenSessionProvider key={role}>` (mounted in `app/`) — **never a module-level singleton**
@@ -241,10 +260,15 @@ explanation. Full policy in **ADR 0021**; in practice:
 
 - **Run lint clean.** `pnpm check:lint` (and `pnpm check` for types too) before
   pushing. The shared config is `@dotden/eslint-config`.
-- **Structural gates are hard (ADR 0035), craft stays a guide.** The renderer override gates
-  the **layer graph** (`eslint-plugin-boundaries`) and **native-HTML-where-shadcn-exists**
-  (`no-restricted-syntax`) — see _Renderer layering_ above. Comments / component size stay
-  review guides; the split is structure-vs-style, not gate-vs-guide globally.
+- **Structural gates are hard (ADR 0035), craft stays a guide.** The **layer graph**
+  (`eslint-plugin-boundaries`, `packages/eslint-config/renderer-boundaries.js`) is **live and
+  enforced**; the sister **native-HTML-where-shadcn-exists** gate (`no-restricted-syntax`) is
+  **deferred to Phase B** — it can't go green until the remaining native form inputs migrate to
+  `den/` (see _Bespoke-native allowlist_ above), so enabling it now would only add dishonest
+  disables. Comments / component size stay review guides; the split is structure-vs-style, not
+  gate-vs-guide globally. The shadcn vendor files (`components/ui/**`, the `use-mobile` hook) are
+  config-exempt from `react-hooks/set-state-in-effect` — CLI-owned code we keep `shadcn add`-clean,
+  never hand-patch (ADR 0036); our own renderer code stays fully gated by that rule.
 - **`eslint-disable` is a last resort, and never bare.** Every disable must carry an
   inline reason after `--`:
 

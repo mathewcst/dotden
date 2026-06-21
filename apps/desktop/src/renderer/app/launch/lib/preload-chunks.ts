@@ -27,7 +27,7 @@
 const COLD_CHUNKS: ReadonlyArray<() => Promise<unknown>> = [
   // Top-level routes reachable from the landing chooser / title bar.
   () => import('@/features/onboarding/components/OnboardingShell'),
-  () => import('@/features/returning/components/ReturningShell'),
+  () => import('@/features/onboarding/components/ReturningShell'),
   () => import('@/features/settings/components/SettingsShell'),
   // Full-window views swapped in from inside the den window on a user verb.
   () => import('@/features/apply/components/ReviewApply'),

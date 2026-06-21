@@ -1,4 +1,4 @@
-import { CommitRow } from '@/features/commit/components/CommitRow'
+import { CommitRow } from './CommitRow'
 import { ConfirmDialog } from '@/components/den/confirm-dialog'
 import { Button } from '@/components/den/button'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/den/resizable'

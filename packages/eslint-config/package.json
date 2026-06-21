@@ -23,6 +23,7 @@
   "dependencies": {
     "@eslint/js": "catalog:",
     "eslint-config-prettier": "catalog:",
+    "eslint-import-resolver-typescript": "catalog:",
     "eslint-plugin-astro": "catalog:",
     "eslint-plugin-boundaries": "catalog:",
     "eslint-plugin-react-hooks": "catalog:",

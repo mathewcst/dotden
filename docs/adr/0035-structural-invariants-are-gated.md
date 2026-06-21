@@ -74,6 +74,22 @@ split is **structure-vs-style**, not gate-vs-guide globally.
 
 ## Consequences
 
+- **As shipped (A5 · 2026-06-21).** The **layer-graph gate (Decision 1) is live and green** —
+  `eslint-plugin-boundaries@6` (a rewrite over the v5-era syntax the Decision snippet above
+  sketches; the verbatim snippet is reconciled to the v6 `boundaries/dependencies` form in A6).
+  Implementation: `packages/eslint-config/renderer-boundaries.js`. Two v6 facts shape it: element
+  `mode: 'folder'` makes each feature folder one _instance_, so intra-feature imports are internal
+  and unchecked while cross-feature imports are checked and disallowed (cross-feature encapsulation
+  needs no capture-template, just the per-feature `capture`); and `@/*`/`@shared/*` aliases resolve
+  through `eslint-import-resolver-typescript` (node resolution can't see them, and an unresolved
+  import is silently skipped). On landing the gate immediately caught two real drifts a manual pass
+  had missed — a misfiled `CommitRow` (commit/ → file-history/, its sole consumer) and the
+  `returning`/`onboarding` split (merged, ADR 0033). **The native-HTML gate (Decision 2) is
+  deferred to Phase B:** ~25 native-HTML sites remain and most are settings/secrets/onboarding
+  **form inputs** that need a real `den/` shadcn migration (Phase B), _not_ a `-- bespoke:` disable,
+  so enabling the rule now would force ~25 dishonest disables. It lands when Phase B migrates those
+  inputs. (The shadcn vendor files — `components/ui/**`, the `use-mobile` hook — are config-exempt
+  from `react-hooks/set-state-in-effect`: CLI-owned code kept `shadcn add`-clean, ADR 0036.)
 - Adds `eslint-plugin-boundaries` to `@dotden/eslint-config`, in a renderer-scoped `files:`
   override (the graph is renderer-specific).
 - **The boundaries config _is_ the architecture documentation** — the element/rule list is the

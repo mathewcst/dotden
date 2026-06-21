@@ -77,3 +77,10 @@ called shell "the composition root"; this ADR just stops _also_ calling it a fea
   file-type), glossary naming, the rejected `git/`/`file/` bucket, and the scoped store
   (relocated in ADR 0034).
 - `app/` is granted the only feature fan-in — by design; it is the root.
+- **`returning` merged into `onboarding` (A5, boundaries pass).** The gate surfaced that
+  `returning` was the _same_ setup domain as `onboarding` — both carried the `OB*` (onboarding-step)
+  vocabulary and `returning` imported `onboarding`'s connect-repo screen sideways. They are now
+  **one** feature with two entry shells (`OnboardingShell` first-run, `ReturningShell`
+  existing-Den/new-environment), so the shared steps are intra-feature and the roster is **10**
+  features, not 11. The launch routes (`onboarding`/`returning`) and `app/launch` routing are
+  unchanged — app-level routing, not the feature boundary. (See conventions.md _Renderer layering_.)
