@@ -27,13 +27,14 @@ on **`03 · Screens — App`** (`54:2`), a 4+3 grid below `Secret & errors`.
 
 ## The 7 tabs
 
-1. **Automation** (`542:6204`) — the headline. A **risk-graded ladder** of 4 `SelectRow`s, one per
-   automation level from the [Automation levels](../../adr/0006-sync-model-transport-not-commit.md) ladder (see also [scope-v1](../../scope-v1.md) "What v1 delivers / automation ladder"): **Manual** (default, Selected — ember radio + "Default"
-   pill), **Auto-sync** (auto-push + fetch, Apply stays manual), **Auto-apply** (Amber **"Warned"**
-   pill), **YOLO mode** (Red **"Strongly warned"** pill). Warned/strongly-warned use functional
-   _status_ tones on the trailing `Pill` only — never an interactive control, preserving ember as the
-   sole interactive hue. A `Shield` note restates the never-relax invariants (conflicts never
-   auto-resolve; incoming deletions always confirm).
+1. **Automation** (`542:6204`) — the headline. A **transport-only ladder** of **2 `SelectRow`s**
+   ([ADR 0037](../../adr/0037-automation-ladder-transport-only.md); see also [scope-v1](../../scope-v1.md)
+   "automation ladder"): **Auto-sync** (default, Selected — ember radio + "Default" pill; auto-push + fetch,
+   **Apply stays manual**) and **Manual** (nothing automatic). No Auto-apply / YOLO rungs and **no warned
+   amber/red `Pill`s** — they were removed: automation never writes the working tree, so there is no risky
+   rung to warn about. A `Shield` note restates the invariant — automation only moves data through git;
+   writing the working tree is always a deliberate Apply (conflicts never auto-resolve; incoming deletions
+   always confirm).
 2. **Commit** (`542:6537`) — the commit-message template (`[$os-sync-$year-$month-$day]`, mono field +
    "Reset to default"), a live preview (`[macos-sync-2026-06-14]`), and insertable variable `Kbd` chips
    (`$os $arch $hostname $environment $year …`). Maps to chezmoi `git.commitMessageTemplate`

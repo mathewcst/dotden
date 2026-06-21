@@ -11,9 +11,11 @@
 | #3 Act only within subscription                      | `ApplicabilityResolver`               | emits an `AppliesHere` witness that `ApplyPlanner`/`SyncEngine` **require as input** to act on a File                                                                                |
 | #4 Confirm incoming deletions                        | `ApplyPlanner` / Apply-review surface | deletions are first-class, never applied without explicit confirmation                                                                                                               |
 
-`AutomationPolicy` gates the Manual/Auto-sync/Auto-apply/YOLO levels by **depending on** these types; it never duplicates the gate.
+`AutomationPolicy` gates the automation levels by **depending on** these types; it never duplicates the gate.
+(Per [ADR 0037](./0037-automation-ladder-transport-only.md) the ladder is now just **Manual / Auto-sync** —
+automation is transport-only, so there is no automatic-apply path for the policy to gate.)
 
-**Why:** In the proposed design each invariant was "owned" by a different pure module, all of which unit-test green in isolation. But the invariants actually **compose at runtime in `SyncEngine`**, per event (incoming, conflict-resolved, the YOLO auto-commit-before-merge path). Four green unit tests are **testability without locality**: the real regression is `SyncEngine` forgetting to route a row through `ConflictModel`, and no pure-module test catches that. Encoding each invariant in a type that downstream modules _must_ consume makes the dangerous composition either correct-by-construction or a compile error.
+**Why:** In the proposed design each invariant was "owned" by a different pure module, all of which unit-test green in isolation. But the invariants actually **compose at runtime in `SyncEngine`**, per event (incoming, conflict-resolved; historically also the now-removed YOLO auto-commit-before-merge path, see [ADR 0037](./0037-automation-ladder-transport-only.md)). Four green unit tests are **testability without locality**: the real regression is `SyncEngine` forgetting to route a row through `ConflictModel`, and no pure-module test catches that. Encoding each invariant in a type that downstream modules _must_ consume makes the dangerous composition either correct-by-construction or a compile error.
 
 **The trade-off we accepted:** the pure core carries a few witness/branded types (`AppliesHere`, an unconstructable resolved-bytes type) that add ceremony to the interfaces, in exchange for moving the safety guarantee from "remembered to check" to "cannot express the unsafe state."
 

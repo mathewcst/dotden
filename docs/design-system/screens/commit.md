@@ -23,17 +23,19 @@ swapped to an `AppPane/Commit` variant.
   (→ Settings; commit-message template in [scope-v1](../../scope-v1.md)).
 
 The primary action is **Commit changes** (the exact label; see the **Commit** verb in
-[CONTEXT.md](../../../CONTEXT.md)). A helper line — "Commits locally —
-push later with Sync now" — encodes the commit-is-local-until-pushed rule ([ADR 0006](../../adr/0006-sync-model-transport-not-commit.md)). After committing, the
-composer flips to **Committed**: success callout, the new commit (amber SHA), a **TO PUSH · 1 commit
-ahead** line, and a **Sync now** push button (Sync now = push pending + fetch; see [ADR 0006](../../adr/0006-sync-model-transport-not-commit.md)).
+[CONTEXT.md](../../../CONTEXT.md)). A helper line — "Committed locally — Sync to share it" — encodes the
+commit-is-local-until-pushed rule ([ADR 0006](../../adr/0006-sync-model-transport-not-commit.md)). After
+committing, the composer flips to **Committed**: success callout, the new commit (amber SHA), a
+**Not synced · 1 change** line, and a **Sync now** push button (Sync now = push pending + fetch; see
+[ADR 0006](../../adr/0006-sync-model-transport-not-commit.md)). Copy retoned from "TO PUSH · 1 commit ahead" —
+"ahead"/"to push" is git jargon, banished from user-facing copy ([brand-and-vocabulary.md](../../brand-and-vocabulary.md) → "Not synced"); **reconciled in Figma** on `283:3059`/`283:3060` (section label `NOT SYNCED` over `1 change waiting to Sync`).
 
 ## The two screens
 
-| Screen                                       | Right pane                       | Notes                                                                 |
-| -------------------------------------------- | -------------------------------- | --------------------------------------------------------------------- |
-| **Pending changes — Commit** (`283:2645`)    | `AppPane/Commit` State=Pending   | tree + diff show the live uncommitted state; composer ready.          |
-| **Committed · 1 ahead to push** (`283:3059`) | `AppPane/Commit` State=Committed | titlebar shows the ahead count ("1 to push"); **Sync now** available. |
+| Screen                                    | Right pane                       | Notes                                                                                  |
+| ----------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------- |
+| **Pending changes — Commit** (`283:2645`) | `AppPane/Commit` State=Pending   | tree + diff show the live uncommitted state; composer ready.                           |
+| **Committed · Not synced** (`283:3059`)   | `AppPane/Commit` State=Committed | titlebar shows the not-synced count ("Not synced · 1 change"); **Sync now** available. |
 
 **Committed-screen consistency** (instance overrides, mirroring the returning "Applied · in sync"
 polish): after commit the local tree is clean, so the three local **M/A status letters are hidden**

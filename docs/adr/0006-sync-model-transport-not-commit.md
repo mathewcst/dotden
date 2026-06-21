@@ -4,6 +4,11 @@ dotden strictly separates **Commit** (recording local edits into the Den through
 
 ## Automation levels
 
+> ⚠ **Revised by [ADR 0037](./0037-automation-ladder-transport-only.md).** The ladder collapsed to two
+> transport-only levels — **YOLO** and **Auto-apply** were removed, and **Auto-sync is now the default**
+> (pre-selected at onboarding, downgradable to Manual). The table below is the original four-level design,
+> kept for history; see 0037 for the current ladder.
+
 | Level                                              | What becomes automatic                                                                                              | Risk   |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------ |
 | **Manual** _(default)_                             | Nothing. Manual Commit / Push / review-Apply. Tray poller notifies only.                                            | —      |

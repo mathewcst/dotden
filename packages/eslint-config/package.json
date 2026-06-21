@@ -24,6 +24,7 @@
     "@eslint/js": "catalog:",
     "eslint-config-prettier": "catalog:",
     "eslint-plugin-astro": "catalog:",
+    "eslint-plugin-boundaries": "catalog:",
     "eslint-plugin-react-hooks": "catalog:",
     "eslint-plugin-turbo": "catalog:",
     "globals": "catalog:",

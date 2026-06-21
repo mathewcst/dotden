@@ -265,8 +265,8 @@ mirroring `<AppShell left center right />` in React:
   `Cloud` for offline). Extracted from the inline AppShell titlebar frame via **detach-extract**
   (`detachInstance` preserves bindings → `createComponentFromNode`), then AppShell + all 20
   app-screen titlebars were migrated to instances (the 6 detached screens also picked up the M8
-  Lucide icons they'd missed). Per-screen sync labels ("1 to push", "Cloned · just now", "Offline" +
-  Cloud) are now clean `SyncStatus`/`SyncIcon` overrides instead of deep node edits.
+  Lucide icons they'd missed). Per-screen sync labels ("Not synced · N changes", "Cloned · just now",
+  "Offline" + Cloud) are now clean `SyncStatus`/`SyncIcon` overrides instead of deep node edits.
 - Default pane components (same page): **`AppPane/Workspaces`** (284w) · **`AppPane/Diff`** (716w) ·
   **`AppPane/Inspector`** (320w). The home screen `App · Main` uses these defaults.
   - The panes were extracted from the original Phase-3 screen via `createComponentFromNode` (note the
@@ -282,9 +282,11 @@ The default panes assemble the [signature screen](./screens/signature-screen.md)
   multiline message field pre-filled with the **resolved** template (`[macos-sync-2026-06-14]`) + a
   template hint showing the **unresolved** template string (`[$os-sync-$year-$month-$day]`) in a code
   block + "Edit template" link + a full-width **Commit changes** `Button` (git-commit lead) and a
-  "commits locally — push later with Sync now" helper. **Committed:** green success callout + the new
-  commit row (message + amber SHA + time) + a "TO PUSH · 1 commit ahead" section + a **Sync now**
-  `Button`. Built per [figma-conventions.md](./figma-conventions.md) (state set via clone-free
+  "Committed locally — Sync to share it" helper. **Committed:** green success callout + the new
+  commit row (message + amber SHA + time) + a "Not synced · N changes" section + a **Sync now**
+  `Button` (retoned from "TO PUSH · 1 commit ahead" → `NOT SYNCED` over "1 change waiting to Sync";
+  reconciled in Figma, see [brand-and-vocabulary.md](../brand-and-vocabulary.md) → "Not synced"). Built per
+  [figma-conventions.md](./figma-conventions.md) (state set via clone-free
   per-state build → `combineAsVariants`).
 
 ## Settings scaffold (Phase 5 — Batch F)
@@ -304,11 +306,14 @@ pattern, applied to settings tabs). See [settings](./screens/settings.md).
   **Card rows are `SettingsRow` instances** (Sync/Repository/Privacy/Environments/About — see the
   `SettingsRow` entry under Row families); Automation (`SelectRow` ladder) and Commit (mono field) keep
   their bespoke controls. The lone exception is Repository's mono Remote-URL row (bespoke):
-  - **`Automation`** (`530:1115`) — the **risk-graded ladder** via 4 `SelectRow`s: **Manual** (Selected,
-    Neutral "Default" pill) / **Auto-sync** / **Auto-apply** (Amber "Warned" trailing `Pill`) / **YOLO
-    mode** (Red "Strongly warned"). Subtitles from the automation levels in
-    [ADR 0006](../adr/0006-sync-model-transport-not-commit.md). A `Shield` note states the two
-    never-relax invariants (conflicts never auto-resolve; deletions always confirm).
+  - **`Automation`** (`530:1115`) — the **transport-only ladder** via **2 `SelectRow`s**: **Auto-sync**
+    (Selected by default — Neutral "Default" pill) / **Manual**. No warned/amber/red rungs — Auto-apply &
+    YOLO were removed ([ADR 0037](../adr/0037-automation-ladder-transport-only.md)). Subtitles: Auto-sync =
+    "Sends your committed changes and fetches incoming in the background. Apply stays a manual review.";
+    Manual = "Nothing automatic. The tray poller notifies you about incoming changes — you review and Apply
+    yourself." A
+    `Shield` note restates the invariant — automation only moves data through git; writing your working
+    tree is always a deliberate Apply (conflicts never auto-resolve; deletions always confirm).
   - **`Commit`** (`532:1146`) — mono message-template field (`[$os-sync-$year-$month-$day]`) + "Reset to
     default" + a live preview line + a wrapped row of insertable variable `Kbd` chips.
   - **`Sync`** (`533:1158`) — a settings card with **`Switch`** rows (tray poller, start-at-login) + a
@@ -344,15 +349,18 @@ Live in section `571:1299` on page 02. Full spec: [tray-and-notification](./scre
   **status dot** (green up-to-date / blue incoming·syncing / gray offline), then `Sync now ⌘S`,
   `Review & Apply` (bright **with count** when incoming, else grayed/disabled), `Auto-sync: Manual ›`
   (the automation-level quick-toggle, see [ADR 0006](../adr/0006-sync-model-transport-not-commit.md)),
-  `Open dotden`, `Quit dotden ⌘Q`. **`State` is the whole API** (same
+  `Open dotden`, `Quit dotden ⌘Q`. (`Auto-sync: Manual ›` is the 2-way Manual ⟷ Auto-sync quick-toggle —
+  [ADR 0037](../adr/0037-automation-ladder-transport-only.md).) **`State` is the whole API** (same
   pattern as `Banner`) — each variant bakes its dot/copy/enabled-rows; disabled rows = secondary @ 0.5.
-- **`OSNotification`** (`562:1299`) SET `State=Incoming|Conflict|Applied` — the macOS notification toast
+- **`OSNotification`** (`562:1299`) SET `State=Incoming|Conflict` — the macOS notification toast
   (360w, radius 16): ember **app-icon** (gradient square + white dot) + `dotden`/`now` header + title +
   body + a right-aligned translucent **action button**. Incoming → **Review & Apply**, Conflict →
-  **Resolve**, **Applied** = the auto-apply confirmation (informational, **action row hidden** so the
-  card shrinks). Mirrors the in-app `Banner` content, in native chrome — the closed-window counterpart.
+  **Resolve**. Mirrors the in-app `Banner` content, in native chrome — the closed-window counterpart.
   Faithful to the notify-don't-apply rule ([ADR 0006](../adr/0006-sync-model-transport-not-commit.md)):
-  the poller **notifies**; the action opens the app — it never applies.
+  the poller **notifies**; the action opens the app — it never applies. (The former **Applied** state was
+  the auto-apply confirmation — retired with auto-apply, [ADR 0037](../adr/0037-automation-ladder-transport-only.md);
+  the poller never applies, so there is no background "Applied" to announce. Manual-apply confirmation is
+  the in-app toast.)
 
 ## Diagnostics (Feature 1)
 

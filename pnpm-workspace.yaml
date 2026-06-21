@@ -12,6 +12,9 @@ catalog:
   eslint: ^10.5.0
   eslint-config-prettier: ^10.1.8
   eslint-plugin-astro: ^1.7.0
+  # Renderer layer-boundary gate (ADR 0035): the three-layer graph (ADR 0033) +
+  # ui/den surface split (ADR 0036) as a lint rule. Flat-config, peer `eslint >=6`.
+  eslint-plugin-boundaries: ^6.0.2
   eslint-plugin-react-hooks: ^7.1.1
   eslint-plugin-turbo: ^2.9.18
   globals: ^17.6.0

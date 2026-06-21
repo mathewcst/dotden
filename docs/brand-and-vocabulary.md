@@ -102,9 +102,9 @@ environment (a computer) subscribes to Workspaces
 - **Apply**: write Den state onto this environment.
 - **Sync**: transport only — sends already-Committed changes and checks for incoming changes. It does not Commit or Apply by default.
 - **Sync now**: manual transport action. It can run while uncommitted changes exist, but only transports Committed changes and checks incoming.
-- **Auto-sync**: "Auto-sync sends your committed changes and notifies you about incoming changes."
-- **Apply automatically**: UI setting label for Auto-apply.
-- **YOLO mode**: actual UI label for full-hands-off automation; intentionally warning-shaped.
+- **Not synced**: the status-bar state for a Commit recorded locally but not yet pushed — `Not synced · N changes`, the mirror of `Synced · <time> ago`. **Rule:** user-facing copy never says git's **"ahead"** or **"to push"**; "push"/"ahead" stay in the IPC/git layer only. We speak Sync.
+- **Auto-sync**: "Auto-sync sends your committed changes and notifies you about incoming changes." The default automation level; the only level besides Manual ([ADR 0037](adr/0037-automation-ladder-transport-only.md)).
+  - _Retired (ADR 0037):_ **Apply automatically** / **YOLO mode** — removed; dotden has no auto-write-to-disk level. Don't reuse these labels.
 
 ## Review flows
 

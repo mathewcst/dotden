@@ -158,7 +158,7 @@ Variant column = variant values (axes `/`-joined for multi-axis sets). Props col
 | Component                    | ID         | Variants | Key props                                                                                                                              |
 | ---------------------------- | ---------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | SettingsShell                | `540:1205` | —        | `Content#540:0` (swap); per screen also set the active `SidebarItem` `State=Active`                                                    |
-| SettingsContent/Automation   | `530:1115` | —        | 4× `SelectRow` ladder (Manual/Auto-sync/Auto-apply/YOLO)                                                                               |
+| SettingsContent/Automation   | `530:1115` | —        | 2× `SelectRow` ladder (Auto-sync default / Manual) — transport-only, ADR 0037 (was 4× incl. Auto-apply/YOLO)                           |
 | SettingsContent/Commit       | `532:1146` | —        | mono template field + variable `Kbd` chips                                                                                             |
 | SettingsContent/Sync         | `533:1158` | —        | poller/autostart `Switch`es + cadence + note                                                                                           |
 | SettingsContent/Repository   | `534:1160` | —        | git remote URL + "Reachable" + git-credential note; 1Password card (V1-Lean, no provider login)                                        |

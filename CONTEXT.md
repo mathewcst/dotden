@@ -67,7 +67,7 @@ _Avoid_: clash, collision (use in prose only), merge error.
 
 **Destination state** _(chezmoi term)_: The actual current contents of managed files on an environment right now, before any Apply.
 
-**Commit** _(dotden verb — maps to chezmoi `add` / `re-add` plus git commit)_: Take an environment's current edited Files and Folders and intentionally record them into the **Den**, ready to push. Primary button label: **Commit changes**.
+**Commit** _(dotden verb — maps to chezmoi `add` / `re-add` plus git commit)_: Take an environment's current edited Files and Folders and intentionally record them into the **Den**, ready to Sync. Primary button label: **Commit changes**.
 _Avoid_: save, capture, upload.
 
 **Apply** _(dotden verb — maps to chezmoi `apply`)_: Write source/target state onto an environment's real files and folders. The "make this real here" direction.
@@ -75,12 +75,10 @@ _Avoid_: install, restore, pull (pull is the git step underneath), download.
 
 **Sync** _(dotden verb — transport)_: Move already-Committed changes between environments and check for incoming changes. Sync is transport only; it does not automatically Commit or Apply by default.
 
-**Auto-sync** _(dotden low-risk automation level, environment-local)_: Automatically sends Committed changes and notifies about incoming changes. **Apply** stays a manual review.
-_Avoid_: auto-commit (that's the separate full-hands-off level), continuous backup, mirroring.
+**Auto-sync** _(dotden's one automation level, environment-local; the default — ADR 0037)_: Transport-only automation — automatically **pushes** your Committed changes and **fetches & notifies** about incoming changes. **Apply always stays a manual review.** The automation ladder is just **Manual ←→ Auto-sync**; Auto-sync is pre-selected at onboarding and downgradable to Manual. Invariant: automation only moves data through git (reversible, touches no live file); writing your working tree is always a deliberate human Apply.
+_Avoid_: auto-commit, auto-apply, continuous backup, mirroring (dotden has no auto-write-to-disk level — see ADR 0037).
 
-**Apply automatically** _(dotden setting label; shorthand Auto-apply)_: Apply clean incoming changes without review. Conflicts and risky changes still ask first.
-
-**YOLO mode** _(dotden setting label)_: Strongly warned full-hands-off automation that automatically Commits, Syncs, and Applies changes except Conflicts. The name is intentionally warning-shaped: “this might break things but I don't care.”
+> **Retired (ADR 0037):** **Auto-apply** ("Apply automatically") and **YOLO mode** were removed. "Clean" means no git conflict, not safe-to-write; automation never writes the working tree. Kept here only so the terms aren't silently reused.
 
 **Operation trace** _(dotden-internal, environment-local; engineering construct, never user-facing copy)_: The named, timed span tree for one user action — a Commit, Sync now, Apply, onboarding step, or poll. Distinct from **Sync** (the user-facing transport verb). See ADR 0007.
 _Avoid_: transaction, session.

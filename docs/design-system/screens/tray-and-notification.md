@@ -58,25 +58,27 @@ Disabled rows = secondary gray @ 0.5 opacity (the macOS disabled-menu-item look)
 (Incoming) → `clone()` ×3 → edit → `combineAsVariants` (literal colors, so `clone()` is safe here —
 nothing variable-bound to drop).
 
-## `OSNotification` (`562:1299`) — macOS notification toast · `State = Incoming | Conflict | Applied`
+## `OSNotification` (`562:1299`) — macOS notification toast · `State = Incoming | Conflict`
 
 A dark Notification-Center card (radius 16, 1px white@0.08 hairline, big soft shadow, 360w): an
 **ember app-icon** (gradient rounded-square + white dot — the dotden mark) + a content column —
 header (`dotden` + `now` timestamp), **title** (Inter Semi Bold), **body** (secondary), and a
 right-aligned **action button** (translucent white@0.13 pill).
 
-| State                   | title                                | body                                        | action                |
-| ----------------------- | ------------------------------------ | ------------------------------------------- | --------------------- |
-| **Incoming** `560:1299` | `work-laptop pushed 3 changes`       | `Review and apply them on this Mac.`        | **Review & Apply**    |
-| **Conflict** `560:1300` | `Conflict in .zshrc`                 | `work-laptop and this Mac both changed it.` | **Resolve**           |
-| **Applied** `560:1314`  | `Applied 3 changes from work-laptop` | `Your setup is up to date.`                 | — (action row hidden) |
+| State                   | title                          | body                                        | action             |
+| ----------------------- | ------------------------------ | ------------------------------------------- | ------------------ |
+| **Incoming** `560:1299` | `work-laptop pushed 3 changes` | `Review and apply them on this Mac.`        | **Review & Apply** |
+| **Conflict** `560:1300` | `Conflict in .zshrc`           | `work-laptop and this Mac both changed it.` | **Resolve**        |
 
-**Applied** is the **auto-apply confirmation** (informational, no action) — its `actionRow.visible =
-false` collapses cleanly under auto-layout, so the card shrinks. Content mirrors the in-app `Banner`
-tones (Incoming/Error/UpToDate) but in native chrome — the closed-window counterpart to the in-app
-strip. Faithful to [ADR 0006](../../adr/0006-sync-model-transport-not-commit.md): the poller
-**notifies**; the action ("Review & Apply" / "Resolve") opens the app where the user decides — the
+Content mirrors the in-app `Banner` tones (Incoming/Error) but in native chrome — the closed-window
+counterpart to the in-app strip. Faithful to [ADR 0006](../../adr/0006-sync-model-transport-not-commit.md):
+the poller **notifies**; the action ("Review & Apply" / "Resolve") opens the app where the user decides — the
 poller never applies.
+
+> The former **Applied** state (`560:1314`, "Applied N changes from work-laptop") was the **auto-apply
+> confirmation** — retired with auto-apply ([ADR 0037](../../adr/0037-automation-ladder-transport-only.md)).
+> The poller never applies, so there is no background apply to announce; manual-apply confirmation is the
+> in-app toast.
 
 ## Screens — `Tray & notification (macOS)` section (`563:7125`, page 03)
 
