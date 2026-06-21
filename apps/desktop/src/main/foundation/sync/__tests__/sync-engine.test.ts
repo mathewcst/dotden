@@ -97,6 +97,22 @@ describe('SyncEngine incoming-clean routing (ADR 0008 load-bearing)', () => {
     expect(result.deferred).toEqual([])
   })
 
+  it('routes an incoming update as an update plan item', () => {
+    const workspaces: WorkspacesDoc = {
+      workspaces: [{ id: 'personal', label: 'Personal', groups: [], scope: null }],
+      placements: [{ targetPath: '.zshrc', workspaceId: 'personal', groupId: null, scope: null }],
+    }
+    const engine = new SyncEngine({ environment: env(['personal']), workspaces })
+
+    const result = engine.routeIncomingClean(
+      [{ targetPath: '.zshrc', status: 'incoming-update' }],
+      'trace-update',
+    )
+
+    expect(result.plan.items).toHaveLength(1)
+    expect(result.plan.items[0]?.kind).toBe('update')
+  })
+
   it('blocks an incoming change to a File with an uncommitted local edit (invariant #2, no silent overwrite)', () => {
     const workspaces: WorkspacesDoc = {
       workspaces: [{ id: 'personal', label: 'Personal', groups: [], scope: null }],
@@ -167,7 +183,13 @@ describe('SyncEngine incoming-clean routing (ADR 0008 load-bearing)', () => {
         if (rng() < 0.3) dirty.add(path)
         const roll = rng()
         const status: IncomingFile['status'] =
-          roll < 0.25 ? 'conflict' : roll < 0.5 ? 'incoming-delete' : 'incoming-clean'
+          roll < 0.25
+            ? 'conflict'
+            : roll < 0.45
+              ? 'incoming-delete'
+              : roll < 0.7
+                ? 'incoming-update'
+                : 'incoming-clean'
         return { targetPath: path, status }
       })
       const { plan } = engine.routeIncomingClean(incoming, `trace-prop-${seed}`, {
@@ -190,6 +212,9 @@ describe('SyncEngine incoming-clean routing (ADR 0008 load-bearing)', () => {
           expect(item.kind).toBe('delete')
           expect(item.requiresConfirmation).toBe(true)
           deletionsSeen++
+        }
+        if (status === 'incoming-update') {
+          expect(item.kind).toBe('update')
         }
         // Invariant #2: a File with a local edit is ALWAYS blocked, never silently applied.
         if (dirty.has(item.witness.targetPath)) {

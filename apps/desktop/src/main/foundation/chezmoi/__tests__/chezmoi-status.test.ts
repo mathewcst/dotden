@@ -11,7 +11,11 @@
  * real shapes the bundled chezmoi v2 emits (captured against the binary).
  */
 import { describe, expect, it } from 'vitest'
-import { parseChezmoiStatus, parseIncomingDeletions } from '../chezmoi-status.js'
+import {
+  parseChezmoiStatus,
+  parseIncomingApplyChanges,
+  parseIncomingDeletions,
+} from '../chezmoi-status.js'
 
 describe('parseChezmoiStatus', () => {
   it('maps a locally modified File (MM) to modified', () => {
@@ -96,5 +100,22 @@ describe('parseIncomingDeletions (incoming-deletion axis, issue 1-10)', () => {
   it('returns an empty list for empty or change-free output', () => {
     expect(parseIncomingDeletions('')).toEqual([])
     expect(parseIncomingDeletions('\n\n')).toEqual([])
+  })
+})
+
+describe('parseIncomingApplyChanges (incoming Review & Apply axis)', () => {
+  it('reads column Y as add/modify/delete changes', () => {
+    expect(
+      [...parseIncomingApplyChanges(' A .vimrc\n M .zshrc\n D .oldrc\nDA .gitconfig\n')],
+    ).toEqual([
+      ['.vimrc', 'add'],
+      ['.zshrc', 'modify'],
+      ['.oldrc', 'delete'],
+      ['.gitconfig', 'add'],
+    ])
+  })
+
+  it('ignores rows with no apply-direction change', () => {
+    expect([...parseIncomingApplyChanges('M  .zshrc\n R run_once.sh\n')]).toEqual([])
   })
 })

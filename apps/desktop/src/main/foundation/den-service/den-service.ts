@@ -32,7 +32,11 @@ import { SyncEngine, type IncomingFile } from '../sync/sync-engine.js'
 
 import { ConflictModel } from '../apply/conflict-model.js'
 import type { ResolutionChoice } from '../../../shared/apply.js'
-import { parseChezmoiStatus, parseIncomingDeletions } from '../chezmoi/chezmoi-status.js'
+import {
+  parseChezmoiStatus,
+  parseIncomingApplyChanges,
+  parseIncomingDeletions,
+} from '../chezmoi/chezmoi-status.js'
 
 import { AutomationPolicy, DEFAULT_AUTOMATION_LEVEL } from '../apply/automation-policy.js'
 import type { Os, Scope } from '../../../shared/scope.js'
@@ -893,7 +897,7 @@ export class DenService {
   async listIncomingClean(traceId: string): Promise<readonly IncomingReviewItem[]> {
     const span = this.tracer?.startOperation('sync', traceId)
     try {
-      await this.git.fetch()
+      await this.advanceIncomingSourceState()
       const incoming = await this.computeIncoming()
       const { environment, workspaces } = await this.loadSyncedModel()
       const engine = new SyncEngine({ environment, workspaces, tracer: this.tracer })
@@ -1199,7 +1203,7 @@ export class DenService {
   async autoApplyIncoming(traceId: string): Promise<AutoApplyResult> {
     const span = this.tracer?.startOperation('sync', traceId)
     try {
-      await this.git.fetch()
+      await this.advanceIncomingSourceState()
       const incoming = await this.computeIncoming()
       const { environment, workspaces } = await this.loadSyncedModel()
       const engine = new SyncEngine({ environment, workspaces, tracer: this.tracer })
@@ -2334,32 +2338,58 @@ export class DenService {
   }
 
   /**
+   * Advance local source state before computing incoming status.
+   *
+   * `git fetch` alone only updates remote refs; `chezmoi status` reads the checked-out source state.
+   * Merging lets non-conflicting upstream edits become the target state that Review & Apply can see.
+   */
+  private async advanceIncomingSourceState(): Promise<void> {
+    await this.git.fetch()
+    try {
+      await this.git.merge()
+    } catch (error) {
+      if (
+        error instanceof CommandFailedError &&
+        error.result.stderr.includes('not something we can merge')
+      ) {
+        return
+      }
+      throw error
+    }
+  }
+
+  /**
    * Classify incoming Files for the incoming-clean + incoming-deletion paths.
    *
    * Two signals are merged:
    * - **incoming-clean creates** — every placed File in `.dotden/` that is NOT yet present
    *   on this environment's disk (no local copy → no Conflict). Reading placements is what
    *   lets env B discover Files it has never seen.
+   * - **incoming updates** — placed Files `chezmoi status` reports as apply-will-modify
+   *   (column Y = `M`) or apply-will-add over an existing local file (column Y = `A` + on disk).
    * - **incoming deletions** (issue 1-10) — Files `chezmoi status` reports as
-   *   apply-will-delete (column Y = `D`, via {@link parseIncomingDeletions}): the source
+   *   apply-will-delete (column Y = `D`, via {@link parseIncomingApplyChanges}): the source
    *   removed the File, so Apply would delete it here. These route as `incoming-delete`
    *   and ApplyPlanner marks them confirm-required (invariant #4), never auto-applied.
    *
-   * A File that already exists locally with NO incoming change is dropped here (the fuller
-   * incoming-update/diff path is the Review & Apply slice, 1-09).
+   * A File that already exists locally with NO incoming change is dropped here.
    */
   private async computeIncoming(): Promise<readonly IncomingFile[]> {
     const { placements } = await this.store.readWorkspaces()
     const incoming: IncomingFile[] = []
-    // Incoming deletions: what `chezmoi apply` would remove on this environment (column Y=D).
-    const toDelete = new Set(parseIncomingDeletions(await this.chezmoi.status()))
+    const applyChanges = parseIncomingApplyChanges(await this.chezmoi.status())
     for (const placement of placements) {
-      if (toDelete.has(placement.targetPath)) {
+      const change = applyChanges.get(placement.targetPath)
+      if (change === 'delete') {
         // The source removed this File — an incoming deletion the user must confirm.
         incoming.push({ targetPath: placement.targetPath, status: 'incoming-delete' })
         continue
       }
       const onDisk = await this.exists(placement.targetPath)
+      if (change === 'modify' || (change === 'add' && onDisk)) {
+        incoming.push({ targetPath: placement.targetPath, status: 'incoming-update' })
+        continue
+      }
       if (!onDisk) incoming.push({ targetPath: placement.targetPath, status: 'incoming-clean' })
     }
     return incoming

@@ -41,6 +41,7 @@ import type { AutoApplyHoldReason } from '../../../shared/den.js'
  *
  * `status` is what lets SyncEngine route safely WITHOUT re-deriving an invariant:
  * - `incoming-clean` — on the Remote, absent locally, no Conflict → applied as a `create`;
+ * - `incoming-update` — on the Remote and present locally, no Conflict → applied as an `update`;
  * - `incoming-delete` — the Remote removed a File that exists here; routed as a `delete`
  *   plan item that {@link ApplyPlanner} marks `requiresConfirmation` (invariant #4:
  *   confirm incoming deletions — never applied silently);
@@ -52,7 +53,7 @@ export interface IncomingFile {
   /** Destination-relative File path arriving from the Remote (e.g. `.zshrc`). */
   readonly targetPath: string
   /** Remote-vs-local classification computed upstream (git status/diff). */
-  readonly status: 'incoming-clean' | 'incoming-delete' | 'conflict'
+  readonly status: 'incoming-clean' | 'incoming-update' | 'incoming-delete' | 'conflict'
 }
 
 /**
@@ -153,8 +154,12 @@ export interface SyncEngineOptions {
  * lookup (it is never routed as a plan item; invariant #1). Keeping the mapping in one
  * object means SyncEngine never invents a kind: it reads the classification it was given.
  */
-const STATUS_TO_KIND: Record<'incoming-clean' | 'incoming-delete', ApplyChangeKind> = {
+const STATUS_TO_KIND: Record<
+  'incoming-clean' | 'incoming-update' | 'incoming-delete',
+  ApplyChangeKind
+> = {
   'incoming-clean': 'create',
+  'incoming-update': 'update',
   'incoming-delete': 'delete',
 }
 

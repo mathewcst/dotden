@@ -1185,6 +1185,56 @@ describe('DenService appearance + Apply/notification preferences (issue 2-10, re
 })
 
 describe('DenService ApplyPlanner invariants end-to-end (issue 1-10, real chezmoi/git)', () => {
+  it('surfaces an upstream edit to an already-present File as an incoming update and applies it', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const aHome = join(root, 'a-home')
+    const aSource = join(root, 'a-source')
+    await mkdir(aHome, { recursive: true })
+    await initSourceRepo(aSource, remote)
+    const envA = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: aHome,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+
+    await writeFile(join(aHome, '.zshrc'), 'export EDITOR=nvim\n')
+    await envA.trackFile('.zshrc', 'trace-track')
+    await envA.commitTracked(['.zshrc'], 'trace-commit')
+    await envA.syncPush('trace-push-1')
+
+    const bHome = join(root, 'b-home')
+    const bSource = join(root, 'b-source')
+    await mkdir(bHome, { recursive: true })
+    await cloneRepo(gitBin, remote, bSource)
+    const envB = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: bSource,
+      destinationDir: bHome,
+      environment: { id: 'env-b', label: 'work-laptop', os: process.platform },
+    })
+
+    await envB.applyIncoming(['.zshrc'], 'trace-apply-initial')
+    await expect(readFile(join(bHome, '.zshrc'), 'utf8')).resolves.toBe('export EDITOR=nvim\n')
+
+    await writeFile(join(aHome, '.zshrc'), 'export EDITOR=vim\n')
+    await envA.commitTracked(['.zshrc'], 'trace-commit-2')
+    await envA.syncPush('trace-push-2')
+
+    const incoming = await envB.listIncomingClean('trace-list-update')
+    expect(incoming).toContainEqual(
+      expect.objectContaining({ targetPath: '.zshrc', kind: 'update' }),
+    )
+
+    const applied = await envB.applyIncoming(['.zshrc'], 'trace-apply-update')
+    expect(applied.applied).toEqual(['.zshrc'])
+    await expect(readFile(join(bHome, '.zshrc'), 'utf8')).resolves.toBe('export EDITOR=vim\n')
+  })
+
   it('invariant #2: an incoming Apply is BLOCKED when the File has an uncommitted local edit (never silently overwritten)', async () => {
     // Two environments share a File. env B applies it, then HAND-EDITS the real File on
     // disk (drift outside dotden) WITHOUT committing. Meanwhile env A changes the same

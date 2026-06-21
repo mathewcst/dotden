@@ -43,6 +43,9 @@
 import type { FileGitStatus } from '../../../shared/den.js'
 import type { FileGitStatusCode } from '../../../shared/den.js'
 
+/** What the incoming/apply-direction status column says Apply would do. */
+export type IncomingApplyStatus = 'add' | 'modify' | 'delete'
+
 /**
  * Translate one chezmoi status column character into dotden's local-axis code.
  *
@@ -131,6 +134,26 @@ export function parseIncomingDeletions(raw: string): string[] {
     const path = line.slice(3).trim()
     if (path.length === 0) continue
     if (y === 'D') out.push(path)
+  }
+  return out
+}
+
+/**
+ * Parse the incoming/apply-direction column (Y) for every changed destination-relative File.
+ *
+ * Unlike {@link parseChezmoiStatus}, this reads column Y because Review & Apply needs to know what
+ * the updated source state would do here: add, modify, or delete a File.
+ */
+export function parseIncomingApplyChanges(raw: string): Map<string, IncomingApplyStatus> {
+  const out = new Map<string, IncomingApplyStatus>()
+  for (const line of raw.split('\n')) {
+    if (line.length < 4) continue
+    const y = line[1] ?? ' '
+    const path = line.slice(3).trim()
+    if (path.length === 0) continue
+    if (y === 'A') out.set(path, 'add')
+    else if (y === 'M') out.set(path, 'modify')
+    else if (y === 'D') out.set(path, 'delete')
   }
   return out
 }
