@@ -46,8 +46,12 @@ import {
 import type { PollCadenceProfile, SyncSettings } from './foundation/settings/sync-settings.js'
 import { readSyncSettings, writeSyncSettings } from './foundation/settings/sync-settings.js'
 import { resolveBundledTools } from './foundation/platform/tools.js'
-import { DEFAULT_POLL_CADENCE, TrayPoller, type PollCadence } from './foundation/tray-poller.js'
-import { noFeed, checkForUpdates as runUpdateCheck } from './foundation/update-check.js'
+import {
+  DEFAULT_POLL_CADENCE,
+  TrayPoller,
+  type PollCadence,
+} from './foundation/system/tray-poller.js'
+import { noFeed, checkForUpdates as runUpdateCheck } from './foundation/system/update-check.js'
 import { registerIpcBridge } from './ipc/ipc-bridge.js'
 
 /**

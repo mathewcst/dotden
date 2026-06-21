@@ -13,7 +13,7 @@
  * of this seam. index.ts supplies the current version (`app.getVersion()`) and, today, the
  * `noFeed` placeholder feed.
  */
-import type { UpdateCheckResult } from '../../shared/app-info.js'
+import type { UpdateCheckResult } from '../../../shared/app-info.js'
 
 /**
  * The pluggable source of "is there a newer release?" knowledge.
