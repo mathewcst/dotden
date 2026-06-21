@@ -1,12 +1,9 @@
 import { AlertDialog } from '@base-ui/react/alert-dialog'
 import { Lock } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import type {
-  DetectedPasswordManager,
-  PasswordManagerId,
-} from '../../../../main/foundation/secrets/pm-detect'
+import type { DetectedPasswordManager, PasswordManagerId } from '@shared/secrets'
 import type { ConvertSecretRequest } from '../../../../main/foundation/den-service'
-import type { PmPreference } from '../../../../main/foundation/secrets/pm-preference'
+import type { PmPreference } from '@shared/secrets'
 import { Button } from '@/ui/button'
 import { canConvert, defaultManagerSelection } from '@/features/secrets/lib/pm-picker'
 

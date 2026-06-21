@@ -53,23 +53,23 @@ import type { Os, Scope } from '../../shared/scope.js'
 import { PushQueue } from './sync/push-queue.js'
 import { isOfflineError } from './sync/offline.js'
 import type { UnsubscribeDisposition } from '../../shared/settings.js'
-import { scanForSecrets, type SecretFinding } from './secrets/secret-scanner.js'
-import { partitionFindings, type SecretAllowlist } from './secrets/secret-allowlist.js'
+import { scanForSecrets } from './secrets/secret-scanner.js'
+import type { SecretFinding } from '../../shared/secrets.js'
+import { partitionFindings } from './secrets/secret-allowlist.js'
+import type { SecretAllowlist } from '../../shared/secrets.js'
 import { parseFileHistory, shortSha } from './file-history/file-history.js'
 import type { FileVersion } from '../../shared/history.js'
 import { parseRemoteLocation } from './sync/remote-client.js'
-import {
-  detectPasswordManagers,
-  type DetectedPasswordManager,
-  type DetectPasswordManagersOptions,
-} from './secrets/pm-detect.js'
+import { detectPasswordManagers, type DetectPasswordManagersOptions } from './secrets/pm-detect.js'
+import type { DetectedPasswordManager } from '../../shared/secrets.js'
 import {
   isSecretReferenceResolutionFailure,
   renderSecretReferenceTemplate,
   sourceTemplateName,
   type SecretReferenceRequest,
 } from './secrets/secret-reference.js'
-import { readPmPreference, writePmPreference, type PmPreference } from './secrets/pm-preference.js'
+import { readPmPreference, writePmPreference } from './secrets/pm-preference.js'
+import type { PmPreference } from '../../shared/secrets.js'
 import { CommandFailedError } from './platform/process.js'
 import {
   DEFAULT_COMMIT_MESSAGE_TEMPLATE,

@@ -3,7 +3,7 @@ import { GitBranch, KeyRound, Loader2, Lock, RefreshCw, Shield, TriangleAlert } 
 import { cn } from '@/shared/lib/utils'
 import type { ConnectedRemote } from '../../../../main/foundation/den-service'
 import type { PreflightResult } from '@shared/remote'
-import type { DetectedPasswordManager } from '../../../../main/foundation/secrets/pm-detect'
+import type { DetectedPasswordManager } from '@shared/secrets'
 
 /**
  * AccountTab — the Settings → Account tab (issue 2-11, stories 40–42; design: screens/settings.md

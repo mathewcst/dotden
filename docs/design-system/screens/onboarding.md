@@ -14,9 +14,11 @@ separate pages.
   the 6-item step rail, and the footer tagline. Each variant bakes the rail state (done = ember dot +
   vector check, current = ember dot + number, upcoming = outlined number). Switching screens = switch
   this one variant.
-- **`OnboardingShell`** — the window chrome: titlebar (traffic lights) + body. The body composes an
-  `OnboardingMenu` instance (left, fixed 360, `Step` set per screen) + a **content slot**
-  (`INSTANCE_SWAP` property `Content`, default `OBContent/Welcome`).
+- **`OnboardingShell`** — the window chrome: frameless titlebar + body. In code, the titlebar uses
+  the same shared real window controls as the main shell: macOS traffic lights on the left;
+  Windows/Linux minimize/maximize/close on the right; the bar is draggable and controls are no-drag.
+  The body composes an `OnboardingMenu` instance (left, fixed 360, `Step` set per screen) + a
+  **content slot** (`INSTANCE_SWAP` property `Content`, default `OBContent/Welcome`).
 - **`OBContent/<Step>`** — one component per step holding that step's content + footer
   (`OBContent/Welcome`, `OBContent/Connect`, …). Sized to the content region; stretches via `FILL`
   in the slot.
@@ -29,15 +31,16 @@ full-window flow; reuse page-02 library components (`Button`, `Input`, `Checkbox
 `StatusTag`, …) for the repeatable controls _inside_ each `OBContent`.
 
 > **Built in code (v1, issue 1-06, 2026-06-15).** The V1-Lean A+B flow below is implemented in
-> `apps/desktop/src/renderer/components/onboarding/`: `OnboardingShell` (rail + content slot + step
-> router) · `OnboardingMenu` (the 6-step rail) · `OBConnectUrl` (step 3, reuses the 1-03
-> `remote.preflight`/`connect` IPC) · `OBDiscover` (step 4) · `ListRow` (scan rows). The
-> tool-catalog discovery scan is the main-process `DiscoveryScanner`
-> (`apps/desktop/src/main/foundation/environments/discovery-scanner.ts`) exposed over the `discover:*` IPC
-> channels — **feature-detection grounded in a known-tools catalog, not a blind sweep** (ADR 0022).
-> Steps Welcome/CreateRepo/Commit/AutoSync/Done render inline in `OnboardingShell`. **C1/C2 and the
-> gh-CLI enrichment remain v1.1** (designs only — see below). The Auto-sync step is a **wired opt-in
-> slot**; the engine is issue 1-12.
+> `apps/desktop/src/renderer/features/onboarding/components/`: `OnboardingShell` (frameless titlebar
+>
+> - rail + content slot + step router) · `OnboardingMenu` (the 6-step rail) · `OBConnectUrl` (step 3, reuses the 1-03
+>   `remote.preflight`/`connect` IPC) · `OBDiscover` (step 4) · `ListRow` (scan rows). The
+>   tool-catalog discovery scan is the main-process `DiscoveryScanner`
+>   (`apps/desktop/src/main/foundation/environments/discovery-scanner.ts`) exposed over the `discover:*` IPC
+>   channels — **feature-detection grounded in a known-tools catalog, not a blind sweep** (ADR 0022).
+>   Steps Welcome/CreateRepo/Commit/AutoSync/Done render inline in `OnboardingShell`. **C1/C2 and the
+>   gh-CLI enrichment remain v1.1** (designs only — see below). The Auto-sync step is a **wired opt-in
+>   slot**; the engine is issue 1-12.
 
 ## V1-Lean flow (canonical for v1 — ADR 0020)
 

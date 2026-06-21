@@ -33,45 +33,7 @@
  * *raw* unless converted. Catching them here is catching the secret "at the door" before
  * it enters the Den (secret-and-errors screen spec).
  */
-
-/**
- * The kind of secret a detector recognized — a short human label shown verbatim in the
- * warn card ("AWS Access Key ID · line 3"). New shapes add a case to {@link DETECTORS};
- * the union is open by design (kind is a label, not a closed policy enum).
- */
-export type SecretKind =
-  | 'AWS Access Key ID'
-  | 'AWS Secret Access Key'
-  | 'GitHub Token'
-  | 'GitLab Personal Access Token'
-  | 'Slack Token'
-  | 'Google API Key'
-  | 'Stripe API Key'
-  | 'OpenAI API Key'
-  | 'JSON Web Token'
-  | 'Private Key'
-  | 'Generic API Key or Secret'
-  | 'High-entropy String'
-
-/**
- * One detected secret — the exact shape the issue's acceptance criteria name. The warn
- * step renders one card per finding: the **File**, the **kind** of secret, the **line**,
- * and a **masked preview** of the value.
- */
-export interface SecretFinding {
-  /** Destination-relative File path the secret was found in (e.g. `.aws/credentials`). */
-  readonly file: string
-  /** Human label for the kind of secret detected (e.g. `AWS Access Key ID`). */
-  readonly kind: SecretKind
-  /** 1-based line number the secret appears on (the line the warn card shows). */
-  readonly line: number
-  /**
-   * A masked preview of the value — head/tail revealed, middle elided. NEVER the full
-   * secret (the security invariant: {@link maskSecret}). Shown so the user recognizes
-   * *which* value was flagged without re-exposing it.
-   */
-  readonly maskedValue: string
-}
+import type { SecretFinding, SecretKind } from '../../../shared/secrets.js'
 
 /**
  * A single File handed to the scanner: its destination-relative path plus the exact bytes

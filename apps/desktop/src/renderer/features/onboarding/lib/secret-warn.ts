@@ -21,7 +21,7 @@
  * (Convert to a Secret reference / Commit anyway) takes over. This module therefore only
  * *marks* rows; it never removes a suggestion or changes the default selection.
  */
-import type { SecretFinding } from '../../../../main/foundation/secrets/secret-scanner'
+import type { SecretFinding } from '@shared/secrets'
 
 /**
  * Reduce a flat list of commit-scan findings to the **set of File paths that look

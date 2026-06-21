@@ -23,12 +23,9 @@ import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { effectiveScope, narrowScope } from './platform/os-scope.js'
 import type { Scope } from '../../shared/scope.js'
-import {
-  addAllowlistEntry,
-  EMPTY_SECRET_ALLOWLIST,
-  type SecretAllowlist,
-} from './secrets/secret-allowlist.js'
-import type { SecretFinding } from './secrets/secret-scanner.js'
+import { addAllowlistEntry, EMPTY_SECRET_ALLOWLIST } from './secrets/secret-allowlist.js'
+import type { SecretAllowlist } from '../../shared/secrets.js'
+import type { SecretFinding } from '../../shared/secrets.js'
 import { DEFAULT_COMMIT_MESSAGE_TEMPLATE } from '../../shared/commit-template.js'
 import {
   type AppearanceSettings,

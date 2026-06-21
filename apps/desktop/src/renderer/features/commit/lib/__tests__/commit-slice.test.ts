@@ -8,7 +8,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createDenSessionStore } from '../../../shell/lib/den-session-store'
 import type { DotdenApi } from '@shared/ipc-api'
-import type { SecretFinding } from '../../../../../main/foundation/secrets/secret-scanner'
+import type { SecretFinding } from '@shared/secrets'
 
 function finding(file: string): SecretFinding {
   return { file, kind: 'AWS Access Key ID', line: 1, maskedValue: 'AKIA••••N7QX' }

@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { warnedPathsFromFindings } from '../secret-warn'
-import type { SecretFinding } from '../../../../../main/foundation/secrets/secret-scanner'
+import type { SecretFinding } from '@shared/secrets'
 
 /** Build a minimal finding for a File — only `file` is load-bearing for the derivation. */
 function finding(file: string, line = 1): SecretFinding {

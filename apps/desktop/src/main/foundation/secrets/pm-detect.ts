@@ -17,21 +17,8 @@
  * {@link runCommand} primitive (no shell = no injection surface; a non-zero exit = not found).
  */
 import { runCommand } from '../platform/process.js'
-import {
-  PASSWORD_MANAGERS,
-  type PasswordManagerId,
-  type PasswordManagerInfo,
-} from './secret-reference.js'
-
-/**
- * One catalog manager annotated with this environment's detection result — exactly what the
- * picker renders: the static {@link PasswordManagerInfo} fields plus `available`. An unavailable
- * manager keeps its `installHint` so the disabled option can explain why it can't be picked.
- */
-export interface DetectedPasswordManager extends PasswordManagerInfo {
-  /** True iff this manager's CLI resolved on this environment's PATH (the option is selectable). */
-  readonly available: boolean
-}
+import { PASSWORD_MANAGERS } from './secret-reference.js'
+import type { DetectedPasswordManager } from '../../../shared/secrets.js'
 
 /** Options for {@link detectPasswordManagers} — the injectable probe seam (tests fake it). */
 export interface DetectPasswordManagersOptions {
@@ -101,6 +88,3 @@ export async function detectPasswordManagers(
     }),
   )
 }
-
-/** Re-export the id type so consumers can `import { type PasswordManagerId } from './pm-detect.js'`. */
-export type { PasswordManagerId }

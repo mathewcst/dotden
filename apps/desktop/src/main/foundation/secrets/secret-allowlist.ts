@@ -27,31 +27,8 @@
  * {@link import('./den-service.js').DenService.scanCommit}.
  */
 import { createHash } from 'node:crypto'
-import type { SecretFinding } from './secret-scanner.js'
-
-/**
- * One allowlist entry — a single match the user judged safe and asked dotden to stop warning
- * about. Carries the human-auditable `file`/`kind`/`maskedValue` (so the entry is legible in the
- * synced JSON git diff and any future "manage my allowlist" surface) PLUS the derived
- * `fingerprint` that is the actual match key. The masked value is the SAME masked preview the
- * scanner produced — never the raw secret (it would otherwise sync raw, defeating the point).
- */
-export interface SecretAllowlistEntry {
-  /** Destination-relative File path the allowlisted secret was found in (e.g. `.aws/credentials`). */
-  readonly file: string
-  /** The kind of secret (the scanner's label), part of the per-File+match scope. */
-  readonly kind: string
-  /** The masked preview of the value — NEVER the raw secret (it would sync raw otherwise). */
-  readonly maskedValue: string
-  /** The stable {@link findingFingerprint} this entry suppresses (the match key). */
-  readonly fingerprint: string
-}
-
-/** The synced allowlist document (`.dotden/secret-allowlist.json`). Append-only in practice. */
-export interface SecretAllowlist {
-  /** Every match the user has judged safe across the Den (synced across environments). */
-  readonly entries: readonly SecretAllowlistEntry[]
-}
+import type { SecretFinding } from '../../../shared/secrets.js'
+import type { SecretAllowlist } from '../../../shared/secrets.js'
 
 /** An empty allowlist — the default before the user has dismissed any finding. */
 export const EMPTY_SECRET_ALLOWLIST: SecretAllowlist = { entries: [] }

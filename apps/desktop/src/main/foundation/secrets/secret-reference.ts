@@ -30,38 +30,7 @@
  *   the field defaults to `password`).
  * - pass → `{{ pass "<entry>" }}` (the first line of `pass show <entry>`).
  */
-
-/**
- * The id of a v1-supported password manager — the closed enum of CLIs dotden detects + converts
- * against. Each maps 1:1 onto a chezmoi template function (chezmoi supports more; v1 targets the
- * common three per scope-v1 "Secrets"). The id is also the CLI binary name on PATH.
- */
-export type PasswordManagerId = 'op' | 'bw' | 'pass'
-
-/**
- * Static catalog metadata for one supported password manager — the data the picker UI renders
- * and the detector probes. Pure data (no behavior), so the UI, the detector, and the converter
- * all read the SAME single source of truth rather than re-listing managers.
- */
-export interface PasswordManagerInfo {
-  /** Stable id = the CLI binary name probed on PATH (`op` / `bw` / `pass`). */
-  readonly id: PasswordManagerId
-  /** Human label shown in the picker ("1Password", "Bitwarden", "pass"). */
-  readonly label: string
-  /** The CLI command the user must have installed for this option to be selectable. */
-  readonly cli: string
-  /**
-   * A short, provider-specific **install hint** shown when the CLI is absent (acceptance
-   * criterion 4) so the disabled option explains *why* it can't be picked + how to fix it
-   * (never fail silently). Generic/OS-agnostic wording — dotden does not run the install.
-   */
-  readonly installHint: string
-  /**
-   * An example reference, shown as placeholder/help so the user knows the shape to paste
-   * (`op://vault/item/field`, a Bitwarden item name, a pass entry path).
-   */
-  readonly referenceExample: string
-}
+import type { PasswordManagerId, PasswordManagerInfo } from '../../../shared/secrets.js'
 
 /**
  * The v1 password-manager catalog (1Password / Bitwarden / pass) — the SINGLE source of truth for

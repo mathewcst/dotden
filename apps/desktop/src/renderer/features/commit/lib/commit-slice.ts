@@ -13,7 +13,7 @@
  * Commit refreshes the apply slice's incoming. The IPC surface is injected for node-testability.
  */
 import type { DotdenApi } from '@shared/ipc-api'
-import type { SecretFinding } from '../../../../main/foundation/secrets/secret-scanner'
+import type { SecretFinding } from '@shared/secrets'
 import type { DenSessionGet, DenSessionSet } from '../../shell/lib/den-session-store'
 
 /** The commit-result fields shared by a plain Commit and a Secret conversion's Commit. */

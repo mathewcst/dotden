@@ -13,13 +13,8 @@
  * scan-at-commit wiring — is exercised in den-service.e2e.test.ts).
  */
 import { describe, expect, it } from 'vitest'
-import {
-  maskSecret,
-  scanFile,
-  scanForSecrets,
-  shannonEntropy,
-  type SecretKind,
-} from '../secret-scanner.js'
+import { maskSecret, scanFile, scanForSecrets, shannonEntropy } from '../secret-scanner.js'
+import type { SecretKind } from '../../../../shared/secrets.js'
 
 /** Scan a single file body and return the findings (test ergonomics over scanFile). */
 function scan(content: string, file = '.config') {

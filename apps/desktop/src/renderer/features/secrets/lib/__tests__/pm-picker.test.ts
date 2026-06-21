@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { canConvert, defaultManagerSelection } from '../pm-picker'
-import type { DetectedPasswordManager } from '../../../../../main/foundation/secrets/pm-detect'
+import type { DetectedPasswordManager } from '@shared/secrets'
 
 /** Build a detected-manager list with the given availability per id (defaults all false). */
 function managers(

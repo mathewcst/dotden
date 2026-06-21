@@ -15,9 +15,9 @@ import {
   findingFingerprint,
   isAllowlisted,
   partitionFindings,
-  type SecretAllowlist,
 } from '../secret-allowlist.js'
-import type { SecretFinding } from '../secret-scanner.js'
+import type { SecretAllowlist } from '../../../../shared/secrets.js'
+import type { SecretFinding } from '../../../../shared/secrets.js'
 
 /** A finding fixture (the scanner's shape) with sensible defaults for terse tests. */
 function finding(overrides: Partial<SecretFinding> = {}): SecretFinding {

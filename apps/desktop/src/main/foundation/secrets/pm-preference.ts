@@ -14,21 +14,12 @@
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { PASSWORD_MANAGERS, type PasswordManagerId } from './secret-reference.js'
+import { PASSWORD_MANAGERS } from './secret-reference.js'
+import type { PasswordManagerId } from '../../../shared/secrets.js'
+import type { PmPreference } from '../../../shared/secrets.js'
 
 /** Relative filename of the environment-local PM-preference file inside the userData dir. */
 const PM_PREFERENCE_FILE = 'pm-preference.json'
-
-/**
- * The remembered conversion default — the preferred manager + (for 1Password) the chosen account.
- * `null` (absent file) means "no remembered choice; ask which manager each time".
- */
-export interface PmPreference {
-  /** The preferred password manager future conversions go straight to. */
-  readonly manager: PasswordManagerId
-  /** (1Password) the remembered non-default account, if the user picked one. */
-  readonly account?: string
-}
 
 /** Whether `id` is one of the v1-supported managers — guards reads + writes against stale ids. */
 function isKnownManager(id: unknown): id is PasswordManagerId {
