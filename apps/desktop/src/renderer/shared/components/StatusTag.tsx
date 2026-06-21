@@ -16,7 +16,7 @@ const TONE: Record<FileStatus, { label: string; className: string }> = {
   // Local-until-pushed is the key honest state (ADR 0006): committed, not yet shared.
   'committed-local': { label: 'Committed · local', className: 'bg-dd-blue-950 text-dd-blue-400' },
   pushed: { label: 'Pushed', className: 'bg-dd-green-950 text-dd-green-400' },
-  incoming: { label: 'Incoming', className: 'bg-dd-ember-950 text-dd-ember-400' },
+  incoming: { label: 'Incoming', className: 'bg-dd-blue-950 text-dd-blue-400' },
 }
 
 /** A single status pill for a File row or header. */

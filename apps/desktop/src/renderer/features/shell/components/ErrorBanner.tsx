@@ -1,5 +1,6 @@
 import { Button } from '@/ui/button'
 import { AlertTriangle, RotateCcw, ScrollText } from 'lucide-react'
+import { Banner } from '@/features/sync/components/Banner'
 
 /** Red failed-Operation strip with the load-bearing Details + Retry actions. */
 export function ErrorBanner({
@@ -12,10 +13,7 @@ export function ErrorBanner({
   onRetry?: () => void
 }) {
   return (
-    <div
-      className="bg-dd-red-950 text-dd-red-100 flex min-w-0 items-center gap-2 px-4 py-2 text-sm"
-      role="alert"
-    >
+    <Banner tone="error" className="min-w-0">
       <AlertTriangle className="text-dd-red-400 size-4 shrink-0" />
       <span className="min-w-0 truncate font-medium">{message}</span>
       <Button
@@ -33,6 +31,6 @@ export function ErrorBanner({
         <RotateCcw className="size-3.5" />
         Retry
       </Button>
-    </div>
+    </Banner>
   )
 }

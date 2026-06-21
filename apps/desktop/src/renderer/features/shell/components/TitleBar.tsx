@@ -1,5 +1,5 @@
 import { useDenSession } from '@/features/shell/components/DenSessionProvider'
-import { remoteAxisSummary } from '@/features/shell/lib/remote-axis'
+import { syncStatus } from '@/features/shell/lib/sync-status'
 import {
   WindowControls,
   windowDragRegionStyle,
@@ -29,11 +29,20 @@ export function TitleBar({
   const role = useDenSession((s) => s.role)
   const workspaces = useDenSession((s) => s.workspaces)
   const remoteAxis = useDenSession((s) => s.remoteAxis)
+  const pushQueued = useDenSession((s) => s.pushQueued)
+  const busy = useDenSession((s) => s.busy)
+  const error = useDenSession((s) => s.error)
   const platform = window.dotden.platform
 
   const workspaceLabel = workspaces[0]?.label ?? 'Personal'
-  // Incoming/conflict status for THIS environment (issue 1-09 + 1-11).
-  const syncSummary = remoteAxisSummary(remoteAxis)
+  const status = syncStatus({
+    role,
+    remoteAxis,
+    pushQueued,
+    busy,
+    error,
+    online: navigator.onLine,
+  })
   const isMac = platform === 'darwin'
   const controlsPlatform: WindowControlsPlatform = platform === 'win32' ? 'win32' : 'linux'
 
@@ -79,7 +88,7 @@ export function TitleBar({
       <div className="flex shrink-0 items-center gap-1" style={windowNoDragRegionStyle}>
         <span className="text-muted-foreground mr-1 flex items-center gap-1 pr-1 text-xs">
           <ArrowDownUp className="size-3" aria-hidden />
-          {role === 'a' ? syncSummary : 'Up to date'}
+          {status.label}
         </span>
         {/* Open the Settings surface (issue 2-08): the app shows it over the Workspace. */}
         <IconButton aria-label="settings" onClick={onOpenSettings} disabled={!onOpenSettings}>

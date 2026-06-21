@@ -1,4 +1,5 @@
 import { Cloud } from 'lucide-react'
+import { Banner } from './Banner'
 
 /**
  * OfflineBanner — the "Offline — changes queued" status strip (issue 1-16; see
@@ -18,13 +19,10 @@ import { Cloud } from 'lucide-react'
  */
 export function OfflineBanner() {
   return (
-    <div
-      className="bg-muted text-muted-foreground flex items-center gap-2 px-4 py-2 text-sm"
-      role="status"
-    >
+    <Banner tone="offline">
       <Cloud className="size-4 shrink-0" aria-label="offline" />
       <span className="text-foreground font-medium">Offline — changes queued</span>
       <span className="text-muted-foreground/80">· Will sync when you reconnect</span>
-    </div>
+    </Banner>
   )
 }

@@ -1,5 +1,6 @@
 import { ArrowDownToLine } from 'lucide-react'
 import { Button } from '@/ui/button'
+import { Banner } from './Banner'
 
 /**
  * IncomingBanner — the top-level "N incoming from `<environment>` — Review & Apply"
@@ -27,10 +28,7 @@ export function IncomingBanner({
   onReview: () => void
 }) {
   return (
-    <div
-      className="bg-dd-blue-950 text-dd-blue-100 flex items-center gap-2 px-4 py-2 text-sm"
-      role="status"
-    >
+    <Banner tone="incoming">
       <ArrowDownToLine className="text-dd-blue-400 size-4 shrink-0" />
       <span className="font-medium">
         {count} incoming {count === 1 ? 'change' : 'changes'}
@@ -39,6 +37,6 @@ export function IncomingBanner({
       <Button size="sm" className="ml-auto" onClick={onReview}>
         Review &amp; Apply
       </Button>
-    </div>
+    </Banner>
   )
 }

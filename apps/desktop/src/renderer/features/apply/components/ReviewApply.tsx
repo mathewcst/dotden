@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   Download,
   Loader2,
-  RefreshCw,
   Trash2,
 } from 'lucide-react'
 import { Button } from '@/ui/button'
@@ -222,6 +221,9 @@ export function ReviewApply({ onClose }: { onClose: () => void }) {
 
   const selectedItem = items.find((i) => i.targetPath === selected)
   const failures = [...outcomes.values()].filter((r) => r.outcome === 'error')
+  const failedPaths = new Set(failures.map((failure) => failure.targetPath))
+  const failedItems = items.filter((item) => failedPaths.has(item.targetPath))
+  const cleanPending = clean.filter((item) => !failedPaths.has(item.targetPath))
   const fromLabel = summary?.fromEnvironmentLabel ?? 'another environment'
   const totalCount = items.length
 
@@ -243,6 +245,11 @@ export function ReviewApply({ onClose }: { onClose: () => void }) {
               ? () => void runApply(failedApply.paths, failedApply.confirmedDeletions)
               : undefined
           }
+        />
+      ) : failures.length > 0 ? (
+        <ErrorBanner
+          message={`Couldn't apply ${failures.length} ${failures.length === 1 ? 'file' : 'files'}.`}
+          onRetry={retryable.length > 0 ? retryFailures : undefined}
         />
       ) : null}
 
@@ -279,6 +286,23 @@ export function ReviewApply({ onClose }: { onClose: () => void }) {
               </div>
             ) : (
               <>
+                {failedItems.length > 0 ? (
+                  <section className="mb-2">
+                    <h2 className="text-dd-red-400 px-4 py-1 text-[11px] font-semibold tracking-wide">
+                      COULDN&apos;T APPLY · {failedItems.length}
+                    </h2>
+                    {failedItems.map((item) => (
+                      <ReviewRow
+                        key={item.targetPath}
+                        item={item}
+                        selected={selected === item.targetPath}
+                        outcome={outcomes.get(item.targetPath)}
+                        onSelect={() => void selectFile(item.targetPath)}
+                      />
+                    ))}
+                  </section>
+                ) : null}
+
                 {/* CONFLICTS — surfaced but not applied here (ConflictModel owns them, 1-11). */}
                 {conflicts.length > 0 ? (
                   <section className="mb-2">
@@ -298,12 +322,12 @@ export function ReviewApply({ onClose }: { onClose: () => void }) {
                 ) : null}
 
                 {/* APPLIES CLEANLY — the ↓ incoming Files this slice can Apply. */}
-                {clean.length > 0 ? (
+                {cleanPending.length > 0 ? (
                   <section>
                     <h2 className="text-muted-foreground px-4 py-1 text-[11px] font-semibold tracking-wide">
-                      APPLIES CLEANLY · {clean.length}
+                      APPLIES CLEANLY · {cleanPending.length}
                     </h2>
-                    {clean.map((item) => (
+                    {cleanPending.map((item) => (
                       <ReviewRow
                         key={item.targetPath}
                         item={item}
@@ -432,25 +456,13 @@ export function ReviewApply({ onClose }: { onClose: () => void }) {
                   </li>
                 ))}
               </ul>
-              {retryable.length > 0 ? (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="mt-3 w-full"
-                  disabled={busy !== null}
-                  onClick={retryFailures}
-                  title="Retry only the failed Files"
-                >
-                  {busy === 'apply' ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="size-4" />
-                  )}
-                  Retry {retryable.length} {retryable.length === 1 ? 'file' : 'files'}
-                </Button>
-              ) : (
+              {retryable.length === 0 ? (
                 <p className="text-muted-foreground mt-3 text-xs">
                   These Files do not apply to this environment, so they can&rsquo;t be retried here.
+                </p>
+              ) : (
+                <p className="text-muted-foreground mt-3 text-xs">
+                  Use the Error banner to retry all retryable failures.
                 </p>
               )}
             </section>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Monitor, TerminalSquare } from 'lucide-react'
 import type { EnvironmentWithAttribution } from '@shared/environments'
 import { useDenSession } from '@/features/shell/components/DenSessionProvider'
-import { remoteAxisSummary } from '@/features/shell/lib/remote-axis'
+import { syncStatus } from '@/features/shell/lib/sync-status'
 import { cn } from '@/shared/lib/utils'
 
 /** Full-width shell status bar with environment identity + Diagnostics badge. */
@@ -11,6 +11,9 @@ export function StatusBar() {
   const [error, setError] = useState<string | null>(null)
   const role = useDenSession((s) => s.role)
   const remoteAxis = useDenSession((s) => s.remoteAxis)
+  const pushQueued = useDenSession((s) => s.pushQueued)
+  const busy = useDenSession((s) => s.busy)
+  const shellError = useDenSession((s) => s.error)
   const diagnosticsErrorCount = useDenSession((s) => s.diagnosticsErrorCount)
   const panelOpen = useDenSession((s) => s.diagnosticsPanelOpen)
   const consoleEnabled = useDenSession((s) => s.diagnosticsConsoleEnabled)
@@ -38,7 +41,14 @@ export function StatusBar() {
     : diagnosticsErrorCount > 0
       ? String(diagnosticsErrorCount)
       : 'Idle'
-  const syncState = role === 'a' ? remoteAxisSummary(remoteAxis) : 'Up to date'
+  const status = syncStatus({
+    role,
+    remoteAxis,
+    pushQueued,
+    busy,
+    error: shellError,
+    online: navigator.onLine,
+  })
 
   return (
     <footer className="border-border bg-sidebar text-muted-foreground flex h-7 items-center gap-3 border-t px-3 text-xs">
@@ -47,13 +57,13 @@ export function StatusBar() {
         <span className="text-foreground truncate font-medium">
           {self?.label ?? 'This environment'}
         </span>
-        <span className="bg-dd-green-500 size-1.5 rounded-full" aria-hidden />
+        <span className={cn('size-1.5 rounded-full', status.dotClassName)} aria-hidden />
         <span>{self?.os ?? window.dotden.platform}</span>
       </div>
 
       {error ? <span className="text-dd-red-400 truncate">{error}</span> : null}
       <div className="flex-1" />
-      <span>{syncState}</span>
+      <span>{status.label}</span>
       <button
         type="button"
         className={cn(

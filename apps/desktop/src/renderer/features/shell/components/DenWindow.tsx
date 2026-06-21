@@ -10,6 +10,7 @@ import { useDenSession } from '@/features/shell/components/DenSessionProvider'
 import { IncomingBanner } from '@/features/sync/components/IncomingBanner'
 import { OfflineBanner } from '@/features/sync/components/OfflineBanner'
 import { remoteAxisDecoration } from '@/features/shell/lib/remote-axis'
+import { syncStatus } from '@/features/shell/lib/sync-status'
 import type { FileTreeRowDecorationRenderer, GitStatusEntry } from '@pierre/trees'
 import { useFileTree } from '@pierre/trees/react'
 import { lazy, Suspense, useCallback, useEffect, useMemo } from 'react'
@@ -75,6 +76,7 @@ export function DenWindow({
   const remoteAxis = useDenSession((s) => s.remoteAxis)
   const incomingFrom = useDenSession((s) => s.incomingFrom)
   const pushQueued = useDenSession((s) => s.pushQueued)
+  const busy = useDenSession((s) => s.busy)
   const selected = useDenSession((s) => s.selected)
   const reviewing = useDenSession((s) => s.reviewing)
   const resolving = useDenSession((s) => s.resolving)
@@ -242,15 +244,23 @@ export function DenWindow({
 
   // How many changes are incoming for THIS environment (issue 1-09): drives the top-level banner.
   const incomingCount = remoteAxis.size
-  const banner = error ? (
+  const status = syncStatus({
+    role,
+    remoteAxis,
+    pushQueued,
+    busy,
+    error,
+    online: navigator.onLine,
+  })
+  const banner = status.kind === 'error' && error ? (
     <ErrorBanner
       message={error.message}
       onViewDetails={error.traceId ? () => void openDiagnosticsPanel(error.traceId) : undefined}
       onRetry={error.retry ? () => void error.retry?.() : undefined}
     />
-  ) : role === 'a' && pushQueued ? (
+  ) : status.kind === 'offline' ? (
     <OfflineBanner />
-  ) : role === 'a' && incomingCount > 0 ? (
+  ) : status.kind === 'incoming' ? (
     <IncomingBanner
       count={incomingCount}
       fromEnvironmentLabel={incomingFrom}
