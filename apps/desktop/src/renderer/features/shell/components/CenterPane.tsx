@@ -2,7 +2,7 @@ import { ChangesDiff } from '@/features/commit/components/ChangesDiff'
 import { StatusTag, type FileStatus } from '@/shared/components/StatusTag'
 import { Button } from '@/ui/button'
 import { useDenSession } from '@/features/shell/components/DenSessionProvider'
-import { Download, FilePlus2, GitCommitVertical, Loader2, RefreshCw } from 'lucide-react'
+import { Download, FilePlus2, FolderOpen, GitCommitVertical, Loader2, RefreshCw } from 'lucide-react'
 import { lazy, Suspense, useState } from 'react'
 
 const FileHistory = lazy(() =>
@@ -59,6 +59,21 @@ export function CenterPane() {
 
   // Track the typed path; the store clears the input (via the callback) the instant the Track lands.
   const doTrack = () => void track(newPath, () => setNewPath(''))
+
+  async function setTrackPathFromPicker(targetPath: string | null) {
+    if (!targetPath) return
+    const suggestion = await window.dotden.discover.inspectPath(targetPath)
+    setNewPath(suggestion?.targetPath ?? targetPath)
+  }
+
+  function dropTrack(file: File | undefined) {
+    if (!file) return
+    void setTrackPathFromPicker(window.dotden.discover.pathForFile(file))
+  }
+
+  async function browseTrack() {
+    await setTrackPathFromPicker(await window.dotden.discover.browse())
+  }
 
   return (
     <main className="flex min-w-0 flex-col overflow-hidden">
@@ -171,7 +186,14 @@ export function CenterPane() {
 
       {/* env A: Track a File by path (a browse-pick stand-in for the MVP shell). */}
       {role === 'a' ? (
-        <div className="border-border flex items-center gap-2 border-b px-4 py-2">
+        <div
+          className="border-border flex items-center gap-2 border-b px-4 py-2"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault()
+            dropTrack(event.dataTransfer.files[0])
+          }}
+        >
           <input
             className="border-input bg-background flex-1 rounded-md border px-3 py-1.5 font-mono text-sm"
             placeholder="~/.zshrc — File path to Track"
@@ -181,6 +203,10 @@ export function CenterPane() {
               if (event.key === 'Enter') doTrack()
             }}
           />
+          <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void browseTrack()}>
+            <FolderOpen className="size-4" />
+            Browse
+          </Button>
           <Button size="sm" disabled={busy !== null || !newPath.trim()} onClick={doTrack}>
             {busy === 'track' ? (
               <Loader2 className="size-4 animate-spin" />

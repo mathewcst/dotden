@@ -10,7 +10,7 @@
  * The exposed object is typed against {@link DotdenApi}, the shared contract the
  * renderer also consumes, so preload and renderer can never silently drift.
  */
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { TraceEnvelope } from '../shared/remote.js'
 import type { DotdenApi } from '../shared/ipc-api.js'
 
@@ -467,6 +467,19 @@ const api: DotdenApi = {
         targetPath,
         _trace: trace(),
       }) as ReturnType<DotdenApi['discover']['inspectPath']>
+    },
+    // → IPC channel 'discover:browse'
+    browse() {
+      return ipcRenderer.invoke('discover:browse', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['discover']['browse']>
+    },
+    pathForFile(file) {
+      try {
+        return webUtils.getPathForFile(file as File) || null
+      } catch {
+        return null
+      }
     },
   },
   environment: {

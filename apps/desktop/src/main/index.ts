@@ -8,6 +8,7 @@ import {
   app,
   BrowserWindow,
   clipboard,
+  dialog,
   ipcMain,
   Menu,
   nativeImage,
@@ -241,6 +242,16 @@ async function getEnvironmentRegistry(): Promise<EnvironmentRegistry> {
  */
 function getDiscoveryScanner(): Promise<DiscoveryScanner> {
   return Promise.resolve(new DiscoveryScanner({ homeDir: app.getPath('home') }))
+}
+
+/** Native picker for adding any existing config File/Folder under home. */
+async function browseHomePath(): Promise<string | null> {
+  const result = await dialog.showOpenDialog({
+    defaultPath: app.getPath('home'),
+    properties: ['openFile', 'openDirectory'],
+  })
+  if (result.canceled) return null
+  return result.filePaths[0] ?? null
 }
 
 /** Resolve tools + this environment's identity, then build the EnvironmentRegistry. */
@@ -978,6 +989,7 @@ if (!app.requestSingleInstanceLock()) {
       denService: getDenService,
       launchState: denLaunchState,
       discoveryScanner: getDiscoveryScanner,
+      browsePath: browseHomePath,
       environmentRegistry: getEnvironmentRegistry,
       getAutomationLevel,
       setAutomationLevel,

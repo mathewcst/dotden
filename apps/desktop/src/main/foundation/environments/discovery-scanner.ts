@@ -20,7 +20,7 @@
  * path (`chezmoi add` + a `.dotden/` placement), which onboarding calls per pick.
  */
 import { stat } from 'node:fs/promises'
-import { isAbsolute, resolve } from 'node:path'
+import { isAbsolute, relative, resolve } from 'node:path'
 import type { DiscoverySuggestion } from '../../../shared/environments.js'
 import type { DiscoveryScanResult } from '../../../shared/environments.js'
 
@@ -156,13 +156,14 @@ export class DiscoveryScanner {
    *   silently: the caller surfaces "that file isn't under your home directory").
    */
   async inspectCustomPath(targetPath: string): Promise<DiscoverySuggestion | null> {
-    // Reject absolute/escaping paths up front: Track targets are home-relative, and a
-    // path that resolves outside the home dir cannot be a chezmoi destination target.
-    if (isAbsolute(targetPath) || !this.isUnderHome(targetPath)) return null
-    const probe = await this.probe(targetPath)
+    // Track targets are home-relative, but browse/drop affordances hand us absolute paths.
+    // Normalize absolute paths that live under home; reject everything that escapes home.
+    const normalized = this.toHomeRelativeTarget(targetPath)
+    if (!normalized) return null
+    const probe = await this.probe(normalized)
     if (!probe) return null
     return {
-      targetPath,
+      targetPath: normalized,
       toolId: 'custom',
       toolLabel: 'Added by you',
       isFolder: probe.isFolder,
@@ -175,6 +176,18 @@ export class DiscoveryScanner {
     const home = resolve(this.options.homeDir)
     const resolved = resolve(home, targetPath)
     return resolved === home || resolved.startsWith(home + pathSep())
+  }
+
+  private toHomeRelativeTarget(targetPath: string): string | null {
+    const home = resolve(this.options.homeDir)
+    if (isAbsolute(targetPath)) {
+      const absolute = resolve(targetPath)
+      if (absolute !== home && !absolute.startsWith(home + pathSep())) return null
+      const target = relative(home, absolute).replaceAll('\\', '/')
+      return target.length > 0 ? target : null
+    }
+    if (!this.isUnderHome(targetPath)) return null
+    return targetPath.replaceAll('\\', '/')
   }
 
   /**

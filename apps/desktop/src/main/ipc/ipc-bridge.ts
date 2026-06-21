@@ -71,6 +71,8 @@ export interface IpcBridgeDeps {
   readonly launchState: () => Promise<LaunchState>
   /** Lazily resolves the shared {@link DiscoveryScanner} bound to this environment's home dir. */
   readonly discoveryScanner: () => Promise<DiscoveryScanner>
+  /** Open the native picker for a user-selected config File/Folder. */
+  readonly browsePath?: () => Promise<string | null>
   /** Lazily resolves the shared {@link EnvironmentRegistry} for identity/labels/attribution. */
   readonly environmentRegistry: () => Promise<EnvironmentRegistry>
   /**
@@ -175,7 +177,8 @@ export interface IpcBridgeDeps {
  *   `den:commit` / `den:sync-push` / `den:list-incoming` /
  *   `den:incoming-summary` / `den:incoming-diff` / `den:apply` / `den:tree` / `den:diff` /
  *   `den:untrack` / `den:delete-everywhere` / `den:affected-environments` → {@link DenService}
- * - `discover:scan` / `discover:inspect-path` → {@link DiscoveryScanner} (issue 1-06)
+ * - `discover:scan` / `discover:inspect-path` / `discover:browse` → discovery affordances
+ *   (issue 1-06)
  * - `automation:get-level` / `automation:set-level` → environment-local automation
  *   settings (issue 1-12); set-level re-arms the automation services via index.ts
  *
@@ -639,6 +642,11 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     traceId(payload)
     const { targetPath } = payload as TracedPayload & { targetPath: string }
     return (await deps.discoveryScanner()).inspectCustomPath(targetPath)
+  })
+  registrar.handle('discover:browse', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    if (!deps.browsePath) throw new Error('Discovery browse IPC is not wired')
+    return deps.browsePath()
   })
 
   // ── Environment channels (issue 1-05): identity, editable label, git-log attribution ──

@@ -117,6 +117,8 @@ export function installDotdenTestApi(overrides: DeepPartial<DotdenApi> = {}): Do
     discover: {
       scan: vi.fn(async () => ({ suggestions: [] })),
       inspectPath: vi.fn(async () => null),
+      browse: vi.fn(async () => null),
+      pathForFile: vi.fn(() => null),
     },
     environment: {
       list: vi.fn(async () => []),

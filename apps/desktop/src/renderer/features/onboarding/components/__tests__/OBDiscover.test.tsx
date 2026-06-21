@@ -87,4 +87,64 @@ describe('OBDiscover liveness', () => {
       (screen.getByRole('button', { name: /track 1 selected/i }) as HTMLButtonElement).disabled,
     ).toBe(false)
   })
+
+  it('adds a browsed absolute path after main normalizes it', async () => {
+    const browse = vi.fn(async () => '/home/me/.config/nvim/init.lua')
+    const inspectPath = vi.fn(async () => ({
+      targetPath: '.config/nvim/init.lua',
+      toolId: 'custom',
+      toolLabel: 'Added by you',
+      isFolder: false,
+      sizeBytes: 42,
+    }))
+    installDotdenTestApi({
+      discover: {
+        scan: vi.fn(async () => ({ suggestions: [] })),
+        browse,
+        inspectPath,
+      },
+      den: {
+        scanCommit: vi.fn(async () => []),
+      },
+    })
+
+    render(<OBDiscover onTracked={vi.fn()} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /browse/i }))
+
+    await waitFor(() => expect(inspectPath).toHaveBeenCalledWith('/home/me/.config/nvim/init.lua'))
+    expect(await screen.findByText('init.lua')).toBeTruthy()
+    expect(screen.getByText('~/.config/nvim/init.lua')).toBeTruthy()
+  })
+
+  it('adds a dropped file using Electron native path lookup', async () => {
+    const dropped = new File(['vim.opt.number = true\n'], 'init.lua')
+    const pathForFile = vi.fn(() => '/home/me/.config/nvim/init.lua')
+    const inspectPath = vi.fn(async () => ({
+      targetPath: '.config/nvim/init.lua',
+      toolId: 'custom',
+      toolLabel: 'Added by you',
+      isFolder: false,
+      sizeBytes: 22,
+    }))
+    installDotdenTestApi({
+      discover: {
+        scan: vi.fn(async () => ({ suggestions: [] })),
+        pathForFile,
+        inspectPath,
+      },
+      den: {
+        scanCommit: vi.fn(async () => []),
+      },
+    })
+
+    render(<OBDiscover onTracked={vi.fn()} />)
+
+    fireEvent.drop(await screen.findByLabelText('Add config files'), {
+      dataTransfer: { files: [dropped] },
+    })
+
+    await waitFor(() => expect(pathForFile).toHaveBeenCalledWith(dropped))
+    expect(inspectPath).toHaveBeenCalledWith('/home/me/.config/nvim/init.lua')
+  })
 })

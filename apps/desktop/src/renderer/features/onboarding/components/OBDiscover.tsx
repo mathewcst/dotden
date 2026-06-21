@@ -1,5 +1,5 @@
 import { Button } from '@/ui/button'
-import { Loader2, Plus, ScanSearch } from 'lucide-react'
+import { FolderOpen, Loader2, Plus, ScanSearch } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DiscoverySuggestion } from '@shared/environments'
 import { withIpcTimeout } from '@/shared/lib/ipc-timeout'
@@ -157,6 +157,26 @@ export function OBDiscover({
     }
   }
 
+  async function browseCustom() {
+    setError(null)
+    try {
+      const targetPath = await window.dotden.discover.browse()
+      if (targetPath) await addCustom(targetPath)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Browsing for a file failed.')
+    }
+  }
+
+  function dropCustom(file: File | undefined) {
+    if (!file) return
+    const targetPath = window.dotden.discover.pathForFile(file)
+    if (!targetPath) {
+      setError('Couldn’t read the dropped file path. Browse or type the path instead.')
+      return
+    }
+    void addCustom(targetPath)
+  }
+
   // Track every picked File through the 1-04 path, then hand the paths to the shell.
   async function advance() {
     const paths = suggestions.map((s) => s.targetPath).filter((p) => picked.has(p))
@@ -199,13 +219,12 @@ export function OBDiscover({
       ) : (
         <div
           ref={dropRef}
+          aria-label="Add config files"
           className="border-border min-h-0 flex-1 space-y-4 overflow-auto rounded-md border border-dashed p-3"
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
-            // Accept a dropped file: its name is a home-relative target guess.
             event.preventDefault()
-            const file = event.dataTransfer.files[0]
-            if (file) void addCustom(file.name)
+            dropCustom(event.dataTransfer.files[0])
           }}
         >
           {groups.length === 0 ? (
@@ -252,6 +271,9 @@ export function OBDiscover({
         />
         <Button size="sm" variant="secondary" onClick={() => void addCustom(customPath)}>
           <Plus className="size-4" /> Add
+        </Button>
+        <Button size="sm" variant="secondary" onClick={() => void browseCustom()}>
+          <FolderOpen className="size-4" /> Browse
         </Button>
       </div>
 

@@ -120,10 +120,24 @@ describe('DiscoveryScanner.inspectCustomPath (drag-in / browse — manage anythi
     expect(await scanner.inspectCustomPath('.does-not-exist')).toBeNull()
   })
 
-  it('refuses an absolute path (Track targets are home-relative)', async () => {
+  it('normalizes an absolute path under home to a Track target', async () => {
     await writeFile(join(home, '.zshrc'), 'z\n')
     const scanner = new DiscoveryScanner({ homeDir: home })
-    expect(await scanner.inspectCustomPath(join(home, '.zshrc'))).toBeNull()
+
+    const suggestion = await scanner.inspectCustomPath(join(home, '.zshrc'))
+
+    expect(suggestion?.targetPath).toBe('.zshrc')
+  })
+
+  it('refuses an absolute path outside the home dir', async () => {
+    const outside = await mkdtemp(join(tmpdir(), 'dotden-outside-'))
+    await writeFile(join(outside, '.zshrc'), 'z\n')
+    const scanner = new DiscoveryScanner({ homeDir: home })
+    try {
+      expect(await scanner.inspectCustomPath(join(outside, '.zshrc'))).toBeNull()
+    } finally {
+      await rm(outside, { recursive: true, force: true })
+    }
   })
 
   it('refuses a path escaping the home dir', async () => {

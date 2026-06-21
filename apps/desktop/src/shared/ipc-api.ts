@@ -565,6 +565,16 @@ export interface DotdenApi {
      * `null` when the path does not exist or escapes the home dir.
      */
     inspectPath(targetPath: string): Promise<DiscoverySuggestion | null>
+    /**
+     * Open the native file/folder picker and return the chosen absolute path, or
+     * `null` when the picker is cancelled. Main still validates via `inspectPath`.
+     */
+    browse(): Promise<string | null>
+    /**
+     * Read Electron's native dropped-file path without exposing broader filesystem
+     * powers to the renderer. Returns `null` when the browser cannot provide a path.
+     */
+    pathForFile(file: unknown): string | null
   }
   /**
    * Environment registry & identity operations (issue 1-05), each forwarded to an

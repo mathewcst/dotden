@@ -886,11 +886,13 @@ describe('IpcBridge', () => {
       scan: vi.fn(async () => ({ suggestions: [{ targetPath: '.zshrc', toolId: 'zsh' }] })),
       inspectCustomPath: vi.fn(async () => ({ targetPath: '.foorc', toolId: 'custom' })),
     }
+    const browsePath = vi.fn(async () => '/home/me/.config/nvim/init.lua')
     const { registrar, handlers } = fakeRegistrar()
     registerIpcBridge(registrar, {
       remoteClient: async () => ({}) as never,
       denService: async () => ({}) as never,
       discoveryScanner: async () => scanner as never,
+      browsePath,
       environmentRegistry: async () => ({}) as never,
       getAutomationLevel: async () => 'manual' as const,
       setAutomationLevel: async () => undefined,
@@ -932,8 +934,16 @@ describe('IpcBridge', () => {
     // The arbitrary drag-in path is forwarded verbatim to inspectCustomPath.
     expect(scanner.inspectCustomPath).toHaveBeenCalledWith('.foorc')
 
-    // Both discover:* channels still hard-fail without a _trace envelope.
+    await expect(
+      handlers.get('discover:browse')?.({}, { _trace: { traceId: 'd3' } } as never),
+    ).resolves.toBe('/home/me/.config/nvim/init.lua')
+    expect(browsePath).toHaveBeenCalledTimes(1)
+
+    // Discovery channels still hard-fail without a _trace envelope.
     await expect(handlers.get('discover:scan')?.({}, {} as never)).rejects.toThrow(
+      'without a _trace envelope',
+    )
+    await expect(handlers.get('discover:browse')?.({}, {} as never)).rejects.toThrow(
       'without a _trace envelope',
     )
   })
