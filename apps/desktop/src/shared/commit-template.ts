@@ -8,7 +8,7 @@
  *
  * This module is the SINGLE source of truth for rendering that template, shared by both
  * the renderer (the Commit tab's live preview) and the main process (the actual Commit
- * message, once PRD2#17 wires the synced template into `DenService.commitTracked`). It is
+ * message in `DenService.commitTracked`). It is
  * placed in `shared/` precisely so one pure function renders both — the preview can never
  * drift from the real message.
  *
@@ -187,7 +187,7 @@ export function resolveCommitTemplateValues(
  * but never crash a Commit either). Longest names are matched first so `$filecount` is never
  * mis-split, and a trailing word boundary stops `$year` from matching inside `$yearly`.
  *
- * This same function backs BOTH the Commit tab's live preview and (via PRD2#17) the real Commit
+ * This same function backs BOTH the Commit tab's live preview and the real Commit
  * message, so what the user previews is exactly what `git log` records.
  *
  * @param template The user's template text (e.g. `[$os-sync-$year-$month-$day]`).

@@ -68,8 +68,8 @@ describe('DenService end-to-end thread (real chezmoi/git)', () => {
     // message and which template produced it (the Commit UI surface).
     const commit = await envA.commitTracked(['.zshrc'], 'trace-commit')
     expect(commit.pushed).toBe(false)
-    expect(commit.templateId).toBe('default')
-    expect(commit.message).toBe('Commit 1 file(s) from this-mac: .zshrc')
+    expect(commit.templateId).toBe('default-commit-template')
+    expect(commit.message).toMatch(/^\[[a-z0-9-]+-sync-\d{4}-\d{2}-\d{2}\]$/)
     expect(commit.committedFiles).toEqual(['.zshrc'])
 
     // The synced .dotden/ exists in the Den BEFORE pushing.
@@ -430,7 +430,7 @@ describe('DenService end-to-end thread (real chezmoi/git)', () => {
     // Commit THREE versions of the same File so the history has a real, ordered timeline.
     await writeFile(join(home, '.zshrc'), 'export EDITOR=nvim\n')
     await env.trackFile('.zshrc', 'trace-track')
-    await env.commitTracked(['.zshrc'], 'trace-commit-1') // "Commit 1 file(s) from this-mac: .zshrc"
+    await env.commitTracked(['.zshrc'], 'trace-commit-1')
     await writeFile(join(home, '.zshrc'), 'export EDITOR=nvim\nexport PAGER=less\n')
     await env.commitTracked(['.zshrc'], 'trace-commit-2')
     await writeFile(join(home, '.zshrc'), 'export EDITOR=nvim\nexport PAGER=bat\n')
@@ -453,7 +453,7 @@ describe('DenService end-to-end thread (real chezmoi/git)', () => {
       expect(version.sha).toMatch(/^[0-9a-f]{40}$/i)
       expect(version.shortSha).toHaveLength(7)
       expect(version.shortSha).toBe(version.sha.slice(0, 7))
-      expect(version.message).toContain('.zshrc')
+      expect(version.message.length).toBeGreaterThan(0)
       expect(version.committedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
       // The author comes straight from git config (the fixture pins it), not the dotden label.
       expect(version.authorName).toBe('dotden tests')
@@ -1024,10 +1024,17 @@ describe('DenService Review & Apply surface (issue 1-09)', () => {
     expect(initial.data.hostname.length).toBeGreaterThan(0)
 
     // Save a custom template; the returned state reflects the new source of truth.
-    const saved = await envA.setCommitTemplate('$environment synced $date', 'trace-ct-set')
-    expect(saved.template).toBe('$environment synced $date')
+    const saved = await envA.setCommitTemplate('$environment synced $filecount', 'trace-ct-set')
+    expect(saved.template).toBe('$environment synced $filecount')
     // It persisted to the synced `.dotden/` metadata…
-    expect(await new DenStore(aSource).readCommitTemplate()).toBe('$environment synced $date')
+    expect(await new DenStore(aSource).readCommitTemplate()).toBe('$environment synced $filecount')
+
+    // The real Commit path reads the saved template, so the preview and git history agree.
+    await writeFile(join(aHome, '.vimrc'), 'set number\n')
+    await envA.trackFile('.vimrc', 'trace-ct-track')
+    const commit = await envA.commitTracked(['.vimrc'], 'trace-ct-commit')
+    expect(commit.message).toBe('this-mac synced 1')
+    expect(commit.templateId).toBe('saved-template')
 
     // Push the Commit that recorded the template change.
     await envA.syncPush('trace-ct-push')
@@ -1043,7 +1050,7 @@ describe('DenService Review & Apply surface (issue 1-09)', () => {
       environment: { id: 'env-b', label: 'work-laptop', os: process.platform },
     })
     const onB = await envB.commitTemplate('trace-ct-read-b')
-    expect(onB.template).toBe('$environment synced $date')
+    expect(onB.template).toBe('$environment synced $filecount')
     // …but the preview's environment label is env B's own (it is local, not synced).
     expect(onB.environment).toBe('work-laptop')
 

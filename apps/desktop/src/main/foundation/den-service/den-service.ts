@@ -7,8 +7,8 @@
  * dotden's verbs end to end:
  *
  * - **env A** — {@link DenService.trackFile} (chezmoi add + record a placement),
- *   {@link DenService.commitTracked} (re-add/add + `git commit` with a
- *   `CommitMessageRenderer` message; LOCAL until pushed), {@link DenService.syncPush}
+ *   {@link DenService.commitTracked} (re-add/add + `git commit` with the saved
+ *   Commit template; LOCAL until pushed), {@link DenService.syncPush}
  *   (`git push` — the moment a Commit leaves the environment);
  * - **env B** — {@link DenService.listIncomingClean} (fetch + classify incoming
  *   Files for review through `SyncEngine`'s incoming-clean path),
@@ -23,12 +23,6 @@ import { relative, resolve } from 'node:path'
 import { ChezmoiAdapter, UncommittedLocalEditError } from '../chezmoi/chezmoi-adapter.js'
 import { GitTransport } from '../chezmoi/git-transport.js'
 import { resolveContainedPath } from '../platform/path-safety.js'
-import {
-  DEFAULT_COMMIT_TEMPLATE,
-  renderCommitMessage,
-  type CommitMessageTemplate,
-  type RenderedCommitMessage,
-} from '../commit/commit-message-renderer.js'
 import { DEFAULT_WORKSPACE_ID, DenStore } from '../den-store.js'
 import type { WorkspacesDoc } from '../../../shared/workspace.js'
 import type { Group, Workspace } from '../../../shared/workspace.js'
@@ -63,7 +57,10 @@ import {
 import { readPmPreference, writePmPreference } from '../secrets/pm-preference.js'
 import type { PmPreference } from '../../../shared/secrets.js'
 import { CommandFailedError } from '../platform/process.js'
-import { DEFAULT_COMMIT_MESSAGE_TEMPLATE } from '../../../shared/commit-template.js'
+import {
+  DEFAULT_COMMIT_MESSAGE_TEMPLATE,
+  renderCommitTemplate,
+} from '../../../shared/commit-template.js'
 import {
   resolveAppearanceSettings,
   type AppearanceOverride,
@@ -106,7 +103,7 @@ import type { DenServiceOptions, PollSnapshot } from './types.js'
  * One instance is bound to a single environment's source/destination dirs. It holds
  * a {@link ChezmoiAdapter}, a {@link GitTransport} (over the same source dir), and a
  * {@link DenStore} for the synced metadata. Pure owners ({@link SyncEngine},
- * {@link renderCommitMessage}) are constructed per call from the current synced
+ * {@link renderCommitTemplate}) are constructed per call from the current synced
  * model so they always see the latest `.dotden/`.
  */
 export class DenService {
@@ -242,10 +239,39 @@ export class DenService {
   }
 
   /**
+   * Render the actual git Commit message from the synced Commit template.
+   *
+   * The Settings preview and this production path now share `renderCommitTemplate`; the only extra
+   * work here is sourcing the current saved template plus chezmoi's cross-OS data at Commit time.
+   */
+  private async renderSavedCommitMessage(targetPaths: readonly string[]): Promise<{
+    readonly message: string
+    readonly templateId: string
+    readonly templateLabel: string
+  }> {
+    const [template, data] = await Promise.all([
+      this.store.readCommitTemplate(),
+      this.chezmoi.templateData(),
+    ])
+    return {
+      message: renderCommitTemplate(template, {
+        data,
+        environment: this.options.environment.label,
+        fileCount: targetPaths.length,
+        now: new Date(),
+      }),
+      templateId:
+        template === DEFAULT_COMMIT_MESSAGE_TEMPLATE ? 'default-commit-template' : 'saved-template',
+      templateLabel:
+        template === DEFAULT_COMMIT_MESSAGE_TEMPLATE ? 'Default Commit template' : 'Saved template',
+    }
+  }
+
+  /**
    * **Commit** tracked Files into the Den with a templated message — LOCAL only.
    *
    * Maps to chezmoi re-add/add per File then `git commit` (CONTEXT.md "Commit").
-   * The message is produced by {@link renderCommitMessage} so the UI can show the
+   * The message is produced by the shared {@link renderCommitTemplate} path so the UI can show the
    * resolved text and which template produced it. Per ADR 0006 (transport not
    * commit) this does NOT push: {@link CommitResult.pushed} is `false`, and the UI
    * tells the user the Commit is local until they Sync now.
@@ -255,7 +281,6 @@ export class DenService {
    *
    * @param targetPaths The Files to record (must already be Tracked or new on disk).
    * @param traceId Correlation id for the wide event.
-   * @param template Commit-message template; defaults to the built-in default.
    * @param options.deferAutoPush When `true`, record the Commit but DO NOT auto-push it now,
    *   even if the level would (`mayAutoPush`). Used by {@link yoloSync}'s auto-Commit-BEFORE-merge
    *   step: the Commit must be recorded first, but its push can only succeed AFTER the merge
@@ -266,15 +291,11 @@ export class DenService {
   async commitTracked(
     targetPaths: readonly string[],
     traceId: string,
-    template: CommitMessageTemplate = DEFAULT_COMMIT_TEMPLATE,
     options: { readonly deferAutoPush?: boolean } = {},
   ): Promise<CommitResult> {
     const span = this.tracer?.startOperation('commit', traceId)
     try {
-      const rendered: RenderedCommitMessage = renderCommitMessage(
-        { targetPaths, environmentLabel: this.options.environment.label },
-        template,
-      )
+      const rendered = await this.renderSavedCommitMessage(targetPaths)
       // chezmoi.commit re-adds/adds the chosen Files then commits exactly their
       // source-state paths; we stage the `.dotden/` metadata in the same commit so
       // the synced Workspace tree + registry travel with the recorded Files.
@@ -1274,7 +1295,7 @@ export class DenService {
         // in history before the merge runs. We DEFER the push: a pre-merge push would be a
         // non-fast-forward rejection against a Remote the env hasn't merged yet. The push goes
         // out AFTER a clean merge, below (transport-not-commit, ADR 0006).
-        commit = await this.commitTracked(preMerge.commitPaths, traceId, undefined, {
+        commit = await this.commitTracked(preMerge.commitPaths, traceId, {
           deferAutoPush: true,
         })
       }
@@ -1994,10 +2015,7 @@ export class DenService {
       await this.chezmoi.apply([targetPath])
       // Record the restore as a NEW commit on top of history — commitIfChanged so restoring
       // the Current version onto itself is a clean no-op (no empty commit), not a failure.
-      const rendered = renderCommitMessage(
-        { targetPaths: [targetPath], environmentLabel: this.options.environment.label },
-        DEFAULT_COMMIT_TEMPLATE,
-      )
+      const rendered = await this.renderSavedCommitMessage([targetPath])
       const restoreMessage = `Restore ${targetPath} to ${shortSha(sha)} (${rendered.message})`
       // Stage the source file PLUS `.dotden`/`.chezmoiignore` for parity with commitTracked,
       // though a restore changes only the File's bytes. commitIfChanged returns whether a
