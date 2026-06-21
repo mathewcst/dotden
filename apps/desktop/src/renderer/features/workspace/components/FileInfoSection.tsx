@@ -99,9 +99,9 @@ export function FileInfoSection() {
               ))}
             </select>
           ) : (
-            selectedIncoming?.workspaceId ??
+            (selectedIncoming?.workspaceId ??
             workspaces.find((w) => w.id === selectedFile?.workspaceId)?.label ??
-            workspaceLabel
+            workspaceLabel)
           )}
         </dd>
         <dt className="text-muted-foreground">Scope</dt>
@@ -142,12 +142,17 @@ export function FileInfoSection() {
             {detailsLoading ? (
               <p className="text-muted-foreground">Reading history...</p>
             ) : visibleDetails?.versions.length ? (
-              <ul className="space-y-1">
+              // Message leads (foreground, clamped to two lines so a long subject can't wall-of-text
+              // the inspector); the sha + date drop to one muted metadata line beneath it.
+              <ul className="space-y-2.5">
                 {visibleDetails.versions.map((version) => (
-                  <li key={version.sha} className="text-muted-foreground min-w-0">
-                    <span className="text-foreground font-mono">{version.shortSha}</span>{' '}
-                    <span className="break-words">{version.message}</span>
-                    <span className="block">{formatDate(version.committedAt)}</span>
+                  <li key={version.sha} className="min-w-0 leading-snug">
+                    <p className="text-foreground line-clamp-2 break-words">{version.message}</p>
+                    <p className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-[11px]">
+                      <span className="font-mono">{version.shortSha}</span>
+                      <span aria-hidden>·</span>
+                      <span>{formatDate(version.committedAt)}</span>
+                    </p>
                   </li>
                 ))}
               </ul>
@@ -242,7 +247,14 @@ function environmentStatus(env: EnvironmentWithAttribution): {
 }
 
 function formatDate(value: string): string {
-  return new Date(value).toLocaleString()
+  // Compact "Jun 21, 11:05 AM" — the full toLocaleString() ("6/21/2026, 11:05:14 AM") was the bulk
+  // of the cramped commit rows; the year and seconds carry no signal in a recent-history list.
+  return new Date(value).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
 }
 
 function messageOf(caught: unknown, fallback: string): string {

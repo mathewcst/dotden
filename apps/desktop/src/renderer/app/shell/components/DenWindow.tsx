@@ -20,7 +20,7 @@ import {
   syncDataLoaderFeature,
 } from '@headless-tree/core'
 import { useTree } from '@headless-tree/react'
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef } from 'react'
 
 const ConflictResolver = lazy(() =>
   import('@/features/apply/components/ConflictResolver').then((module) => ({
@@ -114,44 +114,32 @@ export function DenWindow({
     [selected, treeModel],
   )
 
-  // Containers (Workspaces, Groups, Folders) are expanded by default. We remember only what the
-  // user has explicitly COLLAPSED, never what is expanded — so a freshly loaded Workspace or a
-  // newly created Group opens on first appearance, while a folder the user closed stays closed
-  // across the next background model rebuild (the live git-status refresh).
-  const [collapsedItems, setCollapsedItems] = useState<ReadonlySet<string>>(() => new Set())
-
-  // `expandedItems` is a CONTROLLED Headless Tree substate: every container minus the user's
-  // collapses. Recomputing it on each `treeModel` change hands Headless Tree a fresh array, which
-  // is exactly what makes it re-walk the data loader in the SAME render — so files added/removed by
-  // a Commit, drag, or boot load show immediately instead of one render behind (the old
-  // `tree.setState` effect could not do this: core discards that updater).
-  const expandedItems = useMemo(
-    () => treeModel.expandedIds.filter((id) => !collapsedItems.has(id)),
-    [treeModel, collapsedItems],
-  )
-
-  const handleSetExpanded = useCallback(
-    (next: string[] | ((prev: string[]) => string[])) => {
-      const nextList = typeof next === 'function' ? next(expandedItems) : next
-      const nextExpanded = new Set(nextList)
-      // Headless Tree gives us the full expanded set after a user expand/collapse; invert it into
-      // the collapsed set so the "open by default" rule above keeps holding.
-      const collapsed = new Set<string>()
-      for (const id of treeModel.expandedIds) if (!nextExpanded.has(id)) collapsed.add(id)
-      setCollapsedItems(collapsed)
-    },
-    [expandedItems, treeModel],
-  )
+  // Containers (Workspaces, Groups, Folders) open by default, and expansion is UNCONTROLLED —
+  // Headless Tree owns the expanded-id set. We tried controlling it (`state.expandedItems` +
+  // `setExpandedItems`, tracking only collapses) and it desynced the visible rows from the real
+  // expand state in the live app: a collapse flipped `isExpanded` but never rebuilt the flat row
+  // list — Headless Tree only rebuilds it on the toggle's OWN re-render (its internal `setState`),
+  // which the controlled round-trip bypasses, so the rebuild waited for an unrelated later render
+  // (the "click a folder, nothing happens until you click elsewhere" lag, confirmed by logging
+  // `getItems()` staying flat while `isExpanded()` flipped). Letting the tree own expansion makes a
+  // user toggle drive its own re-render + flat-list rebuild directly — no round-trip, no desync.
+  //
+  // Headless Tree persists the expanded-id set across our background model rebuilds (the live
+  // git-status refresh hands the data loader new closures, not a new tree, and node ids are stable
+  // across rebuilds), so a folder the user collapsed stays collapsed. We only (a) seed every
+  // container open at mount and (b) auto-open containers that FIRST appear afterwards — a freshly
+  // loaded Workspace, a newly created Group, a newly-tracked path — so "open by default" holds
+  // without ever reopening a user's collapse.
 
   // Build the Headless Tree model. The data source is a pure node model derived from the scoped
-  // den-session store; `expandedItems` is controlled (above) so model changes re-render the tree
-  // from new data. Selection stays uncontrolled (the row highlight is driven by the store's
-  // `selected` via DotdenTree's `selectedPath`); we only seed the initial keyboard selection.
+  // den-session store. `initialState.expandedItems` is consumed once at mount (later renders' value
+  // is ignored), so handing it the current container set seeds everything open. Selection is
+  // uncontrolled too (the row highlight is driven by the store's `selected` via DotdenTree's
+  // `selectedPath`); we only seed the initial keyboard selection.
   const tree = useTree<DotdenTreeNode>({
     rootItemId: treeModel.rootId,
-    state: { expandedItems },
-    setExpandedItems: handleSetExpanded,
     initialState: {
+      expandedItems: [...treeModel.expandedIds],
       selectedItems: selectedTreeNodeId ? [selectedTreeNodeId] : [],
     },
     dataLoader: {
@@ -175,6 +163,45 @@ export function DenWindow({
     indent: 14,
     features: [syncDataLoaderFeature, selectionFeature, hotkeysCoreFeature, searchFeature],
   })
+
+  // Auto-open containers that first appear AFTER mount (a new Group, a newly-tracked path, or the
+  // first real model replacing the empty boot model) so "open by default" holds — without reopening
+  // anything the user has collapsed, since we only ever expand ids we have not seen before. The
+  // tree's own mount effect (setMounted + rebuildTree) runs before this one, so expand() applies
+  // immediately rather than queuing for mount.
+  const seenContainers = useRef<Set<string> | null>(null)
+  useEffect(() => {
+    // [tree-lag] TEMP — is the store actually populated, or is the tree empty because no data loaded?
+    console.log(
+      '[tree-lag] model — files:',
+      files.length,
+      'workspaces:',
+      workspaces.length,
+      'busy:',
+      busy,
+      'nodes:',
+      treeModel.nodes.size,
+      'getItems:',
+      tree.getItems().length,
+    )
+    // The data loader closes over `treeModel`; when it changes (a Commit/drag/boot/refresh adds or
+    // removes Files, or a Group is created), re-walk so new and removed rows show immediately. The
+    // old controlled wiring got this for free (a fresh expandedItems array forced the rebuild);
+    // uncontrolled must ask explicitly.
+    tree.rebuildTree()
+
+    if (seenContainers.current === null) {
+      // First run: everything currently present was seeded open via initialState — mark it all seen
+      // so we never re-expand it, and only act on containers that appear in later rebuilds.
+      seenContainers.current = new Set(treeModel.expandedIds)
+      return
+    }
+    for (const id of treeModel.expandedIds) {
+      if (seenContainers.current.has(id)) continue
+      seenContainers.current.add(id)
+      tree.getItemInstance(id)?.expand()
+    }
+  }, [treeModel, tree])
 
   // The title-bar advertises the native search chord; bind it at the shell layer that owns the
   // shared tree model so keyboard and mouse open the exact same search session.

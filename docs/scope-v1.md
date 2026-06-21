@@ -6,14 +6,14 @@ What ships in v1, and what is deliberately deferred. This is the product-scope c
 
 > Store and sync files across environments, and be notified on the current OS when a file changed on a different OS, so it can be applied to the current OS.
 
-In scope: manage **Files** organized into **Workspaces** (environment-access boundaries) and nested **Groups**, per-environment Workspace subscription, manual **Commit**, notify-and-**Apply** (one or all), bundled chezmoi + git, connecting an existing private Remote on any git Provider (user's own git credentials; dotden creates no Remote and holds no token — V1-Lean), and a tray poller with OS notifications. Everything not serving that sentence is a candidate to defer.
+In scope: manage **Files** organized into **Workspaces** (environment-access boundaries) and nested **Nooks**, per-environment Workspace subscription, manual **Commit**, notify-and-**Apply** (one or all), bundled chezmoi + git, connecting an existing private Remote on any git Provider (user's own git credentials; dotden creates no Remote and holds no token — V1-Lean), and a tray poller with OS notifications. Everything not serving that sentence is a candidate to defer.
 
 ## What v1 delivers
 
 - **Manual Commit, notify-and-Apply transport.** Nothing leaves an environment until you Commit; nothing rewrites your files without a reviewed Apply. → [ADR 0006](adr/0006-sync-model-transport-not-commit.md)
 - **Transport-only automation ladder** — **Manual ←→ Auto-sync** (Auto-sync the default), with four never-relaxable safety invariants. Automation only moves data through git; writing your working tree is always a deliberate Apply (no Auto-apply / YOLO). → [ADR 0037](adr/0037-automation-ladder-transport-only.md) (revises [ADR 0006](adr/0006-sync-model-transport-not-commit.md)); invariant ownership → [ADR 0008](adr/0008-invariant-ownership.md)
 - **Conflict resolution** — auto-merge clean, ask on collision (per-file Keep-mine / Take-theirs / Open-both), never lose silently; Apply blocked-with-warning when the target File has uncommitted local edits. → [ADR 0006](adr/0006-sync-model-transport-not-commit.md) / [ADR 0008](adr/0008-invariant-ownership.md)
-- **Access hierarchy** — Workspace → Group → OS Scope → per-file "unsync here". A File applies on an environment **iff** it subscribes to the Workspace ∧ OS Scope matches ∧ not individually unsynced ∧ not deleted. Access control exists only at the Workspace level. → [ADR 0005](adr/0005-workspaces-as-environment-access-boundaries.md)
+- **Access hierarchy** — Workspace → Nook → OS Scope → per-file "unsync here". A File applies on an environment **iff** it subscribes to the Workspace ∧ OS Scope matches ∧ not individually unsynced ∧ not deleted. Access control exists only at the Workspace level. → [ADR 0005](adr/0005-workspaces-as-environment-access-boundaries.md)
 - **Per-OS files** — verbatim sync + OS Scope; "same file, different content per OS" is deferred (in-file conditionals for now). → [ADR 0005](adr/0005-workspaces-as-environment-access-boundaries.md)
 - **Greenfield onboarding on the user's own git credentials** — connect an existing empty private Remote; dotden creates no Remote and holds no token. → [ADR 0020](adr/0020-provider-agnostic-pure-git-floor-v1-lean-auth.md); the feature-detection gate (v1.1) → [ADR 0022](adr/0022-onboarding-gate-is-feature-detection-not-emptiness.md)
 - **Environment identity & lifecycle** — synced registry, stable random ID, editable label; claim / reassign / retire. → [ADR 0024](adr/0024-synced-vs-local-data-architecture.md)
@@ -42,7 +42,7 @@ Single bundled Chromium for pixel-identical UI on every OS; the Node main proces
 
 - **First environment ("connect your repo"):** the user creates an _empty_ private repo on their Provider, pastes the URL; dotden `git ls-remote` preflights credentials, then `chezmoi init <url>` clones+initializes. Then scan-and-suggest via a bundled **catalog** (known tool → typical config paths); suggest the paths that exist on disk; plus drag-drop / file browser. The catalog is data we maintain and grow.
 - **Second environment:** paste the _same_ Remote URL → preflight + clone (now has content) → **pick which Workspaces this environment subscribes to** (default all, editable later) → present the subscribed Workspaces' Files as incoming → review and Apply. A File that already exists locally routes through the **Conflict** flow.
-- **One Den (one repo) per user**, always — Work/personal and other structure are expressed with Workspaces and nested Groups, not separate repos.
+- **One Den (one repo) per user**, always — Work/personal and other structure are expressed with Workspaces and nested Nooks, not separate repos.
 - **First run auto-creates one default Workspace** (e.g. "Personal"); the Workspace concept stays invisible until the user creates a second one.
 - **Onboarding ends with an "enable auto-sync?" prompt** (the low-risk level). The **initial materialization** on a returning environment is always a **reviewed Apply**; automation engages only afterward.
 

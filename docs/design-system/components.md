@@ -168,7 +168,7 @@ Local component sets, all token-bound, mirroring shadcn anatomy:
   the card) + **Primary/Destructive Confirm**. Screens overlay it with a scrim + a centered instance
   (see [confirm dialogs](./screens/confirm-dialogs.md)).
 - **Inline status primitive (Phase 5 — Batch C):** `Banner`
-  (`Tone=Syncing|UpToDate|Incoming|Push|Offline|Error`) — a **persistent full-width inline status
+  (`Tone=Syncing|UpToDate|Incoming|Push|Offline|Error|Conflict`) — a **persistent full-width inline status
   strip**, the counterpart to the transient `Toast`. Tinted `*-bg` surface + a 1px **bottom border** in
   the tone color + a leading icon + `Message` (Sans/Body Medium) + muted `Detail` (Sans/Body Small) +
   an optional trailing `Button` action (**neutral Secondary/sm** — QA 2026-06-14: was ember Primary, but
@@ -182,6 +182,12 @@ Local component sets, all token-bound, mirroring shadcn anatomy:
   screens override `Message`/`Detail` characters + the action per instance. In `AppShell` screens it's
   inserted between the titlebar and body (vertical auto-layout → the body auto-shrinks, nothing is
   covered). `Offline`/`Error` also feed Batch E. See [sync states](./screens/sync-states.md).
+  > **Conflict tone (2026-06-21, journey 04).** Added `Tone=Conflict` (`880:2`) — **amber**
+  > (`alert-triangle`, `dd/amber/950` bg + `amber/500` border), _"1 conflict needs you · from
+  > work-laptop"_, action **Review & Apply**. Deliberately amber, not red `Error`: a conflict is a
+  > thing-you-resolve, not a failure. This is the **in-app** half of the window-open notification branch
+  > (the OS-notification half is `OSNotification` Conflict `560:1300`). See
+  > [journey 04](../user-flow/journeys/04-conflicts.md).
 - **History primitives (Phase 5 — Batch D):** `CommitRow` (`State=Default|Selected`) — a **selectable**
   per-File version-list row: a `git-commit` lead (ember-tinted when Selected) + `Message`
   (Sans/Body Medium) over `Sha` (Mono/Label, **amber** — the committed-SHA convention) · `Meta`
@@ -201,6 +207,12 @@ Local component sets, all token-bound, mirroring shadcn anatomy:
   (StatusTag/Discard/Commit). The affordance rules here (actions are _filled_; presentation is flat;
   selection is loud; two distinct surfaces; disclosure chevrons) are the project's "legible to non-devs
   too" baseline. See [file history](./screens/file-history.md).
+  > **Merge/resolution entry (2026-06-21, journey 04).** `AppPane/History` (`319:888`) now carries a
+  > **merge entry** as the newest `CommitRow`: _"Merge work-laptop — resolved ~/.zshrc"_ + an amber
+  > **`Resolved`** `Pill` (in place of green "Current") + `you · just now`. Demonstrates that the
+  > history surface renders the auto-message merge commit a Conflict-Apply produces ([journey 04] flag
+  > 4). No `GitMerge` Lucide glyph exists in the file yet — follow-up; the auto-message + amber tag
+  > carry it for now.
 - **Secret + choice primitives (Phase 5 — Batch E):** _(M4 update: `RadioRow` + `PMOption` were folded
   into **`SelectRow`** — see Row families above. The two modals below now hold `SelectRow` instances;
   anatomy kept here for history.)_ `RadioRow` — the reusable **single-choice card** (radio + title +
@@ -287,6 +299,17 @@ The default panes assemble the [signature screen](./screens/signature-screen.md)
 > OTHER SYSTEMS ONLY** disclosure — kept `visible=false` on non-adopt `Mode=Apply` instances. The
 > completeness gate lives on `AppPane/Apply` `State=Disabled` (`GateHint` "N items still need you" +
 > disabled Apply). See [returning-environment](./screens/returning-environment.md) → _Adopt enforcement_.
+
+> **Apply-time local-edit guard (2026-06-21, journey 04).** `AppPane/Guard` (`886:2`) — a swappable
+> center pane (716w, peers with `AppPane/Merge`/`Diff`/`History`) for the **other** collision axis:
+> Apply targets a File with **uncommitted local edits**. Built by cloning `AppPane/Merge` for the
+> file-header style, then rebuilding the body: an amber `BLOCKED · UNCOMMITTED LOCAL EDITS` card
+> (`alert-triangle` + explanation) over a **vertical stack of action rows** (copy column FILL + a
+> trailing `Button`) — **Commit my edits first** (Primary) / **Discard my edits** (Destructive). The
+> stack is the API: a future 3-way **"Resolve…"** drops in as a third row (a muted `ROADMAP` socket
+> line marks the spot). Never merges/clobbers ([ADR 0008] invariant #2). Homed on `Apply · local-edit
+guard` (`891:8362`) — the Review & Apply shell with the center swapped to the guard. See
+> [operation surface](./screens/operation-surface.md) + [journey 04](../user-flow/journeys/04-conflicts.md).
 
 - **`AppPane/Commit`** SET `State=Pending|Committed` (right slot, 320w, `sidebar` bg) — the commit
   composer. **Pending:** git-commit header + "N files ready" + `StatusTag` count summary +

@@ -71,6 +71,8 @@ export function DotdenTree({
   // The Group row the pointer is currently over during a drag. Native HTML5 DnD gives no built-in
   // drop highlight, so we track the target ourselves and ring it — without this the drop is a guess.
   const [dropTargetId, setDropTargetId] = useState<string | null>(null)
+  // [tree-lag] TEMP instrumentation — remove after diagnosis. How many rows are visible THIS render?
+  console.log('[tree-lag] DotdenTree render — visible items:', tree.getItems().length)
   return (
     <RowContextMenu onVerb={onRowVerb}>
       <div className="flex h-full min-h-0 flex-col gap-1">
@@ -141,7 +143,21 @@ export function DotdenTree({
                     // toggles folder expansion — calling expand/collapse again here would double-
                     // toggle (net no-op, the "can't collapse" bug). So we ONLY add file selection
                     // and let itemProps own focus + folder toggle (official "click behavior" recipe).
+                    const expandedBefore = item.isExpanded?.() // [tree-lag] TEMP
                     itemProps.onClick?.(event)
+                    // [tree-lag] TEMP — did the synchronous toggle flip isExpanded + change the
+                    // visible-item count INSIDE the handler (before any React re-render)?
+                    console.log(
+                      '[tree-lag] click',
+                      node.kind,
+                      node.name,
+                      'expanded',
+                      expandedBefore,
+                      '→',
+                      item.isExpanded?.(),
+                      '| visible items now:',
+                      tree.getItems().length,
+                    )
                     if (node.kind === 'file' && node.targetPath) {
                       onSelectFile(node.targetPath)
                       item.select?.()

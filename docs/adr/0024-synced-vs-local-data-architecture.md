@@ -10,7 +10,7 @@ dotden splits the data it owns into two tiers by a single governing principle: *
 
 Everything dotden syncs lives in a single chezmoi-ignored `.dotden/` directory in the repo (plus native chezmoi constructs), so chezmoi never treats it as a managed target:
 
-- Workspace/Group tree + File/Folder placements + per-environment Workspace subscriptions
+- Workspace/Nook tree + File placements + per-environment Workspace subscriptions
 - Environment registry `{ id, label, os, subscribedWorkspaces }`
 - Secret-scan "sync anyway" allowlist decisions
 - Shared user settings: commit-message template, theme, default Apply/notification preferences
@@ -42,7 +42,7 @@ Keeping user-authored organization in the repo is what lets a second environment
 
 ## Related
 
-- [ADR 0003](0003-faithful-chezmoi-wrapper.md) — Workspace/Group is the one dotden addition with no chezmoi equivalent, stored in the chezmoi-ignored `.dotden/` file.
+- [ADR 0003](0003-faithful-chezmoi-wrapper.md) — Workspace/Nook is the one dotden addition with no chezmoi equivalent, stored in the chezmoi-ignored `.dotden/` file.
 - [ADR 0005](0005-workspaces-as-environment-access-boundaries.md) — Workspace subscription is the access boundary the registry records.
 - [ADR 0020](0020-provider-agnostic-pure-git-floor-v1-lean-auth.md) — why v1 holds no credential locally.
 - [ADR 0007](0007-observability-wide-events-local-traces.md) — the local observability sink and telemetry sampling state.

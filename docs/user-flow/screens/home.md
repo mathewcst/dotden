@@ -45,7 +45,7 @@ WORKSPACES        +   │ 📄 ~/.zshrc ● modified   Discard  [Commit changes]
 
 **Left — Workspaces pane**
 - Header `WORKSPACES` + add `+`.
-- Workspace roots with counts (`Personal` `12`, `Work` `8`), expand/collapse, nested Folders/Groups, Files.
+- Workspace roots with counts (`Personal` `12`, `Work` `8`), expand/collapse, nested **Nooks**, Files. See [file-tree.md](file-tree.md) for full tree behavior (adding files, drag, context menus, icons).
 - File status badges: `M` (modified), `A` (added)… + per-file sync arrows.
 
 **Center — File-changes pane**

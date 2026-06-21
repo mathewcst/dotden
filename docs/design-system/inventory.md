@@ -111,11 +111,11 @@ Variant column = variant values (axes `/`-joined for multi-axis sets). Props col
 
 ### Overlays & inline status
 
-| Component         | ID        | Variants                                             | Key props                                                                                            |
-| ----------------- | --------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Toast (transient) | `254:741` | Success/Info/Warning/Error                           | `Title#254:0`, `Description#254:5`, `HasDescription#254:10`, `HasAction#254:15`, `HasDismiss#254:20` |
-| Dialog (modal)    | `266:732` | Default/Destructive                                  | `Title#266:0`, `Body#266:1`, `HasIcon#266:2`                                                         |
-| Banner (inline)   | `292:751` | Syncing/UpToDate/Incoming/Push/**Offline**/**Error** | — (Tone is the whole API; override text per instance)                                                |
+| Component         | ID        | Variants                                                          | Key props                                                                                                   |
+| ----------------- | --------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Toast (transient) | `254:741` | Success/Info/Warning/Error                                        | `Title#254:0`, `Description#254:5`, `HasDescription#254:10`, `HasAction#254:15`, `HasDismiss#254:20`        |
+| Dialog (modal)    | `266:732` | Default/Destructive                                               | `Title#266:0`, `Body#266:1`, `HasIcon#266:2`                                                                |
+| Banner (inline)   | `292:751` | Syncing/UpToDate/Incoming/Push/**Offline**/**Error**/**Conflict** | — (Tone is the whole API; override text per instance); `Conflict` `880:2` = amber, routes to Review & Apply |
 
 ### History (Batch D)
 
@@ -137,18 +137,19 @@ Variant column = variant values (axes `/`-joined for multi-axis sets). Props col
 
 ### App scaffold (AppShell + panes)
 
-| Component             | ID         | Variants            | Key props                                                                                     |
-| --------------------- | ---------- | ------------------- | --------------------------------------------------------------------------------------------- |
-| Titlebar              | `516:1424` | —                   | `SyncStatus#516:0` (text), `SyncIcon#516:1` (swap) — reused by every AppShell + SettingsShell |
-| AppShell              | `114:359`  | —                   | a `Titlebar` instance + slots `Left#114:0`, `Center#114:1`, `Right#114:2` (all swap)          |
-| AppPane/Workspaces    | `110:110`  | —                   | —                                                                                             |
-| AppPane/Diff          | `110:203`  | —                   | —                                                                                             |
-| AppPane/Inspector     | `110:278`  | —                   | —                                                                                             |
-| AppPane/ConflictFiles | `119:390`  | —                   | —                                                                                             |
-| AppPane/Merge         | `127:437`  | Unresolved/Resolved | —                                                                                             |
-| AppPane/Resolve       | `128:454`  | Unresolved/Resolved | —                                                                                             |
-| AppPane/Commit        | `282:742`  | Pending/Committed   | —                                                                                             |
-| AppPane/History       | `319:888`  | —                   | master-detail (list / resize-handle / preview-panel)                                          |
+| Component             | ID         | Variants            | Key props                                                                                           |
+| --------------------- | ---------- | ------------------- | --------------------------------------------------------------------------------------------------- |
+| Titlebar              | `516:1424` | —                   | `SyncStatus#516:0` (text), `SyncIcon#516:1` (swap) — reused by every AppShell + SettingsShell       |
+| AppShell              | `114:359`  | —                   | a `Titlebar` instance + slots `Left#114:0`, `Center#114:1`, `Right#114:2` (all swap)                |
+| AppPane/Workspaces    | `110:110`  | —                   | —                                                                                                   |
+| AppPane/Diff          | `110:203`  | —                   | —                                                                                                   |
+| AppPane/Inspector     | `110:278`  | —                   | —                                                                                                   |
+| AppPane/ConflictFiles | `119:390`  | —                   | —                                                                                                   |
+| AppPane/Merge         | `127:437`  | Unresolved/Resolved | —                                                                                                   |
+| AppPane/Resolve       | `128:454`  | Unresolved/Resolved | —                                                                                                   |
+| AppPane/Commit        | `282:742`  | Pending/Committed   | —                                                                                                   |
+| AppPane/History       | `319:888`  | —                   | master-detail (list / resize-handle / preview-panel); top row = merge/resolution entry (journey 04) |
+| AppPane/Guard         | `886:2`    | —                   | apply-time local-edit guard (Commit-first / Discard); journey 04, screen `891:8362`                 |
 
 > Pane names use a `/` folder, **no spaces** (`"AppPane/Diff"` — normalized in M2). Swap a pane into a screen with
 > `appShellInstance.setProperties({ "Center#114:1": "<paneComponentId>" })`.
@@ -220,19 +221,20 @@ referenced them.
 Each flow is a Figma **Section**; new app screens **clone `Backdrop 54:3`** (the source-of-truth home)
 and swap panes. Section children store **section-relative** coords.
 
-| Section                     | ID         | Screens (name · id)                                                                                                                                   | Spec                                                        |
-| --------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| App · Main                  | `130:995`  | Backdrop **`54:3`** (home / source-of-truth)                                                                                                          | [signature-screen](./screens/signature-screen.md)           |
-| Conflict resolver           | `126:1094` | unresolved `126:648` · resolved `129:831`                                                                                                             | [conflict-resolver](./screens/conflict-resolver.md)         |
-| Returning · Review & Apply  | `231:1682` | Review&Apply `228:1153` · Applied·in-sync `230:1392`                                                                                                  | [returning-environment](./screens/returning-environment.md) |
-| Confirm dialogs             | `268:1694` | Track `268:1695` · Untrack `268:2033` · Delete-everywhere `268:2342`                                                                                  | [confirm-dialogs](./screens/confirm-dialogs.md)             |
-| Commit                      | `283:2644` | Pending `283:2645` · Committed `283:3059`                                                                                                             | [commit](./screens/commit.md)                               |
-| Sync states                 | `297:3139` | 3 incoming `297:3140` · Syncing `298:3429` · Up-to-date `298:4100` · 1-ahead `301:3980`                                                               | [sync-states](./screens/sync-states.md)                     |
-| File history                | `320:4250` | File history `320:4251` · Restore-confirm `323:4746`                                                                                                  | [file-history](./screens/file-history.md)                   |
-| Secret & errors             | `343:5185` | Secret choose `343:5243` · Secret pick `354:6937` · Offline `344:6096` · Apply-failed `360:6720`                                                      | [secret-and-errors](./screens/secret-and-errors.md)         |
-| Settings                    | `542:6203` | Automation `542:6204` · Commit `542:6537` · Sync `542:6712` · Repository `542:6866` · Privacy `542:7068` · Environments `542:7228` · About `542:7429` | [settings](./screens/settings.md)                           |
-| Tray & notification (macOS) | `563:7125` | Tray · incoming `563:7126` · Notification states `566:7155`                                                                                           | [tray-and-notification](./screens/tray-and-notification.md) |
-| Diagnostics — Feature 1     | `791:8424` | Console open `781:7726` · On-error Details `784:7912` · Settings — Diagnostics `788:8288`                                                             | [diagnostics](./screens/diagnostics.md)                     |
+| Section                     | ID         | Screens (name · id)                                                                                                                                   | Spec                                                                                                                 |
+| --------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| App · Main                  | `130:995`  | Backdrop **`54:3`** (home / source-of-truth)                                                                                                          | [signature-screen](./screens/signature-screen.md)                                                                    |
+| Conflict resolver           | `126:1094` | unresolved `126:648` · resolved `129:831`                                                                                                             | [conflict-resolver](./screens/conflict-resolver.md)                                                                  |
+| Apply · local-edit guard    | `891:8362` | Guard `891:8363` (center = `AppPane/Guard` `886:2`)                                                                                                   | [operation-surface](../user-flow/screens/operation-surface.md) · [journey 04](../user-flow/journeys/04-conflicts.md) |
+| Returning · Review & Apply  | `231:1682` | Review&Apply `228:1153` · Applied·in-sync `230:1392`                                                                                                  | [returning-environment](./screens/returning-environment.md)                                                          |
+| Confirm dialogs             | `268:1694` | Track `268:1695` · Untrack `268:2033` · Delete-everywhere `268:2342`                                                                                  | [confirm-dialogs](./screens/confirm-dialogs.md)                                                                      |
+| Commit                      | `283:2644` | Pending `283:2645` · Committed `283:3059`                                                                                                             | [commit](./screens/commit.md)                                                                                        |
+| Sync states                 | `297:3139` | 3 incoming `297:3140` · Syncing `298:3429` · Up-to-date `298:4100` · 1-ahead `301:3980`                                                               | [sync-states](./screens/sync-states.md)                                                                              |
+| File history                | `320:4250` | File history `320:4251` · Restore-confirm `323:4746`                                                                                                  | [file-history](./screens/file-history.md)                                                                            |
+| Secret & errors             | `343:5185` | Secret choose `343:5243` · Secret pick `354:6937` · Offline `344:6096` · Apply-failed `360:6720`                                                      | [secret-and-errors](./screens/secret-and-errors.md)                                                                  |
+| Settings                    | `542:6203` | Automation `542:6204` · Commit `542:6537` · Sync `542:6712` · Repository `542:6866` · Privacy `542:7068` · Environments `542:7228` · About `542:7429` | [settings](./screens/settings.md)                                                                                    |
+| Tray & notification (macOS) | `563:7125` | Tray · incoming `563:7126` · Notification states `566:7155`                                                                                           | [tray-and-notification](./screens/tray-and-notification.md)                                                          |
+| Diagnostics — Feature 1     | `791:8424` | Console open `781:7726` · On-error Details `784:7912` · Settings — Diagnostics `788:8288`                                                             | [diagnostics](./screens/diagnostics.md)                                                                              |
 
 _Phase 5 build complete (Batch G was the finale). **Feature 1 (Diagnostics, [ADR 0030](../adr/0030-diagnostics-local-redacted-command-log.md))** adds the section above + the components section `791:10664`. Optional deferred: a Flow-Map overview page._
 

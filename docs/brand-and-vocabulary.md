@@ -32,7 +32,7 @@ Canonical branding/UI-language reference. `CONTEXT.md` remains the domain glossa
 - In-app copy speaks directly to the user and avoids referring to dotden in third person.
 - External copy, README, and website copy may use "dotden."
 - In-app copy should be direct/action-oriented: **Create Den**, **Open existing Den**, **Connect GitHub**, **Choose what to sync**, **Commit changes**, **Review incoming**.
-- dotden concepts are capitalized in UI/docs when referring to product concepts: **Den**, **Workspace**, **Group**, **File**, **Folder**, **Scope**, **Remote**, **Commit**, **Apply**, **Sync**. The one exception is **environment** (a computer), which stays lowercase — reading as natural language is the point.
+- dotden concepts are capitalized in UI/docs when referring to product concepts: **Den**, **Workspace**, **Nook**, **File**, **Scope**, **Remote**, **Commit**, **Apply**, **Sync**. The one exception is **environment** (a computer), which stays lowercase — reading as natural language is the point. (**directory** is the on-disk noun, lowercase — not a product concept; the org node is the **Nook**, ADR 0040.)
 - README intro may stay natural/lowercase for approachability.
 
 ## Core hierarchy
@@ -40,8 +40,8 @@ Canonical branding/UI-language reference. `CONTEXT.md` remains the domain glossa
 ```txt
 Den  (your whole setup; lives in your Repository / Remote)
 └── Workspace
-    └── Group
-        └── File / Folder
+    └── Nook        (nestable; organization-only; carries Scope; no disk-path meaning)
+        └── File
 ```
 
 Separately:
@@ -54,51 +54,51 @@ environment (a computer) subscribes to Workspaces
 - **Remote**: product/domain term for the configured shared git repository.
 - **Den**: whole managed setup.
 - **Workspace**: top-level environment sync/access boundary.
-- **Group**: visual organization inside a Workspace.
+- **Nook**: the one organizational node inside a Workspace — nestable, carries **Scope**, bound to no disk path (ADR 0040).
 - **File**: actual filesystem file.
-- **Folder**: actual filesystem directory managed recursively.
-- Avoid generic **Item** in user-facing copy; say **files and folders**.
+- **directory**: a real on-disk directory you can **Track** recursively (it seeds a Nook; it is not itself a tree node).
+- Avoid generic **Item** in user-facing copy; say **files and directories**.
 - Main sidebar/tree shows Workspaces directly; no visible Den root.
 
-## Workspace / Group rules
+## Workspace / Nook rules
 
 - A default Workspace named **Default** is created silently in v1.
 - **Default** is visible as a normal Workspace, expanded by default on first run, not reserved, and can be renamed.
 - If **Default** is the only Workspace, it cannot be deleted.
 - If other Workspaces exist, **Default** can be deleted like any other Workspace.
 - No hidden root outside Workspaces.
-- Every File/Folder belongs to exactly one Workspace and one Group path.
+- Every File belongs to exactly one Workspace and exactly one Nook.
 - Workspaces do not nest.
-- Groups can nest.
-- Groups are visual-only: no Scope, no access control, no filesystem path meaning.
-- Moving Files/Folders between Groups never changes filesystem paths.
-- Moving Files/Folders between Workspaces is allowed but requires confirmation because it can change sync availability.
+- Nooks can nest.
+- Nooks are organization-only: no access control and **no filesystem path meaning** — but they **do carry Scope** (inherited by descendants; a File may narrow it). Renaming or reshaping a Nook never moves a File on disk.
+- Moving a File between Nooks never changes its filesystem path (only its `nookId`).
+- Moving a File between Workspaces is allowed but requires confirmation because it can change sync availability.
 - First-run does not explain Workspaces in v1; future onboarding can teach them.
 
 ## Empty states and discovery
 
 - Empty Default Workspace copy:
-  > **Track files or folders**  
+  > **Track files or directories**  
   > Drag them here or choose from suggested configs.
 - **Scanning/detection** language is separate from **Recommended** language.
   - Use scanning/detected wording for finding common existing files on the user's computer.
   - Use **Recommended** for choices dotden suggests as defaults, such as a recommended destination/path.
 
-## Files, Folders, Track, Commit
+## Files, directories, Track, Commit
 
-- **Track**: start managing an Untracked File/Folder.
-- **Untrack**: stop managing a File/Folder while leaving it on disk.
+- **Track**: start managing an Untracked File or directory. Affordance label: **Track new file…**.
+- **Untrack**: stop managing a File or directory while leaving it on disk.
 - **Delete everywhere**: destructive removal from the Den and from filesystem paths wherever it applies.
 - Track/Untrack is the preferred pair; avoid **Stop managing**.
-- Tracking a File/Folder stages it into pending review; it does not immediately Commit.
+- Tracking stages into pending review; it does not immediately Commit.
 - Flow: **Untracked → Track → Review changes → Commit changes → Sync**.
-- Tracking a Folder recursively discovers children and shows a preview before Commit.
-- Tracking a Folder does not automatically include future new files forever. Future new files appear as **Untracked** until Tracked and Committed.
-- Untracked children inside tracked Folders are visible by default and can be hidden with **Show untracked**.
+- Tracking a directory recursively discovers children, shows a preview before Commit, and **seeds a Nook** mirroring its structure (ADR 0040).
+- Tracking a directory does not automatically include future new files forever. Future new files appear as **Untracked** until Tracked and Committed.
+- Untracked children inside a tracked directory are visible by default and can be hidden with **Show untracked**.
 
 ## Sync and automation terms
 
-- **Commit**: record local edited Files/Folders into the Den. Primary button: **Commit changes**.
+- **Commit**: record local edited Files into the Den. Primary button: **Commit changes**.
 - **Apply**: write Den state onto this environment.
 - **Sync**: transport only — sends already-Committed changes and checks for incoming changes. It does not Commit or Apply by default.
 - **Sync now**: manual transport action. It can run while uncommitted changes exist, but only transports Committed changes and checks incoming.
@@ -124,10 +124,10 @@ environment (a computer) subscribes to Workspaces
 - **Scope** is the product concept; UI label is **Applies to**.
 - Scope values: **All**, **macOS**, **Linux**, **Windows**.
 - **All** is explicit default.
-- Scope applies to Files and Folders.
-- Folder Scope is inherited by children; children may narrow but not broaden it.
+- Scope applies to Files and Nooks.
+- A Nook's Scope is inherited by its descendants; a File may narrow but not broaden it.
 - Show Scope chip on rows only when not **All**.
-- **Unsync here**: environment-specific opt-out for Files/Folders.
+- **Unsync here**: environment-specific opt-out for Files.
 - **Sync here**: inverse action.
 - Workspaces use checklist selection, not Unsync here.
 - Setup heading: **Choose what to sync**.
@@ -164,15 +164,15 @@ environment (a computer) subscribes to Workspaces
 
 ## Deletion rules
 
-- Empty Group deletion needs no confirmation.
-- Non-empty Group deletion:
-  1. Dialog: **Delete Group**.
-  2. Checkbox: **Also delete files and folders inside this Group?** unchecked by default.
-  3. If unchecked, ask where to move contents.
-  4. If checked, second confirmation: **Delete files and folders everywhere**.
+- Empty Nook deletion needs no confirmation.
+- Non-empty Nook deletion:
+  1. Dialog: **Delete Nook**.
+  2. Checkbox: **Also delete the files inside this Nook from disk?** unchecked by default.
+  3. If unchecked, ask which Nook to move contents to.
+  4. If checked, second confirmation: **Delete files everywhere**.
 - Workspace deletion always requires confirmation, even if empty.
-- Non-empty Workspace deletion follows the same move-or-delete pattern as Group deletion, with stronger wording.
-- **Delete everywhere** applies to Files and Folders; Folder deletion must warn recursively.
+- Non-empty Workspace deletion follows the same move-or-delete pattern as Nook deletion, with stronger wording.
+- **Delete everywhere** applies to Files and directories; deleting a tracked directory must warn recursively.
 
 ## Settings and privacy
 

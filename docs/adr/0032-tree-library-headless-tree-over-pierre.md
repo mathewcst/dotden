@@ -2,6 +2,14 @@
 
 **Status:** accepted · 2026-06-21
 
+> **Tree model revised by [ADR 0040](./0040-one-organizational-node-the-nook.md).** The
+> **library** decision below (`@headless-tree/react`, §1–4) stands unchanged. What changed is the
+> _node taxonomy_ it renders: the **Group → derived-Folder → File** model in "Context" is superseded
+> by a **single structural node, the Nook** (Workspace → Nook → File). Read the Context section as the
+> history that motivated the swap; read ADR 0040 for the current model. Concretely: `GroupRow` +
+> `FolderRow` collapse into one `NookRow`; `groupId` → `nookId`; Folders are no longer derived from
+> Placement (the tree is now OS-stable).
+
 The left pane's file tree was built on `@pierre/trees` (a git-diff file tree). As the
 Workspace/Group organization model firmed up, that library stopped being able to express
 the interactions the tree needs. This ADR replaces it, app-wide, with

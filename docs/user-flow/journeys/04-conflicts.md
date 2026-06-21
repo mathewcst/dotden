@@ -5,14 +5,14 @@
 > center pane (Keep / Take / Both), and Apply writes the resolved set — recording the resolution so
 > every other environment converges without re-conflicting.
 
-|                      |                                                                                                                                                                                                                                                                                                                                                          |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Preconditions**    | At least two environments share a Den (so there's a peer to collide with). Auto-sync (or a manual Sync) has fetched an incoming commit. This is the steady-state collision case — distinct from the first-materialization Conflicts of [adopt](03-second-environment-adopt.md).                                                                              |
-| **Outcome**          | Every colliding hunk is resolved by an explicit user choice; the resolved set is applied to disk; a **merge commit** records the resolution and (under Auto-sync) pushes — peers fetch it and converge with no re-conflict.                                                                                                                                  |
-| **Figma**            | Surfaced via `OSNotification` **Conflict** (`560:1300`) + in-app conflict banner/card on [home](../screens/home.md) (`54:3`). Resolved on the [operation surface](../screens/operation-surface.md) (Apply variant `228:1154`, section `231:1682`): left rail `CONFLICTS · N`, in-center [conflict resolver](../screens/conflict-resolver.md) (`126:1094`, unresolved `126:648` → resolved `129:831`) built from `MergeHunk` (`118:387`). Success: Applied · in-sync `230:1393`.                                                                                                                                   |
-| **environment role** | the **receiving** environment — it fetched a peer's change that overlaps its own. Symmetric: any environment can be on either side of a collision.                                                                                                                                                                                                          |
-| **v1 status**        | Ships v1 — cross-env Conflict resolver + the apply-time local-edit guard ([scope-v1] "Conflict resolution"; [ADR 0008] / [ADR 0038]).                                                                                                                                                                                                                       |
-| **Screens touched**  | [tray / OS notification](../screens/tray-and-notifications.md) → [home](../screens/home.md) (incoming card) → [operation surface](../screens/operation-surface.md) (Apply variant) → [conflict resolver](../screens/conflict-resolver.md) (in-center) → [home](../screens/home.md) (in sync)                                                                  |
+|                      |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Preconditions**    | At least two environments share a Den (so there's a peer to collide with). Auto-sync (or a manual Sync) has fetched an incoming commit. This is the steady-state collision case — distinct from the first-materialization Conflicts of [adopt](03-second-environment-adopt.md).                                                                                                                                                                                                 |
+| **Outcome**          | Every colliding hunk is resolved by an explicit user choice; the resolved set is applied to disk; a **merge commit** records the resolution and (under Auto-sync) pushes — peers fetch it and converge with no re-conflict.                                                                                                                                                                                                                                                     |
+| **Figma**            | Surfaced via `OSNotification` **Conflict** (`560:1300`) + in-app conflict banner/card on [home](../screens/home.md) (`54:3`). Resolved on the [operation surface](../screens/operation-surface.md) (Apply variant `228:1154`, section `231:1682`): left rail `CONFLICTS · N`, in-center [conflict resolver](../screens/conflict-resolver.md) (`126:1094`, unresolved `126:648` → resolved `129:831`) built from `MergeHunk` (`118:387`). Success: Applied · in-sync `230:1393`. |
+| **environment role** | the **receiving** environment — it fetched a peer's change that overlaps its own. Symmetric: any environment can be on either side of a collision.                                                                                                                                                                                                                                                                                                                              |
+| **v1 status**        | Ships v1 — cross-env Conflict resolver + the apply-time local-edit guard ([scope-v1] "Conflict resolution"; [ADR 0008] / [ADR 0038]).                                                                                                                                                                                                                                                                                                                                           |
+| **Screens touched**  | [tray / OS notification](../screens/tray-and-notifications.md) → [home](../screens/home.md) (incoming card) → [operation surface](../screens/operation-surface.md) (Apply variant) → [conflict resolver](../screens/conflict-resolver.md) (in-center) → [home](../screens/home.md) (in sync)                                                                                                                                                                                    |
 
 > [!NOTE]
 > **Source of truth = design + the decisions recorded below.** Where the shipped code differs,
@@ -147,20 +147,20 @@ success `Toast`.
 
 ## State transitions
 
-| From                  | Event                                            | To                                                            |
-| --------------------- | ------------------------------------------------ | ------------------------------------------------------------ |
-| (window closed)       | Auto-sync fetch finds a colliding commit         | `OSNotification` Conflict fires → (click) Review & Apply     |
-| (window open)         | same                                             | in-app conflict banner + incoming card `N conflict`          |
-| home incoming card    | `Review & Apply`                                 | operation surface (Apply variant), `CONFLICTS · N`           |
-| operation surface     | select a conflict File                           | center → conflict resolver (unresolved)                      |
-| conflict resolver     | resolve every hunk of a File                     | File `resolved` + **staged** (git add); Apply count −1       |
-| conflict resolver     | `Back/Cancel` with resolutions made              | confirm Dialog → discard in-flight File's hunks (staged stay) |
-| operation surface     | unresolved Conflicts remain                      | Apply disabled (stay)                                        |
-| operation surface     | Apply would hit a File with uncommitted edits    | that File **blocked-with-warning** → Commit-first / Discard  |
-| operation surface     | all Conflicts resolved → **Apply**               | merge commit (auto-message) + `chezmoi apply` → applying     |
-| applying              | Auto-sync on                                     | merge commit auto-pushes → peers converge → home, in sync    |
-| applying              | Manual                                           | `Not synced · N changes` → home (push on `Sync now`)         |
-| applying              | Apply fails                                      | failure + fix surfaced, retryable ([journey 06])             |
+| From               | Event                                         | To                                                            |
+| ------------------ | --------------------------------------------- | ------------------------------------------------------------- |
+| (window closed)    | Auto-sync fetch finds a colliding commit      | `OSNotification` Conflict fires → (click) Review & Apply      |
+| (window open)      | same                                          | in-app conflict banner + incoming card `N conflict`           |
+| home incoming card | `Review & Apply`                              | operation surface (Apply variant), `CONFLICTS · N`            |
+| operation surface  | select a conflict File                        | center → conflict resolver (unresolved)                       |
+| conflict resolver  | resolve every hunk of a File                  | File `resolved` + **staged** (git add); Apply count −1        |
+| conflict resolver  | `Back/Cancel` with resolutions made           | confirm Dialog → discard in-flight File's hunks (staged stay) |
+| operation surface  | unresolved Conflicts remain                   | Apply disabled (stay)                                         |
+| operation surface  | Apply would hit a File with uncommitted edits | that File **blocked-with-warning** → Commit-first / Discard   |
+| operation surface  | all Conflicts resolved → **Apply**            | merge commit (auto-message) + `chezmoi apply` → applying      |
+| applying           | Auto-sync on                                  | merge commit auto-pushes → peers converge → home, in sync     |
+| applying           | Manual                                        | `Not synced · N changes` → home (push on `Sync now`)          |
+| applying           | Apply fails                                   | failure + fix surfaced, retryable ([journey 06])              |
 
 ## Branches & edge cases
 
@@ -205,21 +205,42 @@ success `Toast`.
    apply-time **uncommitted-local-edit guard** are different responses and must look different. The
    guard's **block-with-warning + Commit-first / Discard** state likely has **no design home** yet —
    add it to the operation surface (Apply variant). Do **not** route it into the merge resolver.
+   > ✅ **Reconciled (2026-06-21, Figma).** Built net-new `AppPane/Guard` (`886:2`) — a swappable
+   > center pane (mirrors `AppPane/Merge`/`Diff`/`History`): amber `BLOCKED · UNCOMMITTED LOCAL EDITS`
+   > card + two stacked action rows **Commit my edits first** (ember) / **Discard my edits**
+   > (destructive). Homed on a dedicated screen, **`Apply · local-edit guard`** section (`891:8362`,
+   > screen `891:8363`), composed from the Review & Apply shell with the center swapped to the guard
+   > and left rail reframed **NEEDS YOU · 2** (the blocked file `~/.gitconfig` flagged `local edits`,
+   > distinct from the red merge resolver). A muted `ROADMAP` socket line reserves room for the future
+   > 3-way "Resolve…" as a **third action row** — drops in without a redesign.
 2. **Axis-agnostic `ConflictModel`.** Both resolution paths must flow through one owner whose
    resolved-bytes are unconstructable without a user choice ([ADR 0008]), built so a future **3-way**
    (destination · source · target) input is **additive** ([ADR 0038] / [roadmap]) — not a second
    engine bolted on later. Code concern; verify the type is merge-source-agnostic from day one.
 3. **git-staging as the resolution checkpoint.** Completing a File must `git add` it so progress
    survives `Back/Cancel` / quit / crash; abandoning resets **only** the single in-flight File's
-   hunks. No parallel dotden resolution store (it would drift from git). Code concern.
+   hunks. No parallel dotden resolution store (it would drift from git). Code concern — this is the
+   ① git-checkpoint case of the app-wide unfinished-work rule ([ADR 0039]).
 4. **Merge commit = auto-message, recorded in history.** Resolving + Apply must create a **merge
    commit with an auto-generated message** (no required user message) that appears in **File
    history**. Verify the history surface renders merge/resolution entries.
+   > ✅ **Reconciled (2026-06-21, Figma).** `AppPane/History` (`319:888`) now renders a
+   > merge/resolution entry as the newest version: **"Merge work-laptop — resolved ~/.zshrc"** with an
+   > amber **`Resolved`** tag (`you · just now`, `5e2a10`) — visible on the `File history` screen
+   > (`320:4251`). No GitMerge glyph exists in the file yet (only `GitCommitHorizontal`); a distinct
+   > merge icon is a low-priority follow-up — the auto-message + amber tag carry the semantics.
 5. **OS notification wiring.** `OSNotification` **Conflict** (`560:1300`) must fire from the tray
    poller when the window is **closed/unfocused** and **route to Review & Apply** on click; when the
    window is **open**, suppress the OS notification in favor of the in-app conflict banner + incoming
    card. This journey is the reference for the OS-notification-vs-banner rule ([states/banners],
    [tray-and-notifications]).
+   > ◑ **Partly reconciled (2026-06-21, Figma).** Added the **in-app** half: `Banner` set (`292:751`)
+   > gained a **`Tone=Conflict`** variant (`880:2`) — amber `TriangleAlert`, _"1 conflict needs you ·
+   > from work-laptop"_, routes to **Review & Apply**; distinct from the blue `Incoming` and red
+   > `Error` tones. The home inspector **incoming card** already reads `from work-laptop · 2 files, 1
+conflict`, and the **window-closed** `OSNotification` Conflict (`560:1300`) already exists. The
+   > **wiring** (suppress OS notification when focused → show this banner; route on click) stays a code
+   > concern.
 6. **No `chezmoi merge`.** No code path may shell out to `chezmoi merge` (interactive vimdiff) for
    either axis ([ADR 0038]); cross-env merge is pure git + `ConflictModel`, the drift axis is the
    deferred in-app 3-way. Review-discipline flag.
@@ -234,8 +255,9 @@ success `Toast`.
 - Notification surfaces: [tray & notifications](../screens/tray-and-notifications.md), [banners](../states/banners.md).
 - Deferred work: [roadmap] (manual merge editor, 3-way drift merge, per-hunk resume, resolution note).
 - Decisions: [ADR 0008] (conflict invariant / `ConflictModel` ownership), [ADR 0038] (chezmoi a
-  tool, not a wrapper — own merge, no `chezmoi merge`), [ADR 0006] + [ADR 0037] (transport / Auto-sync),
-  [scope-v1] (conflict-resolution scope).
+  tool, not a wrapper — own merge, no `chezmoi merge`), [ADR 0039] (the git-staging checkpoint
+  generalized — state-persistence tiers & the unfinished-work rule), [ADR 0006] + [ADR 0037]
+  (transport / Auto-sync), [scope-v1] (conflict-resolution scope).
 
 <!-- Link reference definitions -->
 
@@ -244,6 +266,7 @@ success `Toast`.
 [ADR 0026]: ../../adr/0026-launch-routing-derives-entry-screen-from-registration-state.md
 [ADR 0037]: ../../adr/0037-automation-ladder-transport-only.md
 [ADR 0038]: ../../adr/0038-chezmoi-as-a-tool-not-a-faithful-wrapper.md
+[ADR 0039]: ../../adr/0039-state-persistence-tiers-and-the-unfinished-work-rule.md
 [CONTEXT]: ../../../CONTEXT.md
 [scope-v1]: ../../scope-v1.md
 [roadmap]: ../../roadmap.md

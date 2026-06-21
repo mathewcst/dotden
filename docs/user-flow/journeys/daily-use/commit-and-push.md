@@ -9,7 +9,7 @@ Part of [Daily use](../02-daily-use.md). This is the **send** half (role A). The
 
 | | |
 |---|---|
-| **Preconditions** | A tracked File/Folder was edited on this environment (edit happens *outside* dotden, in the user's own editor) |
+| **Preconditions** | A tracked File was edited on this environment (edit happens *outside* dotden, in the user's own editor) |
 | **Outcome** | The chosen edits are Committed into the Den; on Sync they're pushed to the Remote and the environment is back in sync |
 | **environment role** | A (send / Commit + push) |
 | **v1 status** | ships v1 (Commit always manual; push manual under Manual, automatic under Auto-sync — [02c](automation-ladder.md)) |

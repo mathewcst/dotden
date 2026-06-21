@@ -34,7 +34,7 @@ Everything is cross-linked. File names are stable; link to files, not headings.
 ## Conventions (so this stays searchable + consistent)
 
 - **Vocabulary is load-bearing.** Speak the [`CONTEXT.md`](../../CONTEXT.md) glossary exactly:
-  **Den, environment, Remote, Provider, File, Folder, Workspace, Group, Scope, Placement,
+  **Den, environment, Remote, Provider, File, directory, Workspace, Nook, Scope, Placement,
   Secret reference, Track, Untrack, Delete everywhere, Conflict, Commit, Apply, Sync,
   Auto-sync.** Capitalize product concepts; **environment** stays
   lowercase. UI copy follows [`brand-and-vocabulary.md`](../brand-and-vocabulary.md).

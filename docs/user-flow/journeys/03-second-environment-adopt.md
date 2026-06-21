@@ -73,7 +73,7 @@ synced moments before it died. We surface the risk + the safe default and let th
 
 The new environment chooses its **Workspace subscriptions**. An unsubscribed Workspace is not
 hidden-but-present — it is **never materialized** on this machine ([CONTEXT]: an environment
-"applies only Files and Folders inside" its subscribed Workspaces).
+"applies only the Files inside" its subscribed Workspaces).
 
 - **Default: all checked.** The common case is "I want my whole Den here"; opting _out_ of `Work`
   on a personal laptop is the deliberate exception. Symmetric with how Apply/Commit default-all.

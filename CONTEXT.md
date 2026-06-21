@@ -28,34 +28,34 @@ _Avoid_: server, backend, cloud (except “not another cloud drive”), origin (
 **Provider** _(dotden — the git host the Remote lives on)_: The service hosting the user's Remote: GitHub, GitLab, Bitbucket, a self-hosted instance (GitLab/Gitea/Forgejo), or a bare git remote reached over SSH. dotden's **transport floor is pure git** and works on any Provider with working git credentials (chezmoi imposes no provider restriction). Provider-specific _conveniences_ — OAuth/device-flow sign-in, one-click Remote creation, API-based change detection — are an **additive layer above the floor**, built per-Provider and **deferred past v1**. v1 leans entirely on the user's existing git credentials and creates no Remote. **GitHub is the v1 flavor, not a single-provider restriction.**
 _Avoid_: host (ambiguous with environment hostname), backend, service, remote (that's the repo, not the host).
 
-**File** _(filesystem unit)_: An individual filesystem file dotden manages, such as `~/.zshrc`. A File is distinct from a **Folder**; use “file” only when the thing is actually one file.
+**File** _(filesystem unit)_: An individual filesystem file dotden manages, such as `~/.zshrc`. A File is distinct from a **directory**; use “file” only when the thing is actually one file.
 _Avoid_: dotfile, config (when referring to one path), item.
 
-**Folder** _(filesystem unit)_: A filesystem directory dotden manages recursively, such as `~/.config/nvim/`. A Folder can contain many **Files** and child Folders; committing a Folder records the current managed contents under that path rather than turning it into generic cloud-drive sync.
-_Avoid_: item, collection, group.
+**directory** _(filesystem unit)_: A real on-disk directory, such as `~/.config/nvim/`. A directory is the filesystem thing you point at — **not** a dotden organizational entity (that role is the **Nook**, ADR 0040). **Tracking** a directory recursively manages the **Files** under it _and_ **seeds** a Nook mirroring its structure, after which organization is the user's to reshape. Underneath, chezmoi still manages the directory's contents recursively.
+_Avoid_: Folder / folder (retired dotden entity — the disk noun is now “directory”), item, collection, group.
 
-**Workspace** _(dotden — top-level container + environment-access boundary)_: A top-level grouping the user creates, such as “Work” or “Personal.” A Workspace is the unit of **environment access**: each environment subscribes to Workspaces and applies only Files and Folders inside them.
+**Workspace** _(dotden — top-level container + environment-access boundary)_: A top-level grouping the user creates, such as “Work” or “Personal.” A Workspace is the unit of **environment access**: each environment subscribes to Workspaces and applies only the Files inside them (organized into **Nooks**).
 _Avoid_: vault (implies encryption), space, profile, repo, collection.
 
-**Group** _(dotden — organization inside Workspace)_: A nested, user-named node within a Workspace that organizes Files and Folders. Groups are purely organizational: they can nest, have no access control, have no Scope, and moving a File or Folder between Groups never changes its filesystem path.
-_Avoid_: folder (filesystem term), tag, category, bundle.
+**Nook** _(dotden — the one organizational node inside a Workspace)_: A nestable, user-named node that organizes **Files** inside a Workspace. The Nook is dotden's _only_ structural tree node — it replaces the former _Group_ and the path-derived _Folder_ node (ADR 0040). It is **organization-only and bound to no disk path**: moving a File between Nooks, or renaming/reshaping a Nook, never changes a File's filesystem location (that is **Placement**). A Nook **carries Scope** (inherited by its descendants; a File may narrow it) and is **seeded** from a directory when one is tracked, then freely reshaped. Nooks have no access control — they inherit their Workspace's. The tree of Nooks has the **same shape on every environment** (organization is decoupled from per-OS Placement).
+_Avoid_: folder / Folder (retired; the disk noun is “directory”), group (retired), tag, category, bundle.
 
-**Scope** _(dotden — OS applicability for Files and Folders)_: The set of OSes where a File or Folder applies. Folder Scope is inherited by children; children may narrow but not broaden their parent Folder's Scope.
+**Scope** _(dotden — OS applicability for Files and Nooks)_: The set of OSes where a File or **Nook** applies. A Nook's Scope is inherited by its descendants; a File may narrow but not broaden its Nook's Scope.
 _Avoid_: filter, applicability, platform (platform = OS value itself, not rule).
 
-**Placement** _(dotden — where a File or Folder lands on each OS)_: The target path a File or Folder resolves to on a given OS. By default a File has **one** Placement — the same relative path under `$HOME` on every environment — so the user sets nothing. When two OSes need the file in different locations (e.g. `~/.config/foo` on Linux vs `%AppData%/foo` on Windows), the user adds a **per-OS Placement override**. The Placement inspector lists **one row per OS the user actually has** (derived from the environment registry, never a generic OS menu): the first environment shows only its own OS; a second environment on a new OS adds its row, each with a click-to-change path. Placement is **location only** — a File's content is shared across all its Placements. Per-OS _content_ differences (templating, OS conditionals) are a **separate, later** concept, not Placement. Placement and **Scope** are siblings: Scope decides _whether_ a File applies on an OS; Placement decides _where it lands_ when it does. A File excluded by Scope on an OS has no Placement there.
+**Placement** _(dotden — where a File lands on each OS)_: The target path a File resolves to on a given OS. By default a File has **one** Placement — the same relative path under `$HOME` on every environment — so the user sets nothing. When two OSes need the file in different locations (e.g. `~/.config/foo` on Linux vs `%AppData%/foo` on Windows), the user adds a **per-OS Placement override**. The Placement inspector lists **one row per OS the user actually has** (derived from the environment registry, never a generic OS menu): the first environment shows only its own OS; a second environment on a new OS adds its row, each with a click-to-change path. Placement is **location only** — a File's content is shared across all its Placements. Per-OS _content_ differences (templating, OS conditionals) are a **separate, later** concept, not Placement. Placement and **Scope** are siblings: Scope decides _whether_ a File applies on an OS; Placement decides _where it lands_ when it does. A File excluded by Scope on an OS has no Placement there.
 _Avoid_: path (chezmoi-internal / too generic), location (prose only), mapping, destination (that is chezmoi destination state).
 
 **Secret reference** _(dotden — wraps chezmoi password-manager templating)_: A placeholder stored in the Remote instead of an actual secret, e.g. a 1Password `op://vault/item/field` path. The real secret never enters the repo; chezmoi resolves the reference from the user's password manager at **Apply** time.
 _Avoid_: secret, credential (the resolved value), placeholder.
 
-**Track** _(dotden verb — maps to chezmoi `add`)_: Start managing an untracked File or Folder. Track is the primary action for status **Untracked**.
+**Track** _(dotden verb — maps to chezmoi `add`)_: Start managing an untracked File or directory. Track is the primary action for status **Untracked**.
 _Avoid_: add (too vague), import.
 
-**Untrack** _(dotden verb — maps to chezmoi `forget`)_: Stop managing a File or Folder while leaving the real filesystem path untouched on every environment. Non-destructive; confirmation copy must make clear the file or folder stays on disk.
+**Untrack** _(dotden verb — maps to chezmoi `forget`)_: Stop managing a File or directory while leaving the real filesystem path untouched on every environment. Non-destructive; confirmation copy must make clear the file or directory stays on disk.
 _Avoid_: remove, delete, unsync, forget (chezmoi term underneath).
 
-**Delete everywhere** _(dotden verb — maps to chezmoi `remove` / `destroy`)_: Remove a File or Folder from the Den and delete the real filesystem path on all environments where it applies. Destructive; always confirmed.
+**Delete everywhere** _(dotden verb — maps to chezmoi `remove` / `destroy`)_: Remove a File or directory from the Den and delete the real filesystem path on all environments where it applies. Destructive; always confirmed.
 _Avoid_: remove, unmanage, trash.
 
 **Conflict** _(dotden)_: A state where the same File changed both on an environment and on the Remote in a way git cannot merge automatically. Non-overlapping edits are not Conflicts; they auto-merge.
@@ -67,7 +67,7 @@ _Avoid_: clash, collision (use in prose only), merge error.
 
 **Destination state** _(chezmoi term)_: The actual current contents of managed files on an environment right now, before any Apply.
 
-**Commit** _(dotden verb — maps to chezmoi `add` / `re-add` plus git commit)_: Take an environment's current edited Files and Folders and intentionally record them into the **Den**, ready to Sync. Primary button label: **Commit changes**.
+**Commit** _(dotden verb — maps to chezmoi `add` / `re-add` plus git commit)_: Take an environment's current edited Files and intentionally record them into the **Den**, ready to Sync. Primary button label: **Commit changes**.
 _Avoid_: save, capture, upload.
 
 **Apply** _(dotden verb — maps to chezmoi `apply`)_: Write source/target state onto an environment's real files and folders. The "make this real here" direction.
@@ -112,7 +112,7 @@ _Avoid_: terminal (implies interactive input), debugger, log viewer.
 | Den                                                                                  | source state (the git repo)                                                                                                                                                     |
 | Remote                                                                               | git remote                                                                                                                                                                      |
 | File                                                                                 | managed target file                                                                                                                                                             |
-| Folder                                                                               | recursively managed target directory                                                                                                                                            |
+| directory                                                                            | recursively managed target directory                                                                                                                                            |
 | Commit                                                                               | `add` (new) / `re-add` (existing) → `git commit`                                                                                                                                |
 | Apply (one / all)                                                                    | `apply` (writes target state to destination)                                                                                                                                    |
 | Sync / incoming changes                                                              | `git push` / `git fetch` + `status` / `diff`                                                                                                                                    |
@@ -123,5 +123,5 @@ _Avoid_: terminal (implies interactive input), debugger, log viewer.
 | Secret reference                                                                     | `.tmpl` target + password-manager template function (`onepasswordRead`, …)                                                                                                      |
 | Scope (e.g. Windows-only)                                                            | per-OS `.chezmoiignore` rules                                                                                                                                                   |
 | Placement (per-OS path override)                                                     | shared `.chezmoitemplates` content + a stub entry (`{{ template … }}`) at each OS's target path + generated per-OS `.chezmoiignore` rules ("same contents, different location") |
-| Workspace / Group (organization)                                                     | **no chezmoi equivalent** — dotden metadata in a chezmoi-ignored repo file                                                                                                      |
+| Workspace / Nook (organization)                                                     | **no chezmoi equivalent** — dotden metadata in a chezmoi-ignored repo file                                                                                                      |
 | Workspace not subscribed on an environment                                           | generated per-environment `.chezmoiignore` rules                                                                                                                                |

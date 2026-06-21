@@ -17,7 +17,7 @@
 
 **Retained from [ADR 0003](./0003-faithful-chezmoi-wrapper.md):**
 
-- Added metadata (Workspace / Folder / environment-subscription) still **compiles down to chezmoi/git or stays in a chezmoi-ignored area** — chezmoi never treats it as managed target state.
+- Added metadata (Workspace / Nook / environment-subscription) still **compiles down to chezmoi/git or stays in a chezmoi-ignored area** — chezmoi never treats it as managed target state.
 - The repo **stays a valid chezmoi setup** — a user could run `chezmoi` against the Den directly.
 - **Vocabulary still maps to chezmoi** where chezmoi owns the concept (Den = source state, Apply = `apply`, Scope / Placement = attributes + templates, Secret reference = PM integration). The dotden↔chezmoi table in [`CONTEXT.md`](../../CONTEXT.md) remains the contract.
 

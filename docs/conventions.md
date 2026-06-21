@@ -243,6 +243,16 @@ lib, hooks, den-session}`. A feature never imports `app/` or another feature's i
   (`cn`, `apply-theme`, `ipc-timeout`, …), and shared branded surfaces like `Banner` /
   `ErrorBanner` are `den/` components, not feature- or app-local files (ADR 0033/0036).
 
+## Persisting state across launches: which tier?
+
+Anything dotden remembers across launches is classified by **[ADR 0039](adr/0039-state-persistence-tiers-and-the-unfinished-work-rule.md)** — read it before adding a persisted store. The short version:
+
+- **Tier 1 — view/chrome** (window bounds, last environment, tree expansion, sidebar, last route): persist freely. `electron-window-state` (+ display clamp), `electron-store`, zustand `persist` (`partialize` + `version`).
+- **Tier 2 — preferences**: `electron-store` (migrations + JSON-schema from day one).
+- **Tier 3 — in-progress work** (a half-finished action): pick top-down — **①** git-checkpoint (work already in a system-of-record → stage done units, re-derive the rest, **no parallel store**), **②** backup-snapshot (expensive + byte-exact → non-destructive, restore-or-discard, **never authoritative**), **③** drop-with-notice (cheap or un-restorable → discard and **say so**).
+
+Two hard invariants: **a snapshot is never a source of truth**, and **a drop is always visible** (never silent — ties to ADR 0008 #2 / never-fail-silently). A new surface that can be left unfinished **must add a row to ADR 0039's classification table** (or knowingly inherit the ③ fallback) — that's a valid review question. **No local DB in v1** (ADR 0039 rejects it with the condition that would reopen it).
+
 ## Comments: over-comment, but only what earns its line
 
 dotden is public OSS read by newcomers and AI agents — bias toward **more**

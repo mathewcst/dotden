@@ -31,7 +31,7 @@ export function RightInspector() {
     : null
 
   return (
-    <aside className="border-border bg-sidebar flex flex-col gap-4 overflow-auto border-l p-4 text-sm">
+    <aside className="border-border bg-sidebar flex h-full min-h-0 flex-col gap-4 overflow-auto border-l p-4 text-sm">
       {error ? (
         <div className="bg-dd-red-950 text-dd-red-400 rounded-md px-3 py-2 text-xs" role="alert">
           {error.message}

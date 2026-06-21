@@ -1,18 +1,18 @@
 # Screen — Operation surface (Commit · Review & Apply)
 
-| | |
-|---|---|
-| **Figma** | Commit `node 283:2646` (section `283:2644`; committed state `283:3060`) · Review & Apply `node 228:1154` (section `231:1682`; applied state `230:1393`) · Conflict `node 126:649` unresolved / `129:832` resolved (`design-system/inventory.md`) |
-| **Enforcement target** | `src/renderer/features/commit/components/` (`ChangesDiff.tsx`, `CommitRow.tsx`) · `src/renderer/features/apply/components/` (`ReviewApply.tsx`, `IncomingInspectorCard.tsx`, `ConflictResolver.tsx`, `ConflictCallout.tsx`) |
-| **Route / render condition** | Opened *over* [home](home.md) by `Commit changes` (send) or `Review & Apply` (receive); dismissed by Back/Cancel |
-| **environment role** | Commit = **send** (A) · Apply = **receive** (B) — two variants of one surface, not two screens |
-| **Governing ADRs** | [ADR 0006](../../adr/0006-sync-model-transport-not-commit.md) — Sync is transport, not Commit; [ADR 0008](../../adr/0008-invariant-ownership.md) — automation/Apply never auto-resolves a Conflict; [ADR 0024](../../adr/0024-synced-vs-local-data-architecture.md) — synced vs local data |
-| **v1 status** | ships v1 |
+|                              |                                                                                                                                                                                                                                                                                            |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Figma**                    | Commit `node 283:2646` (section `283:2644`; committed state `283:3060`) · Review & Apply `node 228:1154` (section `231:1682`; applied state `230:1393`) · Conflict `node 126:649` unresolved / `129:832` resolved (`design-system/inventory.md`)                                           |
+| **Enforcement target**       | `src/renderer/features/commit/components/` (`ChangesDiff.tsx`, `CommitRow.tsx`) · `src/renderer/features/apply/components/` (`ReviewApply.tsx`, `IncomingInspectorCard.tsx`, `ConflictResolver.tsx`, `ConflictCallout.tsx`)                                                                |
+| **Route / render condition** | Opened _over_ [home](home.md) by `Commit changes` (send) or `Review & Apply` (receive); dismissed by Back/Cancel                                                                                                                                                                           |
+| **environment role**         | Commit = **send** (A) · Apply = **receive** (B) — two variants of one surface, not two screens                                                                                                                                                                                             |
+| **Governing ADRs**           | [ADR 0006](../../adr/0006-sync-model-transport-not-commit.md) — Sync is transport, not Commit; [ADR 0008](../../adr/0008-invariant-ownership.md) — automation/Apply never auto-resolves a Conflict; [ADR 0024](../../adr/0024-synced-vs-local-data-architecture.md) — synced vs local data |
+| **v1 status**                | ships v1                                                                                                                                                                                                                                                                                   |
 
 ## Purpose
 
 One **operation surface** that both batch flows reuse, so send and receive feel symmetric and share components.
-Whenever the user acts on a *set* of files — recording their own edits (**Commit**) or writing incoming
+Whenever the user acts on a _set_ of files — recording their own edits (**Commit**) or writing incoming
 changes onto this environment (**Apply**) — they get the same three-region skeleton, only the left-list flags
 and the right-panel action differ.
 
@@ -37,11 +37,11 @@ The same skeleton for both variants — **`ChangeList | Diff | OperationPanel`**
 └────────────────────┴────────────────────────────────────┴─────────────────────────┘
 ```
 
-| Region | Commit (send) | Apply (receive) |
-|---|---|---|
-| **Left rail** (`ChangeList`) | changed files — `● 2 modified · ● 1 added` | incoming files — `CONFLICTS · 2` / `APPLIES CLEANLY · 71` |
-| **Center** (`Diff`) | uncommitted diff + **stacked / side-by-side** toggle | incoming diff + same toggle; a selected **Conflict** resolves here (Keep / Take / Both) |
-| **Right rail** (`OperationPanel`) | **Commit composer** | **Apply panel** |
+| Region                            | Commit (send)                                        | Apply (receive)                                                                         |
+| --------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| **Left rail** (`ChangeList`)      | changed files — `● 2 modified · ● 1 added`           | incoming files — `CONFLICTS · 2` / `APPLIES CLEANLY · 71`                               |
+| **Center** (`Diff`)               | uncommitted diff + **stacked / side-by-side** toggle | incoming diff + same toggle; a selected **Conflict** resolves here (Keep / Take / Both) |
+| **Right rail** (`OperationPanel`) | **Commit composer**                                  | **Apply panel**                                                                         |
 
 The center `Diff` is the **same component** in both, with a stacked/side-by-side view toggle the diff package
 already supports (mirror the existing Figma Diff component variants).
@@ -49,6 +49,7 @@ already supports (mirror the existing Figma Diff component variants).
 ## Elements & copy
 
 **Shared — center header**
+
 - File path + state dot: `● modified` (orange, Commit) vs `● incoming` (blue, Apply).
 - Exit + primary: Commit → `Discard` + `Commit changes`; Apply → `Skip` (this file) + `Apply`. Plus a
   surface-level **Back / Cancel** to return home (see Actions).
@@ -56,6 +57,7 @@ already supports (mirror the existing Figma Diff component variants).
 - Diff body title: `Uncommitted changes` (Commit) / `Incoming changes` (Apply) + `N hunks`.
 
 **Commit variant — right rail `OperationPanel` (composer)** — node `283:2646`
+
 - Header `Commit` + `N files ready to record into your Den.`
 - Count chips: `● N modified` `● N added`.
 - `Message` textarea, prefilled e.g. `[macos-sync-2026-06-14]`.
@@ -63,6 +65,7 @@ already supports (mirror the existing Figma Diff component variants).
 - Primary `Commit changes`; subline `Committed locally — Sync to share it.` (push is the separate Sync step — see [02b](../journeys/daily-use/commit-and-push.md)).
 
 **Apply variant — right rail `OperationPanel` (Apply panel)** — node `228:1154` (right rail to be built)
+
 - Header `Apply` + source `from <env> · <context>` (e.g. `from work-laptop · first sync`).
 - Summary: `N incoming` + breakdown chips `● N conflicts · ● N clean`.
 - Primary `Apply` — **disabled until all Conflicts are resolved** in-center; then it writes the full set.
@@ -74,6 +77,12 @@ already supports (mirror the existing Figma Diff component variants).
   groups, conflict rows flagged `⚠`.
 - **Center (Apply, conflict file selected):** the diff becomes a **resolver** — `Keep` (local) / `Take`
   (incoming) / `Both` — node `126:649` (unresolved) → `129:832` (resolved).
+- **Center (Apply, file with uncommitted local edits):** the diff becomes the **local-edit guard** —
+  `AppPane/Guard` (`886:2`), a swappable center pane distinct from the merge resolver. Amber
+  `BLOCKED · UNCOMMITTED LOCAL EDITS` card + two honest outs: **Commit my edits first** (→ resolver)
+  / **Discard my edits** (destructive, confirmed). Never merges or clobbers ([ADR 0008] invariant #2);
+  a `ROADMAP` socket reserves room for a future 3-way "Resolve…" as a third action. Screen home:
+  `Apply · local-edit guard` section (`891:8362`). See [journey 04](../journeys/04-conflicts.md) step 3.
 - **Apply gating (locked — standard git):** the left rail **presents** the split (`CONFLICTS` vs
   `APPLIES CLEANLY`) so the user sees what's at stake, but `Apply` is **disabled until every Conflict is
   resolved** in-center (Keep / Take / Both) — you cannot complete the merge with unresolved conflicts. Once all
@@ -84,16 +93,16 @@ already supports (mirror the existing Figma Diff component variants).
 
 ## Actions → outcomes
 
-| Action | Trigger | Result | Enforcement (IPC / state) |
-|---|---|---|---|
-| Open Commit | home `Commit changes` | enter surface, Commit variant | renderer mode → operation:commit |
-| Open Apply | home inspector `Review & Apply` | enter surface, Apply variant | renderer mode → operation:apply |
-| Toggle diff view | center `stacked ⟷ side-by-side` | re-render diff layout | renderer-local |
-| Resolve conflict | center `Keep / Take / Both` | conflict marked resolved | maps to git source-state resolution |
-| Skip a file (Apply) | center `Skip` | excludes that file from this Apply | renderer selection |
-| **Commit** | right `Commit changes` | records the set into the Den | `api.den.commit(...)` → `add`/`re-add` + `git commit` |
-| **Apply** | right `Apply` (enabled once all conflicts resolved) | writes the full resolved incoming set onto this environment | `api.den.apply(...)` → `chezmoi apply` |
-| **Back / Cancel** | surface-level back | discard the operation (confirm if needed), return to [home](home.md) | renderer mode → home |
+| Action              | Trigger                                             | Result                                                               | Enforcement (IPC / state)                             |
+| ------------------- | --------------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------- |
+| Open Commit         | home `Commit changes`                               | enter surface, Commit variant                                        | renderer mode → operation:commit                      |
+| Open Apply          | home inspector `Review & Apply`                     | enter surface, Apply variant                                         | renderer mode → operation:apply                       |
+| Toggle diff view    | center `stacked ⟷ side-by-side`                     | re-render diff layout                                                | renderer-local                                        |
+| Resolve conflict    | center `Keep / Take / Both`                         | conflict marked resolved                                             | maps to git source-state resolution                   |
+| Skip a file (Apply) | center `Skip`                                       | excludes that file from this Apply                                   | renderer selection                                    |
+| **Commit**          | right `Commit changes`                              | records the set into the Den                                         | `api.den.commit(...)` → `add`/`re-add` + `git commit` |
+| **Apply**           | right `Apply` (enabled once all conflicts resolved) | writes the full resolved incoming set onto this environment          | `api.den.apply(...)` → `chezmoi apply`                |
+| **Back / Cancel**   | surface-level back                                  | discard the operation (confirm if needed), return to [home](home.md) | renderer mode → home                                  |
 
 ## Motion
 
