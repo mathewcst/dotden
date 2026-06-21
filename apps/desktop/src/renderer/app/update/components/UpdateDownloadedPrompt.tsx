@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Download, Loader2 } from 'lucide-react'
-import { Button } from '@/ui/button'
+import { Button } from '@/components/den/button'
 import type { DownloadedUpdate } from '@shared/app-info'
 
 /**

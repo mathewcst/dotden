@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { GitCommitHorizontal, Loader2, RotateCcw } from 'lucide-react'
-import { Button } from '@/ui/button'
+import { Button } from '@/components/den/button'
 import {
   COMMIT_TEMPLATE_VARIABLES,
   DEFAULT_COMMIT_MESSAGE_TEMPLATE,

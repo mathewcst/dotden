@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Layers, Loader2 } from 'lucide-react'
-import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
+import { ConfirmDialog } from '@/components/den/confirm-dialog'
 import type { SubscribableWorkspace, SubscriptionState } from '@shared/den'
 import type { UnsubscribeDisposition } from '@shared/settings'
 

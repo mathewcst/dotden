@@ -5,7 +5,7 @@ import type { DotdenTreeNode } from '@/den-session'
 import { RowContextMenu } from '@/features/workspace/components/RowContextMenu'
 import { AddInline, WorkspaceActionsMenu } from '@/features/workspace/components/WorkspaceSidebar'
 import { remoteAxisDecoration } from '@/den-session'
-import { cn } from '@/shared/lib/utils'
+import { cn } from '@/lib/utils'
 
 export type DotdenHeadlessTree = ReturnType<typeof useTree<DotdenTreeNode>>
 

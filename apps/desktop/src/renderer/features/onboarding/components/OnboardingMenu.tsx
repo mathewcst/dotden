@@ -1,5 +1,5 @@
 import { Check } from 'lucide-react'
-import { cn } from '@/shared/lib/utils'
+import { cn } from '@/lib/utils'
 import { RAIL_STEPS, STEP_ORDER, type OnboardingStep } from '../lib/steps'
 
 /**

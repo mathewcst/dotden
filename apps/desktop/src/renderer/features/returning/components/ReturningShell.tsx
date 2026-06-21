@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { OBConnectUrl } from '@/features/onboarding/components/OBConnectUrl'
-import { WindowTitleBar } from '@/shared/components/WindowControls'
+import { WindowTitleBar } from '@/components/den/window-controls'
 import { ReturningMenu } from './ReturningMenu'
 import { OBFoundDen, type FoundDenChoice } from './OBFoundDen'
 import { OBPickWorkspaces } from './OBPickWorkspaces'

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Loader2, Palette, RotateCcw } from 'lucide-react'
-import { Switch } from '@/ui/switch'
-import { cn } from '@/shared/lib/utils'
+import { Switch } from '@/components/den/switch'
+import { cn } from '@/lib/utils'
 import {
   applyTheme,
   resolveAppearanceSettings,
@@ -10,7 +10,7 @@ import {
   type DefaultApplyBehavior,
   type NotifyOn,
   THEMES,
-} from '@/shared/lib/apply-theme'
+} from '@/lib/apply-theme'
 
 /**
  * AppearanceTab — the Settings → Appearance tab (issues 2-10 + 2-17, story 54; design:

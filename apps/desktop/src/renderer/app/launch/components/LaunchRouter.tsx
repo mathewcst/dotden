@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react'
 import { useLaunch } from '@/app/launch/components/LaunchProvider'
 import { LandingChooser } from '@/app/launch/components/LandingChooser'
 import { DenSessionProvider } from '@/app/providers/DenSessionProvider'
-import { WindowTitleBar } from '@/shared/components/WindowControls'
+import { WindowTitleBar } from '@/components/den/window-controls'
 // DenWindow is EAGER, not lazy: it is the hot path — a set-up environment boots straight to the
 // `app` route (the launch gate returns `ready`), so lazy-splitting it would put a Suspense fallback
 // flash on the single most common launch (splash → splash → app). The cold setup/settings shells

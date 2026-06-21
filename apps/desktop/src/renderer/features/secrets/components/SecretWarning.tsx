@@ -2,7 +2,7 @@ import { AlertDialog } from '@base-ui/react/alert-dialog'
 import { AlertTriangle } from 'lucide-react'
 import { useState } from 'react'
 import type { SecretFinding } from '@shared/secrets'
-import { Button } from '@/ui/button'
+import { Button } from '@/components/den/button'
 
 /** The two deliberate paths Step 1 of the secret flow offers (secret-and-errors screen spec). */
 export type SecretChoice = 'convert' | 'commit-anyway'

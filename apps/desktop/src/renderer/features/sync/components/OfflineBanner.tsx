@@ -1,5 +1,5 @@
 import { Cloud } from 'lucide-react'
-import { Banner } from './Banner'
+import { Banner } from '@/components/den/banner'
 
 /**
  * OfflineBanner — the "Offline — changes queued" status strip (issue 1-16; see

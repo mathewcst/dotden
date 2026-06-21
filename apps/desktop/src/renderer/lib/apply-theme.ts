@@ -1,4 +1,4 @@
-import { THEMES, themeClassName, type ThemeId } from '../../../shared/appearance-settings'
+import { THEMES, themeClassName, type ThemeId } from '@shared/appearance-settings'
 
 /**
  * Apply a {@link ThemeId} to the document — the renderer half of issue 2-10's theme control.
@@ -34,5 +34,5 @@ export type {
   DefaultApplyBehavior,
   NotifyOn,
   ThemeId,
-} from '../../../shared/appearance-settings'
-export { resolveAppearanceSettings, THEMES } from '../../../shared/appearance-settings'
+} from '@shared/appearance-settings'
+export { resolveAppearanceSettings, THEMES } from '@shared/appearance-settings'

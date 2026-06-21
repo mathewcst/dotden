@@ -1,5 +1,5 @@
-import { Button } from '@/ui/button'
-import { WindowTitleBar } from '@/shared/components/WindowControls'
+import { Button } from '@/components/den/button'
+import { WindowTitleBar } from '@/components/den/window-controls'
 import { ArrowRight, MonitorSmartphone, Sparkles } from 'lucide-react'
 
 /**

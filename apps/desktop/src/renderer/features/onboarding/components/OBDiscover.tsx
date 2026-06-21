@@ -1,8 +1,8 @@
-import { Button } from '@/ui/button'
+import { Button } from '@/components/den/button'
 import { FolderOpen, Loader2, Plus, ScanSearch } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DiscoverySuggestion } from '@shared/environments'
-import { withIpcTimeout } from '@/shared/lib/ipc-timeout'
+import { withIpcTimeout } from '@/lib/ipc-timeout'
 import { ListRow } from './ListRow'
 import { warnedPathsFromFindings } from '../lib/secret-warn'
 

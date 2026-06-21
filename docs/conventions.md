@@ -219,8 +219,10 @@ lib, hooks, den-session}`. A feature never imports `app/` or another feature's i
   `@/den-session`, `@/lib/…`); reach for `@`, not deep `../../` chains. The **IPC contract** is
   reached via **`@shared/*`** (ADR 0031), _not_ `@/` — `@` only maps `src/renderer/*`, and the
   renderer never imports `src/main/**`. The old `@/shared/*` (renderer junk drawer) and
-  `@/ui/*` (hand-authored primitives) are **retired** — use `@/components/{ui,den}` and `@/lib`;
-  the legacy folders are deleted as their last consumers migrate (the A4 step; ADR 0033/0036).
+  `@/ui/*` (hand-authored primitives) are **gone** — the `renderer/shared/` and `renderer/ui/`
+  folders no longer exist. Shared components live in `@/components/{ui,den}`, utilities in `@/lib`
+  (`cn`, `apply-theme`, `ipc-timeout`, …), and shared branded surfaces like `Banner` /
+  `ErrorBanner` are `den/` components, not feature- or app-local files (ADR 0033/0036).
 
 ## Comments: over-comment, but only what earns its line
 

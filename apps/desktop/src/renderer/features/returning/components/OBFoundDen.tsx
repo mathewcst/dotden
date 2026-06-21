@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { GitBranch, Loader2, MonitorSmartphone } from 'lucide-react'
-import { Button } from '@/ui/button'
+import { Button } from '@/components/den/button'
 import type { ClaimSuggestion } from '@shared/environments'
-import { withIpcTimeout } from '@/shared/lib/ipc-timeout'
+import { withIpcTimeout } from '@/lib/ipc-timeout'
 
 /**
  * The new-or-returning *identity* choice surfaced after the Den is detected (issue 1-13).

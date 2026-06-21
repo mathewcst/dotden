@@ -1,4 +1,4 @@
-import { Button } from '@/ui/button'
+import { Button } from '@/components/den/button'
 import { useDenSession } from '@/den-session'
 import { AlertTriangle, GitMerge } from 'lucide-react'
 

@@ -12,7 +12,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import type { ThemeId } from '@shared/appearance-settings'
 import type { DotdenApi } from '@shared/ipc-api'
-import { applyTheme } from '../../../shared/lib/apply-theme'
+import { applyTheme } from '@/lib/apply-theme'
 
 /** The top-level route between boot splash, setup flows, Settings, and the den window. */
 export type LaunchRoute = 'booting' | 'landing' | 'onboarding' | 'returning' | 'app' | 'settings'

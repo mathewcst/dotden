@@ -1,6 +1,6 @@
 import { ChangesDiff } from '@/features/commit/components/ChangesDiff'
-import { StatusTag, type FileStatus } from '@/shared/components/StatusTag'
-import { Button } from '@/ui/button'
+import { StatusTag, type FileStatus } from '@/components/den/status-tag'
+import { Button } from '@/components/den/button'
 import { useDenSession } from '@/den-session'
 import {
   Download,

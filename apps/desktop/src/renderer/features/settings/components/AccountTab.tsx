@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { GitBranch, KeyRound, Loader2, Lock, RefreshCw, Shield, TriangleAlert } from 'lucide-react'
-import { cn } from '@/shared/lib/utils'
+import { cn } from '@/lib/utils'
 import type { ConnectedRemote } from '@shared/den'
 import type { PreflightResult } from '@shared/remote'
 import type { DetectedPasswordManager } from '@shared/secrets'

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Layers, Loader2 } from 'lucide-react'
-import { Button } from '@/ui/button'
+import { Button } from '@/components/den/button'
 import type { SubscribableWorkspace } from '@shared/den'
 
 /**

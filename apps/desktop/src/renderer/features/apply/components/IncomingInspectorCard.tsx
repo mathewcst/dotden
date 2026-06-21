@@ -1,5 +1,5 @@
-import { StatusTag } from '@/shared/components/StatusTag'
-import { Button } from '@/ui/button'
+import { StatusTag } from '@/components/den/status-tag'
+import { Button } from '@/components/den/button'
 import { useDenSession } from '@/den-session'
 import { Download } from 'lucide-react'
 

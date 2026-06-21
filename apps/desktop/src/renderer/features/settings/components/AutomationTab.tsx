@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Loader2, Shield } from 'lucide-react'
-import { cn } from '@/shared/lib/utils'
-import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
+import { cn } from '@/lib/utils'
+import { ConfirmDialog } from '@/components/den/confirm-dialog'
 import type { AutomationLevel } from '@shared/apply'
 
 /**

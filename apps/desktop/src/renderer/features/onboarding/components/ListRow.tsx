@@ -1,5 +1,5 @@
 import { Folder, File as FileIcon, AlertTriangle } from 'lucide-react'
-import { cn } from '@/shared/lib/utils'
+import { cn } from '@/lib/utils'
 
 /**
  * ListRow — the scan-result row of the Discover step (design: onboarding.md; Figma

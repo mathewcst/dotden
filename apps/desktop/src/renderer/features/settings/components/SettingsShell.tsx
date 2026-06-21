@@ -1,7 +1,7 @@
 import { Suspense, useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
-import { WindowTitleBar, windowNoDragRegionStyle } from '@/shared/components/WindowControls'
-import { cn } from '@/shared/lib/utils'
+import { WindowTitleBar, windowNoDragRegionStyle } from '@/components/den/window-controls'
+import { cn } from '@/lib/utils'
 import { DEFAULT_SETTINGS_TAB_ID, SETTINGS_TABS, type SettingsTab } from '../lib/tabs'
 
 /**

@@ -1,6 +1,6 @@
 import { ArrowDownToLine } from 'lucide-react'
-import { Button } from '@/ui/button'
-import { Banner } from './Banner'
+import { Button } from '@/components/den/button'
+import { Banner } from '@/components/den/banner'
 
 /**
  * IncomingBanner — the top-level "N incoming from `<environment>` — Review & Apply"

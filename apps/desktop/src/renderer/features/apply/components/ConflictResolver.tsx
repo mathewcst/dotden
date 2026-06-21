@@ -9,9 +9,9 @@ import {
   Loader2,
   XCircle,
 } from 'lucide-react'
-import { Button } from '@/ui/button'
-import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
-import { WindowTitleBar } from '@/shared/components/WindowControls'
+import { Button } from '@/components/den/button'
+import { ConfirmDialog } from '@/components/den/confirm-dialog'
+import { WindowTitleBar } from '@/components/den/window-controls'
 import type { ConflictReviewItem } from '@shared/den'
 import type { ResolutionChoice } from '@shared/apply'
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Cloud, Loader2 } from 'lucide-react'
-import { Switch } from '@/ui/switch'
-import { cn } from '@/shared/lib/utils'
+import { Switch } from '@/components/den/switch'
+import { cn } from '@/lib/utils'
 import type { PollCadenceProfile, SyncSettings } from '@shared/settings'
 
 /**

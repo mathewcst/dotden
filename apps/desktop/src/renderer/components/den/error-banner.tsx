@@ -1,6 +1,6 @@
-import { Button } from '@/ui/button'
+import { Button } from '@/components/den/button'
 import { AlertTriangle, RotateCcw, ScrollText } from 'lucide-react'
-import { Banner } from '@/features/sync/components/Banner'
+import { Banner } from '@/components/den/banner'
 
 /** Red failed-Operation strip with the load-bearing Details + Retry actions. */
 export function ErrorBanner({

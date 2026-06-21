@@ -9,8 +9,8 @@ import {
   Lock,
   RefreshCw,
 } from 'lucide-react'
-import { WindowTitleBar } from '@/shared/components/WindowControls'
-import { Button } from '@/ui/button'
+import { WindowTitleBar } from '@/components/den/window-controls'
+import { Button } from '@/components/den/button'
 import { OnboardingMenu } from './OnboardingMenu'
 import { OBConnectUrl } from './OBConnectUrl'
 import { OBDiscover } from './OBDiscover'

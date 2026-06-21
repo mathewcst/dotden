@@ -2,7 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { IPC_LIVENESS_TIMEOUT_MS } from '@/shared/lib/ipc-timeout'
+import { IPC_LIVENESS_TIMEOUT_MS } from '@/lib/ipc-timeout'
 import { installDotdenTestApi } from '@/test/dotden-test-api'
 import { OBDiscover } from '../OBDiscover'
 

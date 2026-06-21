@@ -9,12 +9,12 @@ import {
   Loader2,
   Trash2,
 } from 'lucide-react'
-import { Button } from '@/ui/button'
+import { Button } from '@/components/den/button'
 import { toast } from '@/lib/toast'
-import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
-import { WindowTitleBar } from '@/shared/components/WindowControls'
-import { StatusTag } from '@/shared/components/StatusTag'
-import { ErrorBanner } from '@/app/shell/components/ErrorBanner'
+import { ConfirmDialog } from '@/components/den/confirm-dialog'
+import { WindowTitleBar } from '@/components/den/window-controls'
+import { StatusTag } from '@/components/den/status-tag'
+import { ErrorBanner } from '@/components/den/error-banner'
 import { useDenSession } from '@/den-session'
 import { operationError, type OperationError } from '@/lib/operation-error'
 import type { ApplyFileResult, IncomingReviewItem, IncomingSummary } from '@shared/den'

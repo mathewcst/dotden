@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import type { Group, Workspace } from '@shared/workspace'
 import type { FileTreeEntry } from '@shared/den'
-import { cn } from '@/shared/lib/utils'
+import { cn } from '@/lib/utils'
 
 /**
  * WorkspaceSidebar — the user-authored organization layer of the left pane (issue 1-14).

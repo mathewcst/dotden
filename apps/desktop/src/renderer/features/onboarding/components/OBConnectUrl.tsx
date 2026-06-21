@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { GitBranch, Loader2, TriangleAlert } from 'lucide-react'
-import { Button } from '@/ui/button'
+import { Button } from '@/components/den/button'
 import type { ConnectResult, RemoteDiagnostics } from '@shared/remote'
 import { isConnectBusy, stateAfterConnectResult, type ConnectState } from '../lib/connect-state'
 

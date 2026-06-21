@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ExternalLink, Info, Loader2, RefreshCw } from 'lucide-react'
-import { Switch } from '@/ui/switch'
+import { Switch } from '@/components/den/switch'
 import {
   CHEZMOI_CREDIT,
   describeUpdateStatus,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ClipboardCopy, FolderOpen, Loader2, SquareTerminal, TriangleAlert } from 'lucide-react'
-import { Button } from '@/ui/button'
-import { Switch } from '@/ui/switch'
+import { Button } from '@/components/den/button'
+import { Switch } from '@/components/den/switch'
 import type { DiagnosticsSettings } from '@shared/settings'
 import type { UnredactedModeState } from '@shared/diagnostics'
 

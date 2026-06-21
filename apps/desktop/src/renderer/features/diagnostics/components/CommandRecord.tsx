@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import type { RedactedCommandRecord as RedactedCommandRecordDto } from '@shared/diagnostics'
-import { cn } from '@/shared/lib/utils'
+import { cn } from '@/lib/utils'
 
 const REDACTED_TOKEN = '[REDACTED]'
 const OMITTED_RENDERED_OUTPUT = '[rendered output omitted]'

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Loader2, Shield } from 'lucide-react'
-import { Switch } from '@/ui/switch'
+import { Switch } from '@/components/den/switch'
 import type { PrivacySettings } from '@shared/settings'
 
 /**

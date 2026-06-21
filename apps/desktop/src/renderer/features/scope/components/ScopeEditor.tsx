@@ -1,4 +1,4 @@
-import { cn } from '@/shared/lib/utils'
+import { cn } from '@/lib/utils'
 import type { Os, Scope } from '@shared/scope'
 
 /**

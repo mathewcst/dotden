@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import type { DetectedPasswordManager, PasswordManagerId } from '@shared/secrets'
 import type { ConvertSecretRequest } from '@shared/den'
 import type { PmPreference } from '@shared/secrets'
-import { Button } from '@/ui/button'
+import { Button } from '@/components/den/button'
 import { canConvert, defaultManagerSelection } from '@/features/secrets/lib/pm-picker'
 
 /** Props for {@link SecretPicker}. */

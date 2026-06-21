@@ -1,6 +1,6 @@
 import { CommandRecord } from '@/features/diagnostics/components/CommandRecord'
 import { useDenSession } from '@/den-session'
-import { IconButton } from '@/ui/icon-button'
+import { IconButton } from '@/components/den/icon-button'
 import { ChevronDown, Copy, Filter, PanelBottomClose, Plus, X } from 'lucide-react'
 import { useState } from 'react'
 

@@ -1,5 +1,5 @@
 import { Check } from 'lucide-react'
-import { cn } from '@/shared/lib/utils'
+import { cn } from '@/lib/utils'
 import { RETURNING_RAIL_STEPS, RETURNING_STEP_ORDER, type ReturningStep } from '../lib/returningSteps'
 
 /**

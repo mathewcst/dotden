@@ -1,4 +1,4 @@
-import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
+import { ConfirmDialog } from '@/components/den/confirm-dialog'
 import { SecretPicker } from '@/features/secrets/components/SecretPicker'
 import { SecretWarning } from '@/features/secrets/components/SecretWarning'
 import { useDenSession } from '@/den-session'
