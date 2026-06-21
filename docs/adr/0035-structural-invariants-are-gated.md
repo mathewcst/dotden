@@ -17,15 +17,22 @@ problem, let's use it."_
 
 **Gate the structural invariants in CI.**
 
-1. **Layer boundaries → `eslint-plugin-boundaries`** (purpose-built, flat-config). Element
-   types `app` / `feature` / `den-session` / `shared` / `ui`; `boundaries/dependencies` set
-   to `default: "disallow"` with the ADR 0033 graph; `capture: ["feature"]` gives
-   cross-feature encapsulation (a feature can't reach another feature's internals); and
-   **`ui` is importable only by `den/`** (ADR 0036).
+1. **Layer boundaries → `eslint-plugin-boundaries`** (purpose-built, flat-config). The rule is
+   `boundaries/element-types` set to `default: "disallow"` with the ADR 0033 graph. Element
+   types are matched **first-match-wins**, so the most specific patterns lead (`app/providers/**`
+   before `app/**`; `components/{ui,den}/**` before the catch-all `shared`). `capture: ["feature"]`
+   plus `${from.feature}` in the allow rule gives cross-feature encapsulation (a feature can't
+   reach another feature's internals). Each layer also allows **itself** (intra-layer wiring:
+   `app/App.tsx` imports sibling `app/` modules, `store.ts` imports its own slices, a shadcn
+   primitive imports another). **`ui` is importable only by `den/` and `app/providers/`** — the
+   latter being the narrow root-provider exception (ADR 0036): default plumbing like
+   `TooltipProvider` / sonner `<Toaster/>` mounts vanilla `ui/`, with no `den/` wrapper.
 
    ```js
    // @dotden/eslint-config — files: ['apps/desktop/src/renderer/**'] override
    settings: { "boundaries/elements": [
+     // First match wins — most specific patterns first.
+     { type: "providers",   pattern: "src/renderer/app/providers/**" },
      { type: "app",         pattern: "src/renderer/app/**" },
      { type: "feature",     pattern: "src/renderer/features/*/**", capture: ["feature"] },
      { type: "den-session", pattern: "src/renderer/den-session/**" },
@@ -33,11 +40,14 @@ problem, let's use it."_
      { type: "ui",          pattern: "src/renderer/components/ui/**" },
      { type: "shared",      pattern: "src/renderer/{components,lib,hooks}/**" },
    ]},
-   rules: { "boundaries/dependencies": ["error", { default: "disallow", rules: [
-     { from: "app",         allow: ["feature","den-session","den","shared"] },
-     { from: "feature",     allow: [["feature",{feature:"${feature}"}],"den-session","den","shared"] },
-     { from: "den-session", allow: ["shared"] },
-     { from: "den",         allow: ["ui","shared"] },
+   rules: { "boundaries/element-types": ["error", { default: "disallow", rules: [
+     // Root providers: the ONLY app-side path to ui/ (the plumbing exception, ADR 0036).
+     { from: "providers",   allow: ["providers","ui","den","den-session","shared"] },
+     { from: "app",         allow: ["app","providers","feature","den-session","den","shared"] },
+     { from: "feature",     allow: [["feature",{ feature: "${from.feature}" }],"den-session","den","shared"] },
+     { from: "den-session", allow: ["den-session","shared"] },
+     { from: "den",         allow: ["den","ui","shared"] },
+     { from: "ui",          allow: ["ui","shared"] },
      { from: "shared",      allow: ["shared"] },
    ]}]}
    ```

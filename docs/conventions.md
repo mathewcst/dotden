@@ -128,12 +128,15 @@ src/renderer/
     secrets  settings  file-history  scope  diagnostics
     └─ each feature: components/  lib/  (+ hooks/ as needed) · per subdir its own __tests__/
   den-session/              # shared state leaf — store + slices + tree model (ADR 0034)
-    store.ts · context.ts · slices/ · tree-node-model.ts · remote-axis.ts
+    store.ts · context.ts · slices/ · tree-node-model.ts · remote-axis.ts · row-verb.ts
   components/               # shared presentational — NEVER imports features/app
     ui/   vanilla shadcn (CLI-owned)       den/   dotden-branded surface (ADR 0036)
-    tree/  the den file-tree view (single consumer; imports den-session *types* only)
-  lib/   cn · apply-theme · ipc-timeout         hooks/   use-mobile · …
+  lib/   cn · toast · operation-error · apply-theme · ipc-timeout    hooks/   use-mobile · …
 ```
+
+> The **file Tree stays a feature** (`features/workspace/`) — only its _model_
+> (`tree-node-model`) and the `RowVerb` type are shared, in `den-session/` (ADR 0034). There is
+> no `components/tree/`.
 
 - **The feature bright-line (ADR 0033).** A folder earns `features/` only if it's a
   **user-facing capability a user would name**. App infrastructure — the shell frame, boot
@@ -151,15 +154,22 @@ lib, hooks, den-session}`. A feature never imports `app/` or another feature's i
 - **Placement rule.** A module used by **one** feature lives in that feature; used by **2+**,
   it moves to a shared leaf (`components/den/` for components, `lib/` for utilities, a slice in
   `den-session/` for shared state). A single-consumer component that still carries den
-  vocabulary (the file Tree) stays in its feature, or in `components/` only when it imports
-  shared _types_ — never feature code.
+  vocabulary (the file Tree) **stays in its feature** — not moved to `components/` for tidiness;
+  only its shared _model_ + _types_ migrate to `den-session/` (ADR 0034).
 - **Components are two-tier (ADR 0036).** `components/ui/` is vanilla shadcn (CLI-owned, never
   branded); `components/den/` is the dotden-branded surface app/features import — thin wrappers
   that _compose over_ `ui/` (`den/button` imports `ui/button`) plus the bespoke design-system
-  family (Badge, Pill, StatusTag, StatusDot, Banner). **Only `den/` may import `ui/`** (gated).
-  Compose-over, never re-implement. Build `den/` lazily from the Figma `37:2` sheet.
+  family (Badge, Pill, StatusTag, StatusDot, Banner). **Only `den/` (and `app/providers/`) may
+  import `ui/`** (gated). Compose-over, never re-implement. Build `den/` lazily from the Figma
+  `37:2` sheet.
+- **Root providers are the one exception (ADR 0036).** Default context providers mounted once at
+  the app root — `TooltipProvider`, sonner's `<Toaster/>`, a theme provider — are plumbing, not
+  rendered surface, so `app/providers/` imports them straight from `ui/` with **no `den/`
+  wrapper**. The carve-out is the _providers_ directory only — `shell/`, `launch/`, and every
+  feature still render through `den/`. Branding a toast's _box_ is a `den/` job; the `<Toaster/>`
+  _provider_ is not.
 - **Bespoke-native allowlist.** A few rows render native `<button>`/`<div>` for keyboard a11y
-  and are _not_ shadcn-migration targets: TreeRow/FileRow (`components/tree/`), CommitRow
+  and are _not_ shadcn-migration targets: TreeRow/FileRow (`features/workspace/`), CommitRow
   (`commit/`), SidebarItem, ListRow/SelectRow, DiffLine/DiffLineSplit/MergeHunk
   (`file-history/`, `apply/`), WindowControls (`den/`). Each native element the
   `no-restricted-syntax` gate would flag carries `// eslint-disable-next-line -- bespoke:

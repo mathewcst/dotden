@@ -18,8 +18,8 @@ hand-author wrappers, even thin ones") read as forbidding any branded layer at a
 
 ```
 components/
-  ui/    vanilla shadcn — CLI-owned, never branded; ONLY den/ may import it
-  den/   the dotden-branded surface — the only component layer app/features import
+  ui/    vanilla shadcn — CLI-owned, never branded; only den/ (+ app/providers) imports it
+  den/   the dotden-branded surface — the layer app/features RENDER through
 ```
 
 - **`components/ui/` — vanilla shadcn, CLI-owned.** Never edited for brand, never re-skinned;
@@ -42,9 +42,24 @@ or _replace_ it (forbidden)?**
 semantic-token layer (`--primary → --dd-ember-500`), so `ui/button` already renders ember.
 `den/` earns its place for **variants/defaults/bespoke structure, not color alone** — but it is
 adopted as a _blanket_ surface anyway, so app code has one import root and `ui/` stays a
-swappable vendor detail. Enforced: `eslint-plugin-boundaries` lets **only `den/` import `ui/`**
-(ADR 0035). `den/` is built **lazily** — only primitives actually used get a wrapper; no
-passthrough files for unused primitives. The Figma `37:2` sheet is the canonical build-list.
+swappable vendor detail. Enforced: `eslint-plugin-boundaries` lets **`den/` and `app/providers/`
+import `ui/`** — nothing else (ADR 0035). `den/` is built **lazily** — only primitives actually
+used get a wrapper; no passthrough files for unused primitives. The Figma `37:2` sheet is the
+canonical build-list.
+
+**Exception — root providers are plumbing, not rendered surface.** The default context providers
+a library mounts once at the application root — `TooltipProvider`, sonner's `<Toaster/>`, a theme
+provider — are **not** branded UI. They render nothing the user perceives as a dotden component;
+they only wire React context. Forcing a `den/` pass-through for them is exactly the
+busywork the compose-over rule exists to kill (there is no behavior to compose and no surface to
+brand). So the `app/providers/` directory MAY import `ui/` directly and needs no `den/` wrapper.
+The exception is deliberately narrow — it is the _providers_ directory, not `app/` at large:
+`shell/`, `launch/`, and every feature still render through `den/`. The discriminator is
+**provider vs rendered surface** — a context provider mounted at the root is plumbing (vanilla
+`ui/` is fine); a toast's visual box, an input, a button — anything the user sees — is `den/`.
+When a toast needs branding, that is a `den/` toast component (or sonner `toastOptions`); the
+`<Toaster/>` provider itself stays the default. This keeps the "no re-skinning `ui/`" guarantee
+intact while not inventing wrappers for zero-surface plumbing.
 
 ## Alternatives considered
 
@@ -68,5 +83,9 @@ passthrough files for unused primitives. The Figma `37:2` sheet is the canonical
   `pushed`/`incoming`) to the Figma's 7 git-diff states (`added`/`modified`/`deleted`/
   `renamed`/`untracked`/`incoming`/`conflict`) when rebuilt as `den/status-tag` — a conscious
   expansion, not a silent drop.
+- **Root providers are exempt** — `app/providers/` mounts the default `TooltipProvider` / sonner
+  `<Toaster/>` straight from `ui/` with no `den/` wrapper; the boundaries gate allows
+  `app/providers → ui` alongside `den → ui` (ADR 0035). Branding a toast's _box_ is still a `den/`
+  job; the _provider_ is not.
 - ADR 0012 stands (Base UI base); this ADR adds the `ui/`-vs-`den/` split and the compose-over
   rule on top.
