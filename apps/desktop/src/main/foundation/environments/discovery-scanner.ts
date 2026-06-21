@@ -22,6 +22,7 @@
 import { stat } from 'node:fs/promises'
 import { isAbsolute, resolve } from 'node:path'
 import type { DiscoverySuggestion } from '../../../shared/environments.js'
+import type { DiscoveryScanResult } from '../../../shared/environments.js'
 
 /**
  * One known tool in the discovery catalog.
@@ -83,17 +84,6 @@ export const DEFAULT_TOOL_CATALOG: readonly CatalogTool[] = [
   { id: 'ssh', label: 'SSH', candidates: ['.ssh/config'] },
   { id: 'editorconfig', label: 'EditorConfig', candidates: ['.editorconfig'] },
 ]
-
-/**
- * Result of a {@link DiscoveryScanner.scan}.
- *
- * Suggestions are flat (the UI groups them by `toolId`); the count is surfaced
- * separately so the Discover step can drive empty/"found N" copy without re-counting.
- */
-export interface DiscoveryScanResult {
-  /** Every config File/Folder the scan found, grounded in the catalog. */
-  readonly suggestions: readonly DiscoverySuggestion[]
-}
 
 /**
  * Scans an environment's home dir for known-tool config Files to suggest Tracking.

@@ -91,3 +91,14 @@ export interface EnvironmentEntry {
   /** Workspace ids this environment subscribes to; only these Files apply here (ADR 0005). */
   readonly subscribedWorkspaces: readonly string[]
 }
+
+/**
+ * Result of a {@link DiscoveryScanner.scan}.
+ *
+ * Suggestions are flat (the UI groups them by `toolId`); the count is surfaced
+ * separately so the Discover step can drive empty/"found N" copy without re-counting.
+ */
+export interface DiscoveryScanResult {
+  /** Every config File/Folder the scan found, grounded in the catalog. */
+  readonly suggestions: readonly DiscoverySuggestion[]
+}
