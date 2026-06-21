@@ -100,6 +100,8 @@ export interface SessionSlice {
   diagnosticsErrorCount: number
   /** Whether the standing Console is enabled. Full Settings control lands in issue 4-07. */
   diagnosticsConsoleEnabled: boolean
+  /** Human reason/fix when this environment would materialize an empty Den from subscriptions. */
+  emptyDenWarning: string | null
 
   /** Run an IPC action with consistent busy/error handling — never fail silently. */
   run(kind: Busy, fn: () => Promise<void>): Promise<void>
@@ -176,6 +178,7 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
     diagnosticsClearedAt: null,
     diagnosticsErrorCount: 0,
     diagnosticsConsoleEnabled: false,
+    emptyDenWarning: null,
 
     run: async (kind, fn) => {
       set({ busy: kind, error: null })
@@ -463,6 +466,8 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
         set({ pushQueued: queued })
         const view = await api.den.tree()
         set({ files: view.files, workspaces: view.workspaces })
+        const subscriptions = await api.den.subscriptionState()
+        set({ emptyDenWarning: subscriptions.emptyDenWarning })
         const summary = await api.den.incomingSummary()
         set({
           remoteAxis: new Map(summary.items.map((i) => [i.targetPath, i.marker])),

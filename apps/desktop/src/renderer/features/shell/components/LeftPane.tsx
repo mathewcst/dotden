@@ -24,6 +24,7 @@ export function LeftPane({ model }: { model: ComponentProps<typeof FileTree>['mo
   const selected = useDenSession((s) => s.selected)
   const selectedGroup = useDenSession((s) => s.selectedGroup)
   const selectedWorkspace = useDenSession((s) => s.selectedWorkspace)
+  const emptyDenWarning = useDenSession((s) => s.emptyDenWarning)
   const busy = useDenSession((s) => s.busy)
   const selectFile = useDenSession((s) => s.selectFile)
   const selectGroup = useDenSession((s) => s.selectGroup)
@@ -104,10 +105,19 @@ export function LeftPane({ model }: { model: ComponentProps<typeof FileTree>['mo
               </span>
             </div>
             {paths.length === 0 ? (
-              <p className="text-muted-foreground px-2 py-3 text-xs">
-                {role === 'a'
-                  ? 'No Files yet. Track a File below to start managing it.'
-                  : 'No incoming Files. Detect the Remote, then refresh.'}
+              <p
+                className={
+                  role === 'a' && emptyDenWarning
+                    ? 'text-dd-amber-400 px-2 py-3 text-xs leading-relaxed'
+                    : 'text-muted-foreground px-2 py-3 text-xs'
+                }
+                role={role === 'a' && emptyDenWarning ? 'alert' : undefined}
+              >
+                {role === 'a' && emptyDenWarning
+                  ? emptyDenWarning
+                  : role === 'a'
+                    ? 'No Files yet. Track a File below to start managing it.'
+                    : 'No incoming Files. Detect the Remote, then refresh.'}
               </p>
             ) : (
               // Right-click any row for the verbs (Commit · Apply · Untrack · Delete everywhere);

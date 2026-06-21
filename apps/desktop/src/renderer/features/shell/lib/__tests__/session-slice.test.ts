@@ -35,6 +35,11 @@ function makeApi(over: Record<string, unknown> = {}): DotdenApi {
       tree: vi.fn(async () => ({ files: [entry('.zshrc')], workspaces: [] })),
       pushPending: vi.fn(async () => false),
       incomingSummary: vi.fn(async () => ({ items: [], fromEnvironmentLabel: 'laptop' })),
+      subscriptionState: vi.fn(async () => ({
+        workspaces: [],
+        registered: true,
+        emptyDenWarning: null,
+      })),
       track: vi.fn(async () => undefined),
       untrack: vi.fn(async () => undefined),
       deleteEverywhere: vi.fn(async () => undefined),
@@ -80,6 +85,7 @@ describe('session slice — the reset guarantee (key={role} remount proven at th
     expect(s.diagnosticsPanelTraceId).toBeNull()
     expect(s.diagnosticsRecords).toEqual([])
     expect(s.diagnosticsClearedAt).toBeNull()
+    expect(s.emptyDenWarning).toBeNull()
     // apply-slice session state is part of the same fresh store.
     expect(s.incoming).toEqual([])
     expect(s.remoteAxis.size).toBe(0)
@@ -373,6 +379,23 @@ describe('session slice — init() (env A boot load)', () => {
     expect(s.pushQueued).toBe(true)
     expect(s.remoteAxis.get('.zshrc')).toBe('incoming')
     expect(s.incomingFrom).toBe('work-laptop')
+  })
+
+  it('loads the empty Den warning during app boot', async () => {
+    const api = makeApi({
+      den: {
+        subscriptionState: vi.fn(async () => ({
+          workspaces: [],
+          registered: false,
+          emptyDenWarning: "This environment isn't registered yet. Finish setup to choose Workspaces.",
+        })),
+      },
+    })
+    const store = createDenSessionStore('a', api)
+
+    await store.getState().init()
+
+    expect(store.getState().emptyDenWarning).toMatch(/isn't registered/i)
   })
 
   it('is a no-op on env B (B drives its own explicit Detect)', async () => {
