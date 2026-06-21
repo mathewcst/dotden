@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { ChezmoiAdapter } from '../chezmoi-adapter.js'
 import { GitTransport } from '../git-transport.js'
-import { runCommand } from '../process.js'
+import { runCommand } from '../platform/process.js'
 
 /**
  * A fully-provisioned, disposable dotden environment for integration tests.

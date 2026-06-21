@@ -19,11 +19,11 @@
 import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, relative, resolve } from 'node:path'
 import { parseChezmoiStatus } from './chezmoi-status.js'
-import { resolveContainedPath } from './path-safety.js'
-import { scopedOutPaths, type Os, type Scope } from './os-scope.js'
+import { resolveContainedPath } from './platform/path-safety.js'
+import { scopedOutPaths, type Os, type Scope } from './platform/os-scope.js'
 import { renderSubscriptionIgnore } from './subscription-ignore.js'
 import { renderSecretReferenceTemplate, type SecretReferenceRequest } from './secret-reference.js'
-import { runCommand } from './process.js'
+import { runCommand } from './platform/process.js'
 import type { CommitTemplateData } from '../../shared/commit-template.js'
 
 /**

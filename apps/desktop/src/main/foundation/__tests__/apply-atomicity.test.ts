@@ -22,8 +22,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DenService } from '../den-service.js'
 import { GitTransport } from '../git-transport.js'
 import { DenStore } from '../den-store.js'
-import { OperationTracer } from '../operation-tracer.js'
-import { runCommand } from '../process.js'
+import { OperationTracer } from '../platform/operation-tracer.js'
+import { runCommand } from '../platform/process.js'
 
 let root: string
 let chezmoiBin: string

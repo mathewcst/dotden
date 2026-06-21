@@ -17,7 +17,7 @@ import {
   CommandFailedError,
   runCommand,
   type CommandResult,
-} from './process.js'
+} from './platform/process.js'
 
 /**
  * Minimal trace envelope required at the renderer↔main IPC boundary.

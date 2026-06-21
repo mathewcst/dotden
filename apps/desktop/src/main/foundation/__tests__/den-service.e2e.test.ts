@@ -21,9 +21,9 @@ import { cloneRepo, GitTransport } from '../git-transport.js'
 import { DenService } from '../den-service.js'
 import { DenStore } from '../den-store.js'
 import { readAppearanceOverride } from '../appearance-override.js'
-import { OperationTracer } from '../operation-tracer.js'
+import { OperationTracer } from '../platform/operation-tracer.js'
 import { parseIncomingDeletions } from '../chezmoi-status.js'
-import { runCommand } from '../process.js'
+import { runCommand } from '../platform/process.js'
 
 let root: string
 let chezmoiBin: string

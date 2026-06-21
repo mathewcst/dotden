@@ -11,7 +11,11 @@ import { describe, expect, it } from 'vitest'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { CommandFailedError, type CommandResult, type RunCommandOptions } from '../process.js'
+import {
+  CommandFailedError,
+  type CommandResult,
+  type RunCommandOptions,
+} from '../platform/process.js'
 import { RemoteClient, RemoteConnectError, RemotePreflightError } from '../remote-client.js'
 
 const trace = { traceId: 'trace-remote-client-test' }

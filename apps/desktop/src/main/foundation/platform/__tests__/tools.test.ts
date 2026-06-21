@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { resolveBundledTools } from '../tools.js'
-import { createExecutableStub } from './temp-git-repo.fixture.js'
+import { createExecutableStub } from '../../__tests__/temp-git-repo.fixture.js'
 
 // chezmoi/git carry the `.exe` suffix on Windows; mirror resolveBundledTools' naming.
 const chezmoiName = process.platform === 'win32' ? 'chezmoi.exe' : 'chezmoi'

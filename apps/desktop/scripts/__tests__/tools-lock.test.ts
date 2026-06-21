@@ -5,7 +5,7 @@
  *
  * These run hermetically (no network): they validate the lock's shape, that every tool
  * pins every target with a real sha256, and — load-bearing — that the paths the lock
- * promises line up with where `src/main/foundation/tools.ts` actually resolves the
+ * promises line up with where `src/main/foundation/platform/tools.ts` actually resolves the
  * binaries. A drift between the two would ship an installer whose tools the app can't find.
  */
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { resolveBundledTools } from '../../src/main/foundation/tools.js'
+import { resolveBundledTools } from '../../src/main/foundation/platform/tools.js'
 import { createExecutableStub } from '../../src/main/foundation/__tests__/temp-git-repo.fixture.js'
 
 // __dirname is valid here: under NodeNext with no package "type":"module", vitest compiles

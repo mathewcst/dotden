@@ -22,7 +22,7 @@ import { access, readFile, rm, writeFile } from 'node:fs/promises'
 import { relative, resolve } from 'node:path'
 import { ChezmoiAdapter, UncommittedLocalEditError } from './chezmoi-adapter.js'
 import { GitTransport } from './git-transport.js'
-import { resolveContainedPath } from './path-safety.js'
+import { resolveContainedPath } from './platform/path-safety.js'
 import {
   DEFAULT_COMMIT_TEMPLATE,
   renderCommitMessage,
@@ -37,7 +37,7 @@ import {
   type Workspace,
   type WorkspacesDoc,
 } from './den-store.js'
-import type { OperationTracer } from './operation-tracer.js'
+import type { OperationTracer } from './platform/operation-tracer.js'
 import { SyncEngine, type AutoApplyHoldReason, type IncomingFile } from './sync-engine.js'
 import type { ApplyChangeKind } from './apply-planner.js'
 import { ConflictModel, type ResolutionChoice } from './conflict-model.js'
@@ -47,7 +47,7 @@ import {
   DEFAULT_AUTOMATION_LEVEL,
   type AutomationLevel,
 } from './automation-policy.js'
-import type { Os, Scope } from './os-scope.js'
+import type { Os, Scope } from './platform/os-scope.js'
 import { PushQueue } from './push-queue.js'
 import { isOfflineError } from './offline.js'
 import type { UnsubscribeDisposition } from './subscription-settings.js'
@@ -67,7 +67,7 @@ import {
   type SecretReferenceRequest,
 } from './secret-reference.js'
 import { readPmPreference, writePmPreference, type PmPreference } from './pm-preference.js'
-import { CommandFailedError } from './process.js'
+import { CommandFailedError } from './platform/process.js'
 import {
   DEFAULT_COMMIT_MESSAGE_TEMPLATE,
   type CommitTemplateData,

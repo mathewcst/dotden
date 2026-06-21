@@ -46,3 +46,6 @@ scheduled_tasks.lock
 
 # Scratch 
 .scratch/
+
+# Local teaching workspace (/teach skill) — not part of the app
+.teach/

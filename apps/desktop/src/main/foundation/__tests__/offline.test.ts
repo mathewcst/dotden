@@ -8,7 +8,7 @@
  * are the real git stderr signatures verified against the bundled git.
  */
 import { describe, expect, it } from 'vitest'
-import { CommandAbortedError, CommandFailedError } from '../process.js'
+import { CommandAbortedError, CommandFailedError } from '../platform/process.js'
 import { isOfflineError } from '../offline.js'
 
 /** A git failure carrying the given stderr (the only thing the classifier inspects). */

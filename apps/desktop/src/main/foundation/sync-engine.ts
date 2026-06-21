@@ -31,7 +31,7 @@ import { ApplicabilityResolver, isAppliesHere } from './applicability-resolver.j
 import type { AutomationPolicy } from './automation-policy.js'
 import { isResolvedConflict, type ResolvedConflict } from './conflict-model.js'
 import type { EnvironmentEntry, WorkspacesDoc } from './den-store.js'
-import type { OperationTracer } from './operation-tracer.js'
+import type { OperationTracer } from './platform/operation-tracer.js'
 
 /**
  * One incoming File observed during a Sync fetch, classified by its Remote-vs-local

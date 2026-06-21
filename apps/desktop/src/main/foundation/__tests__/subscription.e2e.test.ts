@@ -23,7 +23,7 @@ import { cloneRepo, GitTransport } from '../git-transport.js'
 import { DenService } from '../den-service.js'
 import { EnvironmentRegistry } from '../environment-registry.js'
 import { ChezmoiAdapter } from '../chezmoi-adapter.js'
-import { runCommand } from '../process.js'
+import { runCommand } from '../platform/process.js'
 
 let root: string
 let chezmoiBin: string

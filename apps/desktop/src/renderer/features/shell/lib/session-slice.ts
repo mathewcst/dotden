@@ -18,7 +18,7 @@
 import type { DotdenApi } from '../../../../shared/ipc-api'
 import type { AffectedEnvironment, FileTreeEntry } from '../../../../main/foundation/den-service'
 import type { Workspace as WorkspaceModel } from '../../../../main/foundation/den-store'
-import type { Scope } from '../../../../main/foundation/os-scope'
+import type { Scope } from '../../../../main/foundation/platform/os-scope'
 import type { AutomationLevel } from '../../../../main/foundation/automation-policy'
 import type { FileTreeRenameEvent } from '@pierre/trees'
 import type { RowVerb } from '../../workspace/components/RowContextMenu'

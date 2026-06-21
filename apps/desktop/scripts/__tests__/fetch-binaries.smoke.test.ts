@@ -17,7 +17,7 @@ import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { resolveBundledTools } from '../../src/main/foundation/tools.js'
+import { resolveBundledTools } from '../../src/main/foundation/platform/tools.js'
 
 // __dirname is valid here: vitest compiles these .ts test files as CommonJS (NodeNext, no
 // package "type":"module"), where import.meta is disallowed.

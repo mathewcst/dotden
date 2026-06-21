@@ -21,7 +21,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
-import { effectiveScope, narrowScope, type Scope } from './os-scope.js'
+import { effectiveScope, narrowScope, type Scope } from './platform/os-scope.js'
 import {
   addAllowlistEntry,
   EMPTY_SECRET_ALLOWLIST,
