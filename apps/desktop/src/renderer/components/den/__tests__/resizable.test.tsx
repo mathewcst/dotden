@@ -6,7 +6,8 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../resizab
 /**
  * Smoke coverage for the shared resize primitive used by the shell and History tab.
  * Persistence, pointer math, and keyboard behavior belong to react-resizable-panels; dotden only
- * verifies that our shadcn wrapper renders the one resize idiom every pane now consumes.
+ * verifies that the den/ wrapper (composing over the shadcn `ui/resizable`) renders the one
+ * resize idiom every pane now consumes and keeps the `separator` role on the handle.
  */
 describe('Resizable', () => {
   it('renders panels with the shared handle', () => {

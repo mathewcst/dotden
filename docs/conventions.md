@@ -162,7 +162,21 @@ lib, hooks, den-session}`. A feature never imports `app/` or another feature's i
   that _compose over_ `ui/` (`den/button` imports `ui/button`) plus the bespoke design-system
   family (Badge, Pill, StatusTag, StatusDot, Banner). **Only `den/` (and `app/providers/`) may
   import `ui/`** (gated). Compose-over, never re-implement. Build `den/` lazily from the Figma
-  `37:2` sheet.
+  `37:2` sheet. _Built so far:_ compose wrappers `button` · `switch` · `resizable`; bespoke
+  `icon-button` · `status-tag` · `window-controls` · `confirm-dialog` · `toast`.
+  - **A compose wrapper inherits the `ui/` primitive's geometry; it preserves only documented
+    _semantic_ invariants, not old pixels.** `den/button` delegates size/rounding/focus to
+    `ui/button` and adds exactly one dotden default — the destructive verb stays **solid red**
+    (functional-colour discipline, CONTEXT.md), never shadcn's soft tint. Re-encoding the old
+    hand-rolled geometry would be the re-skin the ADR rejects; Figma-`37:2`-faithful variants,
+    sizes, and the bespoke family's full state sets are a deliberate **Phase B** design pass.
+    (Consequence: adopting a compose wrapper shifts that control to shadcn metrics — a visible,
+    intended change surfaced at migration time, not a regression.)
+  - **`ui/` may lag the installed primitive lib; the fix lives in the `den/` wrapper, never in
+    `ui/`.** `ui/resizable` keys vertical layout off `aria-[orientation]`, but
+    `react-resizable-panels@3` emits `data-panel-group-direction` — so `den/resizable` re-supplies
+    the real direction classes (higher Tailwind specificity wins). Patch `ui/` and the next
+    `shadcn add` silently reverts you.
 - **Root providers are the one exception (ADR 0036).** Default context providers mounted once at
   the app root — `TooltipProvider`, sonner's `<Toaster/>`, a theme provider — are plumbing, not
   rendered surface, so `app/providers/` imports them straight from `ui/` with **no `den/`
