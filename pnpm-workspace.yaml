@@ -49,10 +49,11 @@ catalogs:
     clsx: ^2.1.1
     electron: ^42.4.1
     electron-builder: ^26.15.3
-    # electron-updater is intentionally NOT catalogued. electron-builder reads its
-    # version straight from apps/desktop/package.json and validates it as semver,
-    # which the unresolved `catalog:` protocol string fails — aborting `package`
-    # before beforePack. So it's pinned literally there (kept at ^6.8.9). See ADR 0028.
+    # Catalogued for a single source of truth (ADR 0028). electron-builder can't read the
+    # `catalog:` protocol — it validates electron-updater's version straight from
+    # apps/desktop/package.json and aborts `package` on the unresolved string — so the
+    # desktop electron-builder.yml mirrors this version via `extraMetadata`. Keep in sync.
+    electron-updater: ^6.8.9
     electron-vite: 6.0.0-beta.1
     lucide-react: ^1.20.0
     tailwind-merge: ^3.6.0

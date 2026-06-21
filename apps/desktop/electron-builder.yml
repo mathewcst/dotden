@@ -5,6 +5,13 @@ copyright: Copyright © 2026 dotden contributors
 icon: resources/packaging/icon.png
 
 # Packaged app metadata. The workspace package remains @dotden/desktop.
+# extraMetadata is deep-merged over package.json before electron-builder's dependency
+# checks run, so it's also where we resolve the one dependency electron-builder reads
+# raw and validates: electron-updater. package.json references it as `catalog:desktop`
+# (single source of truth, ADR 0028), but electron-builder can't dereference the pnpm
+# `catalog:` protocol and aborts on the unparseable version — so we mirror the catalog's
+# concrete version here. Keep this in lockstep with the electron-updater entry in
+# pnpm-workspace.yaml.
 extraMetadata:
   name: dotden
   description: Keep your setup in sync — private, portable, yours.
@@ -12,6 +19,8 @@ extraMetadata:
   repository:
     type: git
     url: git+https://github.com/mathewcst/dotden.git
+  dependencies:
+    electron-updater: 6.8.9
 
 directories:
   output: release
