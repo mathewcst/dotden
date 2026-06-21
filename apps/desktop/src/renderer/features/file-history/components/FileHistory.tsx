@@ -5,7 +5,7 @@ import { FILE_HISTORY_PATCH_DIFF_OPTIONS } from '@/features/file-history/lib/dot
 import { PatchDiff } from '@pierre/diffs/react'
 import { GripHorizontal, History, Loader2, RotateCcw, ShieldCheck } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { FileVersion } from '../../../../main/foundation/file-history'
+import type { FileVersion } from '../../../../main/foundation/file-history/file-history'
 
 /**
  * The fraction of the History tab's height the version LIST occupies (the rest is the

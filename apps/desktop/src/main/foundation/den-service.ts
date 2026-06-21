@@ -57,7 +57,7 @@ import { isOfflineError } from './sync/offline.js'
 import type { UnsubscribeDisposition } from './subscription-settings.js'
 import { scanForSecrets, type SecretFinding } from './secret-scanner.js'
 import { partitionFindings, type SecretAllowlist } from './secret-allowlist.js'
-import { parseFileHistory, shortSha, type FileVersion } from './file-history.js'
+import { parseFileHistory, shortSha, type FileVersion } from './file-history/file-history.js'
 import { parseRemoteLocation } from './sync/remote-client.js'
 import {
   detectPasswordManagers,

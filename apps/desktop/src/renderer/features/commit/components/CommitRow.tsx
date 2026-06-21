@@ -1,6 +1,6 @@
 import { ChevronRight, GitCommitVertical } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
-import type { FileVersion } from '../../../../main/foundation/file-history'
+import type { FileVersion } from '../../../../main/foundation/file-history/file-history'
 
 /**
  * Render a File version's ISO author date as a readable, locale-aware timestamp for the
