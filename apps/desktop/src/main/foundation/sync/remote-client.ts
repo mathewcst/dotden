@@ -10,7 +10,7 @@
  * Credential Manager, 1Password SSH agent, Keychain, WSL bridges, and askpass
  * hooks keep working exactly as they do for the user's CLI.
  */
-import { access, mkdir, readdir } from 'node:fs/promises'
+import { access, mkdir, readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   CommandAbortedError,
@@ -181,7 +181,7 @@ export class RemoteClient {
       throw new RemotePreflightError(preflight.diagnostics)
     }
 
-    await mkdir(this.options.sourceDir, { recursive: true })
+    await resetSourceDir(this.options.sourceDir)
     await mkdir(this.options.destinationDir, { recursive: true })
     try {
       await this.run(
@@ -207,15 +207,18 @@ export class RemoteClient {
         },
       )
     } catch (error) {
+      await resetSourceDir(this.options.sourceDir)
       // `chezmoi init` puts the URL in argv, so the raw CommandFailedError.message embeds the full
       // URL (and any token in stderr). Route through the same sanitizer the preflight path uses so the
       // surfaced error is host/scheme-only with redacted stderr — never the raw URL/token — across IPC.
       throw new RemoteConnectError(diagnosticsFromError(url, error, 'init'))
     }
+    const repositoryKind = await classifyInitializedSource(this.options.sourceDir)
+    if (repositoryKind === 'foreign-chezmoi') await resetSourceDir(this.options.sourceDir)
     return {
       gitCommand: preflight.gitCommand,
       sourceDir: this.options.sourceDir,
-      repositoryKind: await classifyInitializedSource(this.options.sourceDir),
+      repositoryKind,
     }
   }
 
@@ -335,6 +338,11 @@ async function exists(path: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+async function resetSourceDir(sourceDir: string): Promise<void> {
+  await rm(sourceDir, { recursive: true, force: true })
+  await mkdir(sourceDir, { recursive: true })
 }
 
 /**

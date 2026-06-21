@@ -8,7 +8,7 @@
  * poller SHA with `git ls-remote` instead of a Provider API or full fetch.
  */
 import { describe, expect, it } from 'vitest'
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { access, mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
@@ -166,6 +166,52 @@ describe('RemoteClient', () => {
       await expect(
         client.connectExistingRemote('ssh://git@example.com/chezmoi.git', { _trace: trace }),
       ).resolves.toMatchObject({ repositoryKind: 'foreign-chezmoi' })
+    } finally {
+      await rm(source, { recursive: true, force: true })
+    }
+  })
+
+  it('cleans a refused foreign chezmoi clone so the next boot sees no abandoned source', async () => {
+    const source = await mkdtemp(join(tmpdir(), 'dotden-remote-client-'))
+    try {
+      const client = createClient(async (command, args) => {
+        if (command === '/bin/chezmoi' && args.includes('execute-template'))
+          return result(command, args, '')
+        if (command === '/bin/chezmoi' && args.includes('init')) {
+          await mkdir(join(source, '.git'), { recursive: true })
+          await writeFile(join(source, 'dot_zshrc'), '# foreign\n')
+        }
+        return result(command, args)
+      }, source)
+
+      await expect(
+        client.connectExistingRemote('ssh://git@example.com/chezmoi.git', { _trace: trace }),
+      ).resolves.toMatchObject({ repositoryKind: 'foreign-chezmoi' })
+      await expect(access(join(source, '.git'))).rejects.toThrow()
+      await expect(readdir(source)).resolves.toEqual([])
+    } finally {
+      await rm(source, { recursive: true, force: true })
+    }
+  })
+
+  it('cleans a stale populated source before retrying init', async () => {
+    const source = await mkdtemp(join(tmpdir(), 'dotden-remote-client-'))
+    try {
+      await mkdir(join(source, '.git'), { recursive: true })
+      await writeFile(join(source, 'stale'), 'left by an earlier failed connect\n')
+      const client = createClient(async (command, args) => {
+        if (command === '/bin/chezmoi' && args.includes('execute-template'))
+          return result(command, args, '')
+        if (command === '/bin/chezmoi' && args.includes('init')) {
+          await expect(access(join(source, 'stale'))).rejects.toThrow()
+          await mkdir(join(source, '.dotden'), { recursive: true })
+        }
+        return result(command, args)
+      }, source)
+
+      await expect(
+        client.connectExistingRemote('ssh://git@example.com/dotden.git', { _trace: trace }),
+      ).resolves.toMatchObject({ repositoryKind: 'dotden' })
     } finally {
       await rm(source, { recursive: true, force: true })
     }

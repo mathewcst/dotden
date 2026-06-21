@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { GitBranch, Loader2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/ui/button'
-import type { ConnectResult } from '@shared/remote'
+import type { ConnectResult, RemoteDiagnostics } from '@shared/remote'
 import { isConnectBusy, stateAfterConnectResult, type ConnectState } from '../lib/connect-state'
 
 /** Parsed host for the copy, derived locally so the UI never echoes the raw URL. */
@@ -43,13 +43,7 @@ export function OBConnectUrl({
   const [url, setUrl] = useState('')
   const [state, setState] = useState<ConnectState>('idle')
   // Sanitized diagnostics from a failed preflight (host/scheme/exitCode/stderr/help).
-  const [diagnostics, setDiagnostics] = useState<{
-    host: string
-    scheme: string
-    exitCode?: number
-    stderr: string
-    help: string
-  } | null>(null)
+  const [diagnostics, setDiagnostics] = useState<RemoteDiagnostics | null>(null)
   const [showDetails, setShowDetails] = useState(false)
 
   const host = hostFromRemote(url)
@@ -84,12 +78,7 @@ export function OBConnectUrl({
       // A rejected invoke (e.g. chezmoi init failed, bundled tools missing) must leave a
       // recoverable state — surface it, never strand the UI mid-check (never fail silently).
       setState('credential-error')
-      setDiagnostics({
-        host,
-        scheme: 'unknown',
-        stderr: '',
-        help: error instanceof Error ? error.message : 'Connecting your Remote failed. Retry.',
-      })
+      setDiagnostics(diagnosticsFromCaught(error, host))
     }
   }
 
@@ -145,8 +134,8 @@ export function OBConnectUrl({
             <li>your active credentials don’t have access</li>
           </ul>
           <p className="text-muted-foreground text-xs">
-            Set up an SSH key or token for {diagnostics.host}, then retry. Using the GitHub CLI?
-            Check <span className="text-foreground font-mono">gh auth status</span> and switch with{' '}
+            {diagnostics.help} Using the GitHub CLI? Check{' '}
+            <span className="text-foreground font-mono">gh auth status</span> and switch with{' '}
             <span className="text-foreground font-mono">gh auth switch</span>.
           </p>
           <button
@@ -201,5 +190,26 @@ export function OBConnectUrl({
         ) : null}
       </div>
     </div>
+  )
+}
+
+function diagnosticsFromCaught(caught: unknown, host: string): RemoteDiagnostics {
+  const diagnostics = (caught as { diagnostics?: unknown } | null)?.diagnostics
+  if (isRemoteDiagnostics(diagnostics)) return diagnostics
+  return {
+    host,
+    scheme: 'unknown',
+    stderr: '',
+    help: caught instanceof Error ? caught.message : 'Connecting your Remote failed. Retry.',
+  }
+}
+
+function isRemoteDiagnostics(value: unknown): value is RemoteDiagnostics {
+  const candidate = value as RemoteDiagnostics | null
+  return (
+    typeof candidate?.host === 'string' &&
+    typeof candidate.scheme === 'string' &&
+    typeof candidate.stderr === 'string' &&
+    typeof candidate.help === 'string'
   )
 }

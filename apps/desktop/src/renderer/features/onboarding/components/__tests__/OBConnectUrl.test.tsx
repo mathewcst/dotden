@@ -62,4 +62,36 @@ describe('OBConnectUrl liveness', () => {
     await waitFor(() => expect(onConnected).toHaveBeenCalledTimes(1))
     expect(onConnected.mock.calls[0]?.[0].repositoryKind).toBe(kind)
   })
+
+  it('surfaces sanitized clone/init diagnostics after preflight passes', async () => {
+    const onConnected = vi.fn()
+    const error = Object.assign(new Error('Could not initialize from github.com.'), {
+      diagnostics: {
+        host: 'github.com',
+        scheme: 'https',
+        exitCode: 128,
+        stderr: 'fatal: repository not found',
+        help: 'Could not initialize from github.com. Check access, then retry.',
+      },
+    })
+    installDotdenTestApi({
+      remote: {
+        preflight: vi.fn(async () => ({ reachable: true, gitCommand: 'git' })),
+        connect: vi.fn(async () => {
+          throw error
+        }),
+      },
+    })
+
+    render(<OBConnectUrl onConnected={onConnected} />)
+    fireEvent.change(screen.getByRole('textbox', { name: /repo url/i }), {
+      target: { value: 'https://github.com/acme/private.git' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /connect/i }))
+
+    expect(await screen.findByText(/could not initialize from github.com/i)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /details/i }))
+    expect(screen.getByText(/stderr: fatal: repository not found/i)).toBeTruthy()
+    expect(onConnected).not.toHaveBeenCalled()
+  })
 })
