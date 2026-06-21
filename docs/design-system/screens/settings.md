@@ -3,6 +3,12 @@
 > The app's configuration surface — 7 tabs in a nav-rail window. Built from `SettingsShell` +
 > `SettingsContent/*`. Part of the [design system](../README.md); components in
 > [components.md](../components.md), grounding in [`CONTEXT.md`](../../../CONTEXT.md).
+>
+> **Feature 1 adds an 8th tab — Diagnostics** (`SettingsContent/Diagnostics` `786:1541`, an active
+> `Diagnostics` nav `SidebarItem` with a `SquareTerminal` icon, placed after Privacy). Spec lives in
+> [diagnostics.md](./diagnostics.md) ([ADR 0030](../../adr/0030-diagnostics-local-redacted-command-log.md)):
+> Enable Console · Copy diagnostics · Open log location, plus the loud session-scoped **Unredacted-mode**
+> toggle.
 
 Settings is the second window shell in the app (after `AppShell`). It reuses the shared **`Titlebar`**
 and follows the **OnboardingShell pattern** — a left nav rail + a swappable content slot — so all 7

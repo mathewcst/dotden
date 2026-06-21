@@ -349,3 +349,35 @@ Live in section `571:1299` on page 02. Full spec: [tray-and-notification](./scre
   card shrinks). Mirrors the in-app `Banner` content, in native chrome — the closed-window counterpart.
   Faithful to the notify-don't-apply rule ([ADR 0006](../adr/0006-sync-model-transport-not-commit.md)):
   the poller **notifies**; the action opens the app — it never applies.
+
+## Diagnostics (Feature 1)
+
+The observability surfaces from [ADR 0030](../adr/0030-diagnostics-local-redacted-command-log.md) — the
+redacted **Command log** rendered three ways. Vocabulary: [CONTEXT.md](../../CONTEXT.md). Mono throughout
+(Geist Mono); all `dd/*` token-bound. Live in section `791:10664` on page 02; screen assembly in
+[screens/diagnostics.md](./screens/diagnostics.md).
+
+- **`CommandRecord`** (`774:9610`) SET `State=Collapsed-ok|Collapsed-failed|Expanded-failed` — one captured
+  **Command record**. Row: expand chevron · **exit chip** (`dd/green/950`+`/500` `0` / `dd/red/950`+`/500`
+  `exit N`) · mono command+args (`foreground`) · `Mono/Code Small` timestamp · muted `traceId` chip.
+  Expanded adds an inset `muted` block: `STDERR` eyebrow + mono lines, with the **`[REDACTED]` token**
+  (ember pill, `dd/ember/950`+`/400`) standing in for masked secrets and a red error line. Text is raw per
+  instance (no TEXT props yet). Variants hug height — keep `primaryAxisSizingMode=AUTO` (a combined set
+  froze it to a row once; symptom = expanded output overlaps the next record).
+- **`StatusBar`** (`776:9624`) SET `State=Idle|Errors|Console-on` — the new **global bottom bar** (28h,
+  `sidebar` bg, top `border`). Left: env identity `🖥 this-mac ● · macOS` (`Monitor` + green `StatusDot` +
+  muted OS) — **relocated from the `AppPane/Workspaces` footer** (per the "move env in" decision). Center:
+  the **Diagnostics badge** (`SquareTerminal` + label) — the VSCode-native affordance that opens the
+  panel. Right: sync status. `Errors` = red count pill + red "Sync failed"; `Console-on` = `secondary`-bg
+  ember-active badge. `State` is the whole API (like `Banner`).
+- **`BottomPanel`** (`778:1490`) — the reusable, global VSCode-style panel region (`card` body, top
+  `border`). **Header** (`sidebar`): tab strip (**Console** active with ember underline + ghost `+` for
+  future tabs) and a toolbar (**Copy diagnostics** ghost button · `ListFilter` · `Eraser` clear · collapse
+  chevron · close X). **Body**: a vertical stack of `CommandRecord` instances (the live tail). Designed as
+  a shell region, not a one-off — the user has future plans for more tabs. Details mode (filtered to a
+  failed Operation, primary Copy diagnostics) is a screen override today; promote to a `Mode` variant.
+- **`SettingsContent/Diagnostics`** (`786:1541`) — swaps into `SettingsShell` `Content#540:0` (set the
+  `Diagnostics` nav `SidebarItem` `State=Active`, icon `SquareTerminal`). Header + a `SettingsRow` card
+  (Enable Console `Switch` · Copy diagnostics · Open log location) + a **loud amber Unredacted-mode card**
+  (`dd/amber/950`+`/500` border, `TriangleAlert` note: "secrets appear in full … Copy diagnostics always
+  stays redacted") + a redact-at-write footnote linking *What gets redacted*.
