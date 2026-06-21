@@ -3,25 +3,35 @@ packages:
   - "packages/*"
 
 catalog:
-  "@eslint/js": ^9.39.1
-  eslint: ^9.39.1
+  # ESLint 10 (coupled bump: @eslint/js + eslint + globals must move together).
+  # All plugins below already declare `^10.0.0` peer support, and typescript-eslint
+  # gained ESLint-10 support at 8.61.0 (keep it at/above that floor). ESLint 10 has
+  # behavioral shifts (per-file config lookup, JSX identifiers count as references)
+  # but no install-time blockers. See ADR 0028.
+  "@eslint/js": ^10.0.1
+  eslint: ^10.5.0
   eslint-config-prettier: ^10.1.8
-  eslint-plugin-astro: ^1.5.0
+  eslint-plugin-astro: ^1.7.0
   eslint-plugin-react-hooks: ^7.1.1
   eslint-plugin-turbo: ^2.9.18
-  globals: ^16.5.0
-  prettier: ^3.8.0
+  globals: ^17.6.0
+  prettier: ^3.8.4
   turbo: ^2.9.18
   typescript: ^6.0.3
-  typescript-eslint: ^8.61.0
+  typescript-eslint: ^8.61.1
 
 catalogs:
   react19:
-    react: ^19.2.3
-    react-dom: ^19.2.3
-    "@types/react": ^19.2.7
+    react: ^19.2.7
+    react-dom: ^19.2.7
+    "@types/react": ^19.2.17
     "@types/react-dom": ^19.2.3
   desktop:
+    # HELD on Babel 7 — babel-plugin-react-compiler@1.0.0 pins `@babel/types ^7.26.0`
+    # internally and ships no Babel 8 support. Babel exists here ONLY to run the React
+    # Compiler pass (ADR 0011); `@rolldown/plugin-babel` already accepts Babel 8, so the
+    # compiler plugin is the sole blocker. Revisit when React Compiler ships Babel 8
+    # support. See ADR 0028.
     "@babel/core": ^7.29.0
     "@babel/plugin-transform-runtime": ^7.29.0
     "@babel/runtime": ^7.29.0
@@ -29,31 +39,40 @@ catalogs:
     "@fontsource-variable/geist": ^5.2.9
     "@fontsource-variable/geist-mono": ^5.2.8
     "@rolldown/plugin-babel": ^0.2.3
-    "@tailwindcss/vite": ^4.3.0
+    "@tailwindcss/vite": ^4.3.1
+    # HELD on v24 to track the Node 24 runtime (engines.node >=24). Don't float the
+    # ambient node types ahead of the runtime major. See ADR 0028.
     "@types/node": ^24.10.1
     "@vitejs/plugin-react": ^6.0.2
     babel-plugin-react-compiler: 1.0.0
     class-variance-authority: ^0.7.1
     clsx: ^2.1.1
-    electron: ^42.4.0
-    electron-builder: ^26.0.12
-    electron-updater: ^6.6.2
+    electron: ^42.4.1
+    electron-builder: ^26.15.3
+    electron-updater: ^6.8.9
     electron-vite: 6.0.0-beta.1
-    lucide-react: ^1.17.0
+    lucide-react: ^1.20.0
     tailwind-merge: ^3.6.0
-    tailwindcss: ^4.3.0
+    tailwindcss: ^4.3.1
     vite: ^8.0.16
-    vitest: ^4.1.8
-    zustand: ^5.0.0
+    vitest: ^4.1.9
+    zustand: ^5.0.14
   astro:
-    "@astrojs/check": ^0.9.4
+    # Marketing site (apps/web). Toolchain intentionally diverges from desktop and is
+    # kept deliberately frozen: Astro 6.4 depends on `vite ^7` directly and warns/breaks
+    # under Vite 8, so vite + the matching @tailwindcss/vite/tailwindcss stay pinned here
+    # while desktop runs Vite 8. Bump vite only when a future Astro major adds Vite 8
+    # support. See ADR 0028.
+    "@astrojs/check": ^0.9.9
     "@tailwindcss/vite": 4.1.18
-    astro: ^6.4.6
+    astro: ^6.4.8
     tailwindcss: 4.1.18
     vite: ^7.3.5
   prettier-plugins:
     prettier-plugin-astro: ^0.14.1
-    prettier-plugin-tailwindcss: ^0.6.14
+    # Pre-1.0, so a minor *can* change Tailwind class-sort output; verified this 0.6→0.8
+    # bump produced no class reordering in our sources (no churn). See ADR 0028.
+    prettier-plugin-tailwindcss: ^0.8.0
 
 nodeLinker: hoisted
 

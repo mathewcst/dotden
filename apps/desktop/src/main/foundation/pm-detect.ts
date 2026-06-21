@@ -88,7 +88,9 @@ export async function detectPasswordManagers(
   // Probe all managers concurrently — independent PATH lookups, no ordering dependency.
   return Promise.all(
     PASSWORD_MANAGERS.map(async (manager) => {
-      let available = false
+      // Assigned in both the try and catch below, so no initializer is needed (and an
+      // initial `false` would be a dead store — ESLint 10's no-useless-assignment).
+      let available: boolean
       try {
         available = await probe(manager.cli)
       } catch {

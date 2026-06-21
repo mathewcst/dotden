@@ -23,7 +23,7 @@
     "@shikijs/langs": "4.2.0",
     "class-variance-authority": "catalog:desktop",
     "clsx": "catalog:desktop",
-    "electron-updater": "^6.6.2",
+    "electron-updater": "catalog:desktop",
     "lucide-react": "catalog:desktop",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
