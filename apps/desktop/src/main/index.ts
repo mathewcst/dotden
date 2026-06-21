@@ -23,7 +23,7 @@ import {
   readAutomationLevel,
   writeAutomationLevel,
 } from './foundation/apply/automation-settings.js'
-import { DenService } from './foundation/den-service.js'
+import { DenService } from './foundation/den-service/den-service.js'
 import { DiscoveryScanner } from './foundation/environments/discovery-scanner.js'
 import {
   claimLocalIdentity,

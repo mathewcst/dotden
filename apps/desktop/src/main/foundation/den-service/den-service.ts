@@ -20,57 +20,56 @@
  */
 import { access, readFile, rm, writeFile } from 'node:fs/promises'
 import { relative, resolve } from 'node:path'
-import { ChezmoiAdapter, UncommittedLocalEditError } from './chezmoi/chezmoi-adapter.js'
-import { GitTransport } from './chezmoi/git-transport.js'
-import { resolveContainedPath } from './platform/path-safety.js'
+import { ChezmoiAdapter, UncommittedLocalEditError } from '../chezmoi/chezmoi-adapter.js'
+import { GitTransport } from '../chezmoi/git-transport.js'
+import { resolveContainedPath } from '../platform/path-safety.js'
 import {
   DEFAULT_COMMIT_TEMPLATE,
   renderCommitMessage,
   type CommitMessageTemplate,
   type RenderedCommitMessage,
-} from './commit/commit-message-renderer.js'
-import { DEFAULT_WORKSPACE_ID, DenStore } from './den-store.js'
-import type { WorkspacesDoc } from '../../shared/workspace.js'
-import type { Group, Workspace } from '../../shared/workspace.js'
-import type { EnvironmentEntry } from '../../shared/environments.js'
-import type { OperationTracer } from './platform/operation-tracer.js'
-import { SyncEngine, type IncomingFile } from './sync/sync-engine.js'
+} from '../commit/commit-message-renderer.js'
+import { DEFAULT_WORKSPACE_ID, DenStore } from '../den-store.js'
+import type { WorkspacesDoc } from '../../../shared/workspace.js'
+import type { Group, Workspace } from '../../../shared/workspace.js'
+import type { EnvironmentEntry } from '../../../shared/environments.js'
+import type { OperationTracer } from '../platform/operation-tracer.js'
+import { SyncEngine, type IncomingFile } from '../sync/sync-engine.js'
 
-import { ConflictModel } from './apply/conflict-model.js'
-import type { ResolutionChoice } from '../../shared/apply.js'
-import { parseChezmoiStatus, parseIncomingDeletions } from './chezmoi/chezmoi-status.js'
+import { ConflictModel } from '../apply/conflict-model.js'
+import type { ResolutionChoice } from '../../../shared/apply.js'
+import { parseChezmoiStatus, parseIncomingDeletions } from '../chezmoi/chezmoi-status.js'
 
-import { AutomationPolicy, DEFAULT_AUTOMATION_LEVEL } from './apply/automation-policy.js'
-import type { AutomationLevel } from '../../shared/apply.js'
-import type { Os, Scope } from '../../shared/scope.js'
-import { PushQueue } from './sync/push-queue.js'
-import { isOfflineError } from './sync/offline.js'
-import type { UnsubscribeDisposition } from '../../shared/settings.js'
-import { scanForSecrets } from './secrets/secret-scanner.js'
-import type { SecretFinding } from '../../shared/secrets.js'
-import { partitionFindings } from './secrets/secret-allowlist.js'
-import type { SecretAllowlist } from '../../shared/secrets.js'
-import { parseFileHistory, shortSha } from './file-history/file-history.js'
-import type { FileVersion } from '../../shared/history.js'
-import { parseRemoteLocation } from './sync/remote-client.js'
-import { detectPasswordManagers, type DetectPasswordManagersOptions } from './secrets/pm-detect.js'
-import type { DetectedPasswordManager } from '../../shared/secrets.js'
+import { AutomationPolicy, DEFAULT_AUTOMATION_LEVEL } from '../apply/automation-policy.js'
+import type { Os, Scope } from '../../../shared/scope.js'
+import { PushQueue } from '../sync/push-queue.js'
+import { isOfflineError } from '../sync/offline.js'
+import type { UnsubscribeDisposition } from '../../../shared/settings.js'
+import { scanForSecrets } from '../secrets/secret-scanner.js'
+import type { SecretFinding } from '../../../shared/secrets.js'
+import { partitionFindings } from '../secrets/secret-allowlist.js'
+import type { SecretAllowlist } from '../../../shared/secrets.js'
+import { parseFileHistory, shortSha } from '../file-history/file-history.js'
+import type { FileVersion } from '../../../shared/history.js'
+import { parseRemoteLocation } from '../sync/remote-client.js'
+import { detectPasswordManagers, type DetectPasswordManagersOptions } from '../secrets/pm-detect.js'
+import type { DetectedPasswordManager } from '../../../shared/secrets.js'
 import {
   isSecretReferenceResolutionFailure,
   renderSecretReferenceTemplate,
   sourceTemplateName,
-} from './secrets/secret-reference.js'
+} from '../secrets/secret-reference.js'
 
-import { readPmPreference, writePmPreference } from './secrets/pm-preference.js'
-import type { PmPreference } from '../../shared/secrets.js'
-import { CommandFailedError } from './platform/process.js'
-import { DEFAULT_COMMIT_MESSAGE_TEMPLATE } from '../../shared/commit-template.js'
+import { readPmPreference, writePmPreference } from '../secrets/pm-preference.js'
+import type { PmPreference } from '../../../shared/secrets.js'
+import { CommandFailedError } from '../platform/process.js'
+import { DEFAULT_COMMIT_MESSAGE_TEMPLATE } from '../../../shared/commit-template.js'
 import {
   resolveAppearanceSettings,
   type AppearanceOverride,
   type AppearanceSettings,
-} from '../../shared/appearance-settings.js'
-import { readAppearanceOverride, writeAppearanceOverride } from './settings/appearance-override.js'
+} from '../../../shared/appearance-settings.js'
+import { readAppearanceOverride, writeAppearanceOverride } from '../settings/appearance-override.js'
 import type {
   AffectedEnvironment,
   AppearanceState,
@@ -93,74 +92,13 @@ import type {
   ConflictReviewItem,
   FileTreeEntry,
   SubscribableWorkspace,
-} from '../../shared/den.js'
+} from '../../../shared/den.js'
 
-/** Construction wiring for a {@link DenService}, bound to one environment's dirs. */
-export interface DenServiceOptions {
-  /** Path to the bundled chezmoi binary. */
-  readonly chezmoiBin: string
-  /** Path to the bundled git binary. */
-  readonly gitBin: string
-  /** chezmoi source dir = the git-tracked Den repo, holding `.dotden/` + source state. */
-  readonly sourceDir: string
-  /** Destination/home dir where applied Files land (`~/.zshrc`, …). */
-  readonly destinationDir: string
-  /**
-   * Optional environment-local chezmoi config path carrying `[data].dotden_env_id`
-   * (issue 1-05). Passed through to the {@link ChezmoiAdapter} so a per-environment
-   * `.chezmoiignore` template that self-identifies by `dotden_env_id` is honored
-   * during Apply. Omitted in tests that do not exercise subscription templates.
-   */
-  readonly configPath?: string
-  /** This environment's identity, label and OS (its subscriptions live in `.dotden/`). */
-  readonly environment: Pick<EnvironmentEntry, 'id' | 'label' | 'os'>
-  /** Shared tracer so each Operation emits one wide event (ADR 0007); optional in tests. */
-  readonly tracer?: OperationTracer
-  /**
-   * This environment's selected {@link AutomationLevel} (issue 1-12) — the rung the
-   * {@link AutomationPolicy} gates by. It is **environment-local** (CONTEXT.md "Auto-sync"),
-   * read from {@link import('./automation-settings.js').readAutomationLevel} in production
-   * and defaulting to the safe Manual rung when omitted. It controls exactly one thing in
-   * the MVP: whether a Commit **auto-pushes** (Auto-sync) or waits for **Sync now** (Manual).
-   * Commit itself is NEVER automatic at any level (ADR 0006), and Apply always stays manual.
-   */
-  readonly automationLevel?: AutomationLevel
-  /**
-   * Path to this environment's **offline push outbox** (issue 1-16). The outbox is a single
-   * durable flag "a push is owed to the Remote", used so a Commit made while offline records
-   * locally and **queues** its push for retry on reconnect / next Sync (ADR 0006), rather
-   * than failing. It is **environment-local** (a property of THIS machine's connectivity,
-   * never synced — ADR 0024): `index.ts` passes a path under Electron `userData`. Omitted in
-   * tests/contexts that don't exercise queued pushes ⇒ offline pushes still queue in memory
-   * for the lifetime of the service via an in-process fallback path.
-   */
-  readonly pushOutboxPath?: string
-  /**
-   * The Electron `userData` dir this environment stores its **environment-local** password-manager
-   * preference under (issue 2-05). The "Remember my choice" toggle persists the preferred manager
-   * here via {@link import('./pm-preference.js')} — it is a property of THIS computer's installed
-   * tools, never synced (ADR 0024). `index.ts` passes `app.getPath('userData')`; omitted in tests
-   * that don't exercise the remembered preference (in which case {@link DenService.pmPreference}
-   * reports "no preference").
-   */
-  readonly userDataDir?: string
-}
-
-/**
- * A snapshot the {@link import('./tray-poller.js').TrayPoller} needs to watch the Remote
- * (issue 1-12): the Remote URL to `git ls-remote`, and this environment's local HEAD SHA
- * to seed the poller's "already seen" marker so the first observed Remote SHA equal to
- * HEAD is "nothing new", not a spurious notification.
- *
- * `remoteUrl` is `null` when no Remote is configured yet (a Den initialized but never
- * connected), in which case the poller stays dormant rather than poll nothing.
- */
-export interface PollSnapshot {
-  /** The configured Remote URL (`git remote get-url origin`), or null when none exists. */
-  readonly remoteUrl: string | null
-  /** This environment's local HEAD SHA (`git rev-parse HEAD`), or null on a fresh repo. */
-  readonly headSha: string | null
-}
+// DenServiceOptions (construction wiring) + PollSnapshot are main-only internal types,
+// co-located with the service in ./types.js (ADR 0029). They are NOT IPC wire types —
+// they reference main-side collaborators (OperationTracer) and never cross the boundary,
+// so they live here rather than in the src/shared contract (ADR 0031).
+import type { DenServiceOptions, PollSnapshot } from './types.js'
 
 /**
  * Orchestrates the dotden sync loop over the faithful chezmoi/git wrappers.

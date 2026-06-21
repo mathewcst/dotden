@@ -21,7 +21,7 @@
  * The actual write of the `.tmpl` File into source state (the integration seam) lives in
  * {@link import('./chezmoi-adapter.js').ChezmoiAdapter.convertToSecretReference}; this module only
  * computes the bytes + the filename. Apply-time resolution + the provider-agnostic failure mapping
- * live in {@link import('./den-service.js').DenService.convertSecret}/`applyIncoming`.
+ * live in {@link import('../den-service/den-service.js').DenService.convertSecret}/`applyIncoming`.
  *
  * Template-function shapes (confirmed against chezmoi docs via Context7):
  * - 1Password → `{{ onepasswordRead "op://vault/item/field" }}` (calls `op read --no-newline`;
@@ -144,7 +144,7 @@ const SECRET_RESOLUTION_MARKERS: readonly RegExp[] = [
  * failure** — a password-manager CLI that is locked/signed-out, or a missing item/field (issue
  * 2-05, acceptance criterion 9).
  *
- * Used by {@link import('./den-service.js').DenService.applyIncoming} to turn the raw provider
+ * Used by {@link import('../den-service/den-service.js').DenService.applyIncoming} to turn the raw provider
  * stderr into a clean, provider-AGNOSTIC error pointing the user at the fix (unlock/sign in, or
  * correct the reference) rather than surfacing chezmoi's internal template error verbatim. Pure
  * string classification so it is unit-testable without a vault.

@@ -8,7 +8,7 @@
  * is NO separate history store (the issue's load-bearing acceptance criterion). This module
  * is the pure transform from `git log`'s machine-parsable stdout into the ordered
  * {@link FileVersion} list the renderer renders as `CommitRow`s; the I/O (running git and
- * resolving the File's source path) lives in {@link import('./den-service.js').DenService}.
+ * resolving the File's source path) lives in {@link import('../den-service/den-service.js').DenService}.
  *
  * Keeping the parse pure (no shell, no Node) makes the ordering, short-SHA, and timestamp
  * rules unit-testable without a real repo, and keeps the foundation Electron-free (ADR 0023).

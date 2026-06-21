@@ -14,7 +14,7 @@
  * (ADR 0023 keeps the testable core Electron-free; only `index.ts` passes the real
  * `ipcMain`).
  */
-import type { DenService } from '../foundation/den-service.js'
+import type { DenService } from '../foundation/den-service/den-service.js'
 import type { ResolutionChoice } from '../../shared/apply.js'
 import type { DiscoveryScanner } from '../foundation/environments/discovery-scanner.js'
 import type { EnvironmentRegistry } from '../foundation/environments/environment-registry.js'

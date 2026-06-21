@@ -16,7 +16,7 @@
  * It is **Electron-free** (ADR 0023): it only reads the filesystem via
  * `node:fs/promises`, so the whole scan is testable in plain Node against a temp
  * home dir. It performs **no chezmoi/git work** — it only *finds candidate Files*;
- * Tracking the picks is the existing 1-04 {@link import('./den-service.js').DenService.trackFile}
+ * Tracking the picks is the existing 1-04 {@link import('../den-service/den-service.js').DenService.trackFile}
  * path (`chezmoi add` + a `.dotden/` placement), which onboarding calls per pick.
  */
 import { stat } from 'node:fs/promises'

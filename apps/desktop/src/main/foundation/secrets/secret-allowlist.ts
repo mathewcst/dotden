@@ -24,7 +24,7 @@
  * This module is PURE (no I/O, no shell) so the scoping invariant is trivially unit-testable at
  * the model seam. The synced persistence lives in {@link import('./den-store.js').DenStore}
  * (`.dotden/secret-allowlist.json`), and the commit-time filtering in
- * {@link import('./den-service.js').DenService.scanCommit}.
+ * {@link import('../den-service/den-service.js').DenService.scanCommit}.
  */
 import { createHash } from 'node:crypto'
 import type { SecretFinding } from '../../../shared/secrets.js'

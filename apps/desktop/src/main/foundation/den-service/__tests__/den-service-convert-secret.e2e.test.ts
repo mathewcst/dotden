@@ -13,9 +13,9 @@ import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DenService } from '../den-service.js'
-import { GitTransport } from '../chezmoi/git-transport.js'
-import { readPmPreference } from '../secrets/pm-preference.js'
-import { runCommand } from '../platform/process.js'
+import { GitTransport } from '../../chezmoi/git-transport.js'
+import { readPmPreference } from '../../secrets/pm-preference.js'
+import { runCommand } from '../../platform/process.js'
 
 let root: string
 let chezmoiBin: string

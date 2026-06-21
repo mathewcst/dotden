@@ -145,7 +145,7 @@ export class ChezmoiAdapter {
    * 3. remove the original non-template source File, so chezmoi has exactly ONE source entry for
    *    the target (a target with both `dot_x` and `dot_x.tmpl` is ambiguous).
    *
-   * The result is committed by the caller ({@link import('./den-service.js').DenService}); only the
+   * The result is committed by the caller ({@link import('../den-service/den-service.js').DenService}); only the
    * reference enters the Remote. The raw secret is never written here — the template string is the
    * only thing this method produces, and the unit + integration tests scan the written bytes to
    * prove the value is absent (the issue's acceptance criterion, verified at THIS seam).

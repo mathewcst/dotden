@@ -63,7 +63,7 @@ const OFFLINE_STDERR_PATTERNS: readonly RegExp[] = [
  * Whether `error` is a **network-offline** transport failure (queue + retry), as opposed
  * to a server-reached rejection (surface) or a non-transport error (rethrow).
  *
- * Used by {@link import('./den-service.js').DenService} to decide whether a failed
+ * Used by {@link import('../den-service/den-service.js').DenService} to decide whether a failed
  * `git push` should be **queued** (offline → retry on reconnect/next Sync) or surfaced as
  * a hard error. Only a {@link CommandFailedError} whose captured stderr matches the
  * offline family counts; a {@link CommandAbortedError} (timeout/cancel) is explicitly NOT
