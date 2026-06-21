@@ -34,6 +34,7 @@ export function ScopeEditor({
   scope,
   disabled,
   onChange,
+  subject = 'File',
 }: {
   /** The File's current EFFECTIVE Scope (`null` = universal, applies everywhere). */
   scope: Scope
@@ -45,6 +46,8 @@ export function ScopeEditor({
    * NARROWER effective Scope back if the request tried to broaden past the Folder.
    */
   onChange: (scope: Scope) => void
+  /** The model object being scoped; copy only, behavior is identical. */
+  subject?: 'File' | 'Group'
 }) {
   // The currently-applied OS set, derived from the effective Scope. Universal (null) ⇒ every
   // OS is "on" (it applies everywhere); a concrete Scope ⇒ exactly its OSes are on.
@@ -89,16 +92,16 @@ export function ScopeEditor({
       </div>
       <p className="text-muted-foreground mt-2 text-xs">
         {scope === null ? (
-          'Applies on every OS. Toggle one off to scope this File to specific systems.'
+          `Applies on every OS. Toggle one off to scope this ${subject} to specific systems.`
         ) : scope.length === 0 ? (
-          'Scoped to no OS — this File applies nowhere. Toggle an OS on to apply it.'
+          `Scoped to no OS — this ${subject} applies nowhere. Toggle an OS on to apply it.`
         ) : (
           <>
             Applies only on{' '}
             <span className="text-foreground">
               {scope.map((os) => SCOPE_OSES.find((o) => o.os === os)?.label ?? os).join(', ')}
             </span>
-            . A child can narrow within its Folder but never broaden past it.
+            . A child can narrow within its inherited Scope but never broaden past it.
           </>
         )}
       </p>

@@ -10,12 +10,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createDenSessionStore, type Role } from '../den-session-store'
 import type { DotdenApi } from '@shared/ipc-api'
+import type { FileTreeEntry } from '@shared/den'
 
 /** A managed File tree entry — only the fields the session actions read are load-bearing. */
-function entry(targetPath: string, over: Partial<Record<string, unknown>> = {}) {
+function entry(targetPath: string, over: Partial<FileTreeEntry> = {}): FileTreeEntry {
   return {
     targetPath,
-    status: 'M',
+    status: 'modified',
     muted: false,
     scope: null,
     workspaceId: 'w1',
@@ -46,6 +47,11 @@ function makeApi(over: Record<string, unknown> = {}): DotdenApi {
       affectedEnvironments: vi.fn(async () => [{ id: 'e1', label: 'desktop', isSelf: true }]),
       apply: vi.fn(async () => ({ results: [] })),
       createWorkspace: vi.fn(async () => ({ id: 'w2', label: 'Work', groups: [] })),
+      createGroup: vi.fn(async () => ({ id: 'g1', label: 'Shell', parentId: null, scope: null })),
+      moveFileToGroup: vi.fn(async () => undefined),
+      setFileWorkspace: vi.fn(async () => undefined),
+      setFileScope: vi.fn(async () => null),
+      setGroupScope: vi.fn(async () => null),
       ...(over.den ?? {}),
     },
     diagnostics: {
@@ -417,6 +423,52 @@ describe('session slice — init() (env A boot load)', () => {
     const store = createDenSessionStore('a', api)
     await store.getState().init()
     expect(store.getState().error?.message).toBe('no chezmoi')
+  })
+})
+
+describe('session slice — inspector organize/scope actions', () => {
+  it('moves the selected File to another Workspace through setFileWorkspace', async () => {
+    const api = makeApi()
+    const store = createDenSessionStore('a', api)
+    store.setState({
+      selected: '.zshrc',
+      files: [entry('.zshrc', { workspaceId: 'personal', groupId: 'shell' })],
+      workspaces: [
+        { id: 'personal', label: 'Personal', groups: [], scope: null },
+        { id: 'work', label: 'Work', groups: [], scope: null },
+      ],
+    })
+
+    store.getState().moveSelectedToWorkspace('work')
+
+    await vi.waitFor(() => expect(api.den.setFileWorkspace).toHaveBeenCalledWith('.zshrc', 'work'))
+    expect(api.den.tree).toHaveBeenCalled()
+  })
+
+  it('does not call setFileWorkspace when the File is already in that Workspace', () => {
+    const api = makeApi()
+    const store = createDenSessionStore('a', api)
+    store.setState({
+      selected: '.zshrc',
+      files: [entry('.zshrc', { workspaceId: 'personal' })],
+    })
+
+    store.getState().moveSelectedToWorkspace('personal')
+
+    expect(api.den.setFileWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('scopes the selected Group through setGroupScope', async () => {
+    const api = makeApi()
+    const store = createDenSessionStore('a', api)
+    store.setState({ selectedGroup: { workspaceId: 'personal', groupId: 'shell' } })
+
+    store.getState().scopeSelectedGroup(['darwin'])
+
+    await vi.waitFor(() =>
+      expect(api.den.setGroupScope).toHaveBeenCalledWith('personal', 'shell', ['darwin']),
+    )
+    expect(api.den.tree).toHaveBeenCalled()
   })
 })
 

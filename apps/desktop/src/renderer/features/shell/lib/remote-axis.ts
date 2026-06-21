@@ -44,3 +44,12 @@ export function remoteAxisDecoration(
       return null
   }
 }
+
+/** Format the global Remote-axis summary shown in shell chrome. */
+export function remoteAxisSummary(remoteAxis: ReadonlyMap<string, RemoteAxisMarker>): string {
+  const total = remoteAxis.size
+  if (total === 0) return 'Up to date'
+  const conflicts = [...remoteAxis.values()].filter((marker) => marker === 'conflict').length
+  if (conflicts === 0) return `${total} incoming`
+  return `${total} incoming, ${conflicts} conflict${conflicts === 1 ? '' : 's'}`
+}

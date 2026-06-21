@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Monitor, TerminalSquare } from 'lucide-react'
 import type { EnvironmentWithAttribution } from '@shared/environments'
 import { useDenSession } from '@/features/shell/components/DenSessionProvider'
+import { remoteAxisSummary } from '@/features/shell/lib/remote-axis'
 import { cn } from '@/shared/lib/utils'
 
 /** Full-width shell status bar with environment identity + Diagnostics badge. */
@@ -37,8 +38,7 @@ export function StatusBar() {
     : diagnosticsErrorCount > 0
       ? String(diagnosticsErrorCount)
       : 'Idle'
-  const syncState =
-    role === 'a' && remoteAxis.size > 0 ? `${remoteAxis.size} incoming` : 'Up to date'
+  const syncState = role === 'a' ? remoteAxisSummary(remoteAxis) : 'Up to date'
 
   return (
     <footer className="border-border bg-sidebar text-muted-foreground flex h-7 items-center gap-3 border-t px-3 text-xs">

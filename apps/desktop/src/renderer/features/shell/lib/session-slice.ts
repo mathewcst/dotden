@@ -126,8 +126,12 @@ export interface SessionSlice {
   createGroup(workspaceId: string, label: string, parentId: string | null): Promise<void>
   /** File the selected File under a Group (or back to its Workspace root). Organization only. */
   moveSelectedToGroup(groupId: string | null): void
+  /** Move the selected File into a Workspace. Changes access and resets its Group. */
+  moveSelectedToWorkspace(workspaceId: string): void
   /** Scope the selected File to specific OSes (issue 1-15); the main process clamps + recompiles. */
   scopeSelectedFile(scope: Scope): void
+  /** Scope the selected Group to specific OSes; Files and child Groups inherit it. */
+  scopeSelectedGroup(scope: Scope): void
   /** Route a right-click row verb (Commit/Apply run; Untrack/Delete open a confirm first). */
   onRowVerb(path: string, verb: RowVerb): void
   /** Carry out the verb the user CONFIRMED in the dialog (faithful chezmoi forget/destroy/apply). */
@@ -301,11 +305,30 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
       })
     },
 
+    moveSelectedToWorkspace: (workspaceId) => {
+      const selected = get().selected
+      const selectedFile = get().files.find((file) => file.targetPath === selected)
+      if (!selected || selectedFile?.workspaceId === workspaceId) return
+      void get().run('organize', async () => {
+        await api.den.setFileWorkspace(selected, workspaceId)
+        await get().reloadTree()
+      })
+    },
+
     scopeSelectedFile: (scope) => {
       const selected = get().selected
       if (!selected) return
       void get().run('organize', async () => {
         await api.den.setFileScope(selected, scope)
+        await get().reloadTree()
+      })
+    },
+
+    scopeSelectedGroup: (scope) => {
+      const selectedGroup = get().selectedGroup
+      if (!selectedGroup) return
+      void get().run('organize', async () => {
+        await api.den.setGroupScope(selectedGroup.workspaceId, selectedGroup.groupId, scope)
         await get().reloadTree()
       })
     },

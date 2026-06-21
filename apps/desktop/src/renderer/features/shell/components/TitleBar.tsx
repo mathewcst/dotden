@@ -1,4 +1,5 @@
 import { useDenSession } from '@/features/shell/components/DenSessionProvider'
+import { remoteAxisSummary } from '@/features/shell/lib/remote-axis'
 import {
   WindowControls,
   windowDragRegionStyle,
@@ -31,8 +32,8 @@ export function TitleBar({
   const platform = window.dotden.platform
 
   const workspaceLabel = workspaces[0]?.label ?? 'Personal'
-  // How many changes are incoming for THIS environment (issue 1-09).
-  const incomingCount = remoteAxis.size
+  // Incoming/conflict status for THIS environment (issue 1-09 + 1-11).
+  const syncSummary = remoteAxisSummary(remoteAxis)
   const isMac = platform === 'darwin'
   const controlsPlatform: WindowControlsPlatform = platform === 'win32' ? 'win32' : 'linux'
 
@@ -78,7 +79,7 @@ export function TitleBar({
       <div className="flex shrink-0 items-center gap-1" style={windowNoDragRegionStyle}>
         <span className="text-muted-foreground mr-1 flex items-center gap-1 pr-1 text-xs">
           <ArrowDownUp className="size-3" aria-hidden />
-          {role === 'a' && incomingCount > 0 ? `${incomingCount} incoming` : 'Up to date'}
+          {role === 'a' ? syncSummary : 'Up to date'}
         </span>
         {/* Open the Settings surface (issue 2-08): the app shows it over the Workspace. */}
         <IconButton aria-label="settings" onClick={onOpenSettings} disabled={!onOpenSettings}>

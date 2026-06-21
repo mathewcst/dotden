@@ -16,11 +16,19 @@ export function RightInspector() {
   const error = useDenSession((s) => s.error)
   const role = useDenSession((s) => s.role)
   const selected = useDenSession((s) => s.selected)
+  const selectedGroup = useDenSession((s) => s.selectedGroup)
   const files = useDenSession((s) => s.files)
+  const workspaces = useDenSession((s) => s.workspaces)
   const busy = useDenSession((s) => s.busy)
   const scopeSelectedFile = useDenSession((s) => s.scopeSelectedFile)
+  const scopeSelectedGroup = useDenSession((s) => s.scopeSelectedGroup)
 
   const selectedFile = files.find((f) => f.targetPath === selected)
+  const scopedGroup = selectedGroup
+    ? workspaces
+        .find((workspace) => workspace.id === selectedGroup.workspaceId)
+        ?.groups.find((group) => group.id === selectedGroup.groupId)
+    : null
 
   return (
     <aside className="border-border bg-sidebar flex flex-col gap-4 overflow-auto border-l p-4 text-sm">
@@ -40,14 +48,23 @@ export function RightInspector() {
       {/* ORGANIZE — file the selected File into a Group within its Workspace (issue 1-14). */}
       <GroupSection />
 
-      {/* OS SCOPE — scope the selected File to specific OSes (issue 1-15). The main process clamps
-          the request to the File's inherited Folder/Workspace Scope (narrowable, never broadenable)
-          and re-compiles the native `.chezmoiignore`; a scoped-out File renders muted. env A only. */}
+      {/* OS SCOPE — scope the selected File or Group to specific OSes (issue 1-15). The main process
+          clamps the request to inherited Scope (narrowable, never broadenable) and re-compiles the
+          native `.chezmoiignore`; a scoped-out File renders muted. env A only. */}
       {role === 'a' && selectedFile ? (
         <ScopeEditor
           scope={selectedFile.scope}
           disabled={busy !== null}
           onChange={scopeSelectedFile}
+        />
+      ) : null}
+
+      {role === 'a' && scopedGroup ? (
+        <ScopeEditor
+          scope={scopedGroup.scope}
+          disabled={busy !== null}
+          onChange={scopeSelectedGroup}
+          subject="Group"
         />
       ) : null}
 

@@ -897,8 +897,8 @@ export class DenService {
   async listIncomingClean(traceId: string): Promise<readonly IncomingReviewItem[]> {
     const span = this.tracer?.startOperation('sync', traceId)
     try {
-      await this.advanceIncomingSourceState()
-      const incoming = await this.computeIncoming()
+      const conflictedTargets = await this.advanceIncomingSourceState()
+      const incoming = await this.computeIncoming(conflictedTargets)
       const { environment, workspaces } = await this.loadSyncedModel()
       const engine = new SyncEngine({ environment, workspaces, tracer: this.tracer })
       // Hand the local-drift facts to the planner so a File blocked by an uncommitted edit
@@ -906,17 +906,27 @@ export class DenService {
       const uncommittedEdits = await this.chezmoi.localEdits()
       const { plan } = engine.routeIncomingClean(incoming, traceId, { uncommittedEdits })
       const placementOf = new Map(workspaces.placements.map((p) => [p.targetPath, p.workspaceId]))
-      const items: IncomingReviewItem[] = plan.items.map((item) => ({
-        targetPath: item.witness.targetPath,
-        // A `create`/`update` resolves a placement; a `delete` may have lost its placement
-        // already (removed on the source env), so fall back to '' rather than failing.
-        workspaceId: placementOf.get(item.witness.targetPath) ?? '',
-        // Incoming Files are all the ↓ Remote axis here; ⚠ conflict is issue 1-11.
-        marker: 'incoming',
-        kind: item.kind,
-        // Consume the planner's verdict directly (invariant #4 lives in ApplyPlanner).
-        requiresConfirmation: item.requiresConfirmation,
-      }))
+      const items: IncomingReviewItem[] = [
+        ...plan.items.map((item) => ({
+          targetPath: item.witness.targetPath,
+          // A `create`/`update` resolves a placement; a `delete` may have lost its placement
+          // already (removed on the source env), so fall back to '' rather than failing.
+          workspaceId: placementOf.get(item.witness.targetPath) ?? '',
+          marker: 'incoming' as const,
+          kind: item.kind,
+          // Consume the planner's verdict directly (invariant #4 lives in ApplyPlanner).
+          requiresConfirmation: item.requiresConfirmation,
+        })),
+        ...incoming
+          .filter((item) => item.status === 'conflict')
+          .map((item) => ({
+            targetPath: item.targetPath,
+            workspaceId: placementOf.get(item.targetPath) ?? '',
+            marker: 'conflict' as const,
+            kind: 'update' as const,
+            requiresConfirmation: false,
+          })),
+      ]
       span?.setAttribute('fileCount', items.length)
       span?.end('ok')
       return items
@@ -1203,8 +1213,8 @@ export class DenService {
   async autoApplyIncoming(traceId: string): Promise<AutoApplyResult> {
     const span = this.tracer?.startOperation('sync', traceId)
     try {
-      await this.advanceIncomingSourceState()
-      const incoming = await this.computeIncoming()
+      const conflictedTargets = await this.advanceIncomingSourceState()
+      const incoming = await this.computeIncoming(conflictedTargets)
       const { environment, workspaces } = await this.loadSyncedModel()
       const engine = new SyncEngine({ environment, workspaces, tracer: this.tracer })
       // Hand the local-drift facts to the planner (invariant #2) so a File with an
@@ -2343,19 +2353,40 @@ export class DenService {
    * `git fetch` alone only updates remote refs; `chezmoi status` reads the checked-out source state.
    * Merging lets non-conflicting upstream edits become the target state that Review & Apply can see.
    */
-  private async advanceIncomingSourceState(): Promise<void> {
+  private async advanceIncomingSourceState(): Promise<readonly string[]> {
     await this.git.fetch()
     try {
-      await this.git.merge()
+      const merge = await this.git.merge()
+      if (merge.merged) return []
+      const { placements } = await this.store.readWorkspaces()
+      return this.conflictedTargetsForSources(merge.conflictedPaths, placements)
     } catch (error) {
       if (
         error instanceof CommandFailedError &&
         error.result.stderr.includes('not something we can merge')
       ) {
-        return
+        return []
       }
       throw error
     }
+  }
+
+  /**
+   * Git reports merge conflicts in source-state paths (`dot_zshrc`), while the renderer tree and
+   * Apply surfaces speak destination-relative target paths (`.zshrc`). Map only placed Files back
+   * to target paths so the ⚠ Remote-axis marker lands on a real row.
+   */
+  private async conflictedTargetsForSources(
+    conflictedSourcePaths: readonly string[],
+    placements: WorkspacesDoc['placements'],
+  ): Promise<readonly string[]> {
+    const sourceSet = new Set(conflictedSourcePaths)
+    const targets: string[] = []
+    for (const placement of placements) {
+      const sourcePath = await this.repoRelativeSourcePath(placement.targetPath)
+      if (sourcePath !== null && sourceSet.has(sourcePath)) targets.push(placement.targetPath)
+    }
+    return targets
   }
 
   /**
@@ -2374,11 +2405,18 @@ export class DenService {
    *
    * A File that already exists locally with NO incoming change is dropped here.
    */
-  private async computeIncoming(): Promise<readonly IncomingFile[]> {
+  private async computeIncoming(
+    conflictedTargets: readonly string[] = [],
+  ): Promise<readonly IncomingFile[]> {
     const { placements } = await this.store.readWorkspaces()
     const incoming: IncomingFile[] = []
     const applyChanges = parseIncomingApplyChanges(await this.chezmoi.status())
+    const conflictSet = new Set(conflictedTargets)
     for (const placement of placements) {
+      if (conflictSet.has(placement.targetPath)) {
+        incoming.push({ targetPath: placement.targetPath, status: 'conflict' })
+        continue
+      }
       const change = applyChanges.get(placement.targetPath)
       if (change === 'delete') {
         // The source removed this File — an incoming deletion the user must confirm.

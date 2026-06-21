@@ -19,7 +19,7 @@ import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { cloneRepo, GitTransport } from '../../chezmoi/git-transport.js'
 import { DenService } from '../den-service.js'
-import { DenStore } from '../../den-store.js'
+import { DEFAULT_WORKSPACE_ID, DenStore } from '../../den-store.js'
 import { readAppearanceOverride } from '../../settings/appearance-override.js'
 import { OperationTracer } from '../../platform/operation-tracer.js'
 import { parseIncomingDeletions } from '../../chezmoi/chezmoi-status.js'
@@ -1545,6 +1545,63 @@ describe('DenService conflict resolution (issue 1-11, real chezmoi/git)', () => 
     expect(resolved).not.toContain('<<<<<<<')
     // The merge is committed (clean tree) and the histories are joined.
     await expect(new GitTransport({ gitBin, repoDir: aSource }).status()).resolves.toBe('')
+  })
+
+  it('surfaces overlapping edits in the everyday incoming summary before opening the resolver', async () => {
+    const remote = join(root, 'remote.git')
+    await runCommand(gitBin, ['init', '--bare', remote])
+
+    const aHome = join(root, 'a-home')
+    const aSource = join(root, 'a-source')
+    await mkdir(aHome, { recursive: true })
+    await initSourceRepo(aSource, remote)
+    const envA = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: aSource,
+      destinationDir: aHome,
+      environment: { id: 'env-a', label: 'this-mac', os: process.platform },
+    })
+    await writeFile(join(aHome, '.zshrc'), 'export EDITOR=base\n')
+    await envA.trackFile('.zshrc', 'trace-track')
+    await envA.commitTracked(['.zshrc'], 'trace-commit')
+    await envA.syncPush('trace-push-1')
+
+    const bHome = join(root, 'b-home')
+    const bSource = join(root, 'b-source')
+    await mkdir(bHome, { recursive: true })
+    await cloneRepo(gitBin, remote, bSource)
+    await configureIdentity(bSource)
+    const envB = new DenService({
+      chezmoiBin,
+      gitBin,
+      sourceDir: bSource,
+      destinationDir: bHome,
+      environment: { id: 'env-b', label: 'work-laptop', os: process.platform },
+    })
+    await envB.applyIncoming(['.zshrc'], 'trace-apply')
+    await writeFile(join(bHome, '.zshrc'), 'export EDITOR=theirs\n')
+    await envB.commitTracked(['.zshrc'], 'trace-commit-b')
+    await envB.syncPush('trace-push-b')
+
+    await writeFile(join(aHome, '.zshrc'), 'export EDITOR=mine\n')
+    await envA.commitTracked(['.zshrc'], 'trace-commit-a')
+
+    const summary = await envA.incomingSummary('trace-summary')
+    expect(summary.items).toEqual([
+      {
+        targetPath: '.zshrc',
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        marker: 'conflict',
+        kind: 'update',
+        requiresConfirmation: false,
+      },
+    ])
+
+    const review = await envA.detectConflicts('trace-detect')
+    expect(review.autoMerged).toBe(false)
+    expect(review.conflicts).toHaveLength(1)
+    expect(review.conflicts[0]?.targetPath).toBe('dot_zshrc')
   })
 
   it('Abort discards the half-merged tree and resolves NOTHING', async () => {

@@ -8,7 +8,8 @@
  * the foundation tests).
  */
 import { describe, expect, it } from 'vitest'
-import { remoteAxisDecoration } from '../remote-axis'
+import type { RemoteAxisMarker } from '@shared/den'
+import { remoteAxisDecoration, remoteAxisSummary } from '../remote-axis'
 
 describe('remoteAxisDecoration (issue 1-09)', () => {
   it('maps an incoming marker to the ↓ glyph with an explaining tooltip', () => {
@@ -27,5 +28,26 @@ describe('remoteAxisDecoration (issue 1-09)', () => {
     // A File with no incoming marker must not paint a Remote-axis glyph, so the local
     // git-status letter is the only thing in the row's status cluster.
     expect(remoteAxisDecoration(undefined)).toBeNull()
+  })
+})
+
+describe('remoteAxisSummary (issue 1-11)', () => {
+  it('formats incoming totals with conflicts called out', () => {
+    const axis = new Map<string, RemoteAxisMarker>([
+      ['.zshrc', 'incoming'],
+      ['.gitconfig', 'conflict'],
+    ])
+
+    expect(remoteAxisSummary(axis)).toBe('2 incoming, 1 conflict')
+  })
+
+  it('formats a clean incoming count without conflict copy', () => {
+    const axis = new Map<string, RemoteAxisMarker>([['.zshrc', 'incoming']])
+
+    expect(remoteAxisSummary(axis)).toBe('1 incoming')
+  })
+
+  it('formats an empty Remote axis as up to date', () => {
+    expect(remoteAxisSummary(new Map())).toBe('Up to date')
   })
 })

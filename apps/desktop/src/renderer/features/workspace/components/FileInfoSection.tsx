@@ -6,14 +6,18 @@ import { useDenSession } from '@/features/shell/components/DenSessionProvider'
  * Reads the selected File (env A) or incoming item (env B) from the scoped den-session store.
  */
 export function FileInfoSection() {
+  const role = useDenSession((s) => s.role)
   const selected = useDenSession((s) => s.selected)
   const files = useDenSession((s) => s.files)
   const incoming = useDenSession((s) => s.incoming)
   const workspaces = useDenSession((s) => s.workspaces)
+  const busy = useDenSession((s) => s.busy)
+  const moveSelectedToWorkspace = useDenSession((s) => s.moveSelectedToWorkspace)
 
   const selectedFile = files.find((f) => f.targetPath === selected)
   const selectedIncoming = incoming.find((i) => i.targetPath === selected)
   const workspaceLabel = workspaces[0]?.label ?? 'Personal'
+  const canMoveWorkspace = role === 'a' && selectedFile && workspaces.length > 1
 
   return (
     <section>
@@ -21,9 +25,25 @@ export function FileInfoSection() {
       <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2 text-xs">
         <dt className="text-muted-foreground">Workspace</dt>
         <dd className="text-right">
-          {selectedIncoming?.workspaceId ??
+          {canMoveWorkspace ? (
+            <select
+              aria-label="Move File to Workspace"
+              className="border-input bg-background max-w-full rounded-md border px-2 py-1 text-xs"
+              value={selectedFile.workspaceId}
+              disabled={busy !== null}
+              onChange={(event) => moveSelectedToWorkspace(event.target.value)}
+            >
+              {workspaces.map((workspace) => (
+                <option key={workspace.id} value={workspace.id}>
+                  {workspace.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            selectedIncoming?.workspaceId ??
             workspaces.find((w) => w.id === selectedFile?.workspaceId)?.label ??
-            workspaceLabel}
+            workspaceLabel
+          )}
         </dd>
         <dt className="text-muted-foreground">Scope</dt>
         <dd className="text-right">
