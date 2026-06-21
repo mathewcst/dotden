@@ -71,6 +71,7 @@ describe('session slice — the reset guarantee (key={role} remount proven at th
     expect(s.error).toBeNull()
     expect(s.confirm).toBeNull()
     expect(s.diagnosticsPanelOpen).toBe(false)
+    expect(s.diagnosticsPanelMode).toBe('console')
     expect(s.diagnosticsRecords).toEqual([])
     // apply-slice session state is part of the same fresh store.
     expect(s.incoming).toEqual([])
@@ -105,11 +106,18 @@ describe('session slice — run()', () => {
 
   it('surfaces a thrown error into the error channel and still clears busy', async () => {
     const store = freshStore()
+    const error = Object.assign(new Error('boom'), { traceId: 'trace-failed' })
+    let attempts = 0
     await store.getState().run('track', async () => {
-      throw new Error('boom')
+      attempts += 1
+      throw error
     })
-    expect(store.getState().error).toBe('boom')
+    expect(store.getState().error?.message).toBe('boom')
+    expect(store.getState().error?.traceId).toBe('trace-failed')
     expect(store.getState().busy).toBeNull()
+
+    await store.getState().error?.retry?.()
+    expect(attempts).toBe(2)
   })
 
   it('clears any prior error when a new action starts', async () => {
@@ -117,7 +125,7 @@ describe('session slice — run()', () => {
     await store.getState().run('track', async () => {
       throw new Error('first')
     })
-    expect(store.getState().error).toBe('first')
+    expect(store.getState().error?.message).toBe('first')
     await store.getState().run('load', async () => {})
     expect(store.getState().error).toBeNull()
   })
@@ -147,7 +155,32 @@ describe('session slice — Diagnostics panel', () => {
 
     expect(api.diagnostics.recordsFor).toHaveBeenCalledWith('trace-a')
     expect(store.getState().diagnosticsPanelOpen).toBe(true)
+    expect(store.getState().diagnosticsPanelMode).toBe('details')
     expect(store.getState().diagnosticsRecords).toEqual(records)
+    expect(store.getState().diagnosticsErrorCount).toBe(0)
+  })
+
+  it('opens the standing console mode when no trace filter is provided', async () => {
+    const records = [
+      {
+        command: 'git',
+        args: ['push'],
+        exitCode: 128,
+        redactedStdout: '',
+        redactedStderr: 'failed',
+        timestamp: 1,
+      },
+    ]
+    const api = makeApi({
+      diagnostics: {
+        recordsFor: vi.fn(async () => records),
+      },
+    })
+    const store = createDenSessionStore('a', api)
+
+    await store.getState().openDiagnosticsPanel()
+
+    expect(store.getState().diagnosticsPanelMode).toBe('console')
     expect(store.getState().diagnosticsErrorCount).toBe(1)
   })
 
@@ -255,7 +288,7 @@ describe('session slice — init() (env A boot load)', () => {
     })
     const store = createDenSessionStore('a', api)
     await store.getState().init()
-    expect(store.getState().error).toBe('no chezmoi')
+    expect(store.getState().error?.message).toBe('no chezmoi')
   })
 })
 

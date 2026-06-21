@@ -14,6 +14,7 @@
 import type { DotdenApi } from '@shared/ipc-api'
 import type { IncomingReviewItem, RemoteAxisMarker } from '@shared/den'
 import type { DenSessionGet, DenSessionSet } from '../../shell/lib/den-session-store'
+import { operationError } from '../../shell/lib/operation-error'
 
 /** The `apply` slice's state + actions (combined into {@link DenSession}). */
 export interface ApplySlice {
@@ -59,10 +60,7 @@ export function createApplySlice(api: DotdenApi) {
         })
       } catch (caught) {
         set({
-          error:
-            caught instanceof Error
-              ? caught.message
-              : 'Could not check the Remote for incoming changes.',
+          error: operationError(caught, 'Could not check the Remote for incoming changes.'),
         })
       }
     },

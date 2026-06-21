@@ -1,6 +1,7 @@
 import { BottomPanel } from '@/features/shell/components/BottomPanel'
 import { CenterPane } from '@/features/shell/components/CenterPane'
 import { DialogLayer } from '@/features/shell/components/DialogLayer'
+import { ErrorBanner } from '@/features/shell/components/ErrorBanner'
 import { LeftPane } from '@/features/shell/components/LeftPane'
 import { RightInspector } from '@/features/shell/components/RightInspector'
 import { StatusBar } from '@/features/shell/components/StatusBar'
@@ -78,6 +79,7 @@ export function DenWindow({
   const reviewing = useDenSession((s) => s.reviewing)
   const resolving = useDenSession((s) => s.resolving)
   const diagnosticsPanelOpen = useDenSession((s) => s.diagnosticsPanelOpen)
+  const error = useDenSession((s) => s.error)
 
   const selectFile = useDenSession((s) => s.selectFile)
   const onRename = useDenSession((s) => s.onRename)
@@ -87,6 +89,7 @@ export function DenWindow({
   const refreshPushQueued = useDenSession((s) => s.refreshPushQueued)
   const flushQueuedPush = useDenSession((s) => s.flushQueuedPush)
   const refreshDiagnosticsStatus = useDenSession((s) => s.refreshDiagnosticsStatus)
+  const openDiagnosticsPanel = useDenSession((s) => s.openDiagnosticsPanel)
   const setReviewing = useDenSession((s) => s.setReviewing)
   const setResolving = useDenSession((s) => s.setResolving)
 
@@ -191,6 +194,24 @@ export function DenWindow({
 
   // How many changes are incoming for THIS environment (issue 1-09): drives the top-level banner.
   const incomingCount = remoteAxis.size
+  const banner = error ? (
+    <ErrorBanner
+      message={error.message}
+      onViewDetails={error.traceId ? () => void openDiagnosticsPanel(error.traceId) : undefined}
+      onRetry={error.retry ? () => void error.retry?.() : undefined}
+    />
+  ) : role === 'a' && pushQueued ? (
+    <OfflineBanner />
+  ) : role === 'a' && incomingCount > 0 ? (
+    <IncomingBanner
+      count={incomingCount}
+      fromEnvironmentLabel={incomingFrom}
+      onReview={() => setReviewing(true)}
+    />
+  ) : (
+    // Keep the middle grid row collapsed when there is no banner (no layout shift).
+    <div />
+  )
 
   // The Conflict resolution surface (issue 1-11): the ⚠ CTA opens it. On close it re-checks the
   // Remote + tree so the decorations reflect what was resolved.
@@ -238,25 +259,7 @@ export function DenWindow({
         onOpenSettings={onOpenSettings}
       />
 
-      {/* The Offline banner (issue 1-16): a persistent strip shown when this environment has a push
-          QUEUED because it is offline (ADR 0006 — the Commit is recorded locally; only the push
-          waits). Takes precedence over the incoming banner so the most urgent transient state
-          shows; already-fetched incoming changes still Apply offline (only push is queued). */}
-      {role === 'a' && pushQueued ? (
-        <OfflineBanner />
-      ) : /* The top-level "N incoming from <environment> — Review & Apply" entry (issue 1-09): a
-            persistent strip between the titlebar and the body. Only env A's everyday view, only when
-            there is something incoming; its CTA jumps straight to the Review & Apply surface. */
-      role === 'a' && incomingCount > 0 ? (
-        <IncomingBanner
-          count={incomingCount}
-          fromEnvironmentLabel={incomingFrom}
-          onReview={() => setReviewing(true)}
-        />
-      ) : (
-        // Keep the middle grid row collapsed when there is no banner (no layout shift).
-        <div />
-      )}
+      {banner}
 
       <div className="grid min-h-0 grid-cols-[284px_1fr_320px] overflow-hidden">
         <LeftPane model={model} />

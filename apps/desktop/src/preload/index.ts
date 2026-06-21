@@ -19,6 +19,29 @@ function trace(): TraceEnvelope {
   return { traceId: crypto.randomUUID() }
 }
 
+/**
+ * Invoke an IPC route with a fresh trace and attach that trace to thrown renderer-side errors.
+ * Electron preserves the message but the renderer still needs this id to open trace-filtered
+ * Diagnostics after a failed Operation.
+ */
+function invokeWithTrace<T>(
+  channel: string,
+  payload: Record<string, unknown> = {},
+): Promise<T> {
+  const _trace = trace()
+  return ipcRenderer
+    .invoke(channel, {
+      ...payload,
+      _trace,
+    })
+    .catch((caught: unknown) => {
+      if (typeof caught === 'object' && caught !== null) {
+        ;(caught as { traceId?: string }).traceId = _trace.traceId
+      }
+      throw caught
+    }) as Promise<T>
+}
+
 const api: DotdenApi = {
   platform: process.platform,
   versions: {
@@ -100,23 +123,20 @@ const api: DotdenApi = {
     },
     // → IPC channel 'den:track'
     track(targetPath) {
-      return ipcRenderer.invoke('den:track', {
+      return invokeWithTrace('den:track', {
         targetPath,
-        _trace: trace(),
       }) as ReturnType<DotdenApi['den']['track']>
     },
     // → IPC channel 'den:scan-commit' (commit-time secret scan + warn step, issue 2-03)
     scanCommit(targetPaths) {
-      return ipcRenderer.invoke('den:scan-commit', {
+      return invokeWithTrace('den:scan-commit', {
         targetPaths,
-        _trace: trace(),
       }) as ReturnType<DotdenApi['den']['scanCommit']>
     },
     // → IPC channel 'den:allowlist-secret' (synced "don't warn me about this File again", issue 2-04)
     allowlistSecret(finding) {
-      return ipcRenderer.invoke('den:allowlist-secret', {
+      return invokeWithTrace('den:allowlist-secret', {
         finding,
-        _trace: trace(),
       }) as ReturnType<DotdenApi['den']['allowlistSecret']>
     },
     // → IPC channel 'den:get-commit-template' (Settings → Commit tab: synced template + preview facts, issue 2-09)
@@ -172,29 +192,25 @@ const api: DotdenApi = {
     },
     // → IPC channel 'den:convert-secret' (write the `.tmpl` reference + Commit it, issue 2-05)
     convertSecret(request) {
-      return ipcRenderer.invoke('den:convert-secret', {
+      return invokeWithTrace('den:convert-secret', {
         request,
-        _trace: trace(),
       }) as ReturnType<DotdenApi['den']['convertSecret']>
     },
     // → IPC channel 'den:commit'
     commit(targetPaths) {
-      return ipcRenderer.invoke('den:commit', {
+      return invokeWithTrace('den:commit', {
         targetPaths,
-        _trace: trace(),
       }) as ReturnType<DotdenApi['den']['commit']>
     },
     // → IPC channel 'den:sync-push' (push + flush any offline-queued push, issue 1-16)
     syncPush() {
-      return ipcRenderer.invoke('den:sync-push', {
-        _trace: trace(),
-      }) as ReturnType<DotdenApi['den']['syncPush']>
+      return invokeWithTrace('den:sync-push') as ReturnType<DotdenApi['den']['syncPush']>
     },
     // → IPC channel 'den:flush-push-queue' (retry a push queued while offline, issue 1-16)
     flushPushQueue() {
-      return ipcRenderer.invoke('den:flush-push-queue', {
-        _trace: trace(),
-      }) as ReturnType<DotdenApi['den']['flushPushQueue']>
+      return invokeWithTrace('den:flush-push-queue') as ReturnType<
+        DotdenApi['den']['flushPushQueue']
+      >
     },
     // → IPC channel 'den:push-pending' (offline-banner state: is a push queued?, issue 1-16)
     pushPending() {
@@ -204,15 +220,13 @@ const api: DotdenApi = {
     },
     // → IPC channel 'den:list-incoming'
     listIncoming() {
-      return ipcRenderer.invoke('den:list-incoming', {
-        _trace: trace(),
-      }) as ReturnType<DotdenApi['den']['listIncoming']>
+      return invokeWithTrace('den:list-incoming') as ReturnType<DotdenApi['den']['listIncoming']>
     },
     // → IPC channel 'den:incoming-summary' (Review & Apply: incoming + source env label)
     incomingSummary() {
-      return ipcRenderer.invoke('den:incoming-summary', {
-        _trace: trace(),
-      }) as ReturnType<DotdenApi['den']['incomingSummary']>
+      return invokeWithTrace('den:incoming-summary') as ReturnType<
+        DotdenApi['den']['incomingSummary']
+      >
     },
     // → IPC channel 'den:incoming-diff' (preview an incoming File before Apply)
     incomingDiff(targetPath) {
@@ -223,25 +237,20 @@ const api: DotdenApi = {
     },
     // → IPC channel 'den:apply'
     apply(targetPaths, confirmedDeletions) {
-      return ipcRenderer.invoke('den:apply', {
+      return invokeWithTrace('den:apply', {
         targetPaths,
         // The deletions the user explicitly confirmed (invariant #4); omitted ⇒ none.
         confirmedDeletions: confirmedDeletions ?? [],
-        _trace: trace(),
       }) as ReturnType<DotdenApi['den']['apply']>
     },
     // → IPC channel 'den:auto-apply' (Auto-apply Sync: fetch + auto-apply clean changes, 2-12)
     autoApply() {
-      return ipcRenderer.invoke('den:auto-apply', {
-        _trace: trace(),
-      }) as ReturnType<DotdenApi['den']['autoApply']>
+      return invokeWithTrace('den:auto-apply') as ReturnType<DotdenApi['den']['autoApply']>
     },
     // → IPC channel 'den:yolo-sync' (YOLO hands-off: auto-Commit before merge → push → merge →
     //   auto-apply clean; Conflicts still surfaced for the user, never auto-resolved, 2-13)
     yoloSync() {
-      return ipcRenderer.invoke('den:yolo-sync', {
-        _trace: trace(),
-      }) as ReturnType<DotdenApi['den']['yoloSync']>
+      return invokeWithTrace('den:yolo-sync') as ReturnType<DotdenApi['den']['yoloSync']>
     },
     // → IPC channel 'den:detect-conflicts' (fetch + merge; surface true Conflicts, 1-11)
     detectConflicts() {
@@ -271,15 +280,12 @@ const api: DotdenApi = {
     },
     // → IPC channel 'den:tree'
     tree() {
-      return ipcRenderer.invoke('den:tree', {
-        _trace: trace(),
-      }) as ReturnType<DotdenApi['den']['tree']>
+      return invokeWithTrace('den:tree') as ReturnType<DotdenApi['den']['tree']>
     },
     // → IPC channel 'den:diff'
     diff(targetPath) {
-      return ipcRenderer.invoke('den:diff', {
+      return invokeWithTrace('den:diff', {
         targetPath,
-        _trace: trace(),
       }) as ReturnType<DotdenApi['den']['diff']>
     },
     // → IPC channel 'den:connected-remote' (Account tab: git Remote URL + Provider, issue 2-11)
@@ -313,72 +319,63 @@ const api: DotdenApi = {
     },
     // → IPC channel 'den:untrack' (the Untrack verb → chezmoi forget)
     untrack(targetPath) {
-      return ipcRenderer.invoke('den:untrack', {
+      return invokeWithTrace('den:untrack', {
         targetPath,
-        _trace: trace(),
       }) as ReturnType<DotdenApi['den']['untrack']>
     },
     // → IPC channel 'den:delete-everywhere' (the Delete everywhere verb → chezmoi destroy)
     deleteEverywhere(targetPath) {
-      return ipcRenderer.invoke('den:delete-everywhere', {
+      return invokeWithTrace('den:delete-everywhere', {
         targetPath,
-        _trace: trace(),
       }) as ReturnType<DotdenApi['den']['deleteEverywhere']>
     },
     // → IPC channel 'den:affected-environments' (blast radius for the destructive confirm)
     affectedEnvironments(targetPath) {
-      return ipcRenderer.invoke('den:affected-environments', {
+      return invokeWithTrace('den:affected-environments', {
         targetPath,
-        _trace: trace(),
       }) as ReturnType<DotdenApi['den']['affectedEnvironments']>
     },
     // → IPC channel 'den:create-workspace' (new access boundary, issue 1-14)
     createWorkspace(label) {
-      return ipcRenderer.invoke('den:create-workspace', {
+      return invokeWithTrace('den:create-workspace', {
         label,
-        _trace: trace(),
       }) as ReturnType<DotdenApi['den']['createWorkspace']>
     },
     // → IPC channel 'den:create-group' (nested organization Group, issue 1-14)
     createGroup(workspaceId, label, parentId) {
-      return ipcRenderer.invoke('den:create-group', {
+      return invokeWithTrace('den:create-group', {
         workspaceId,
         label,
         parentId,
-        _trace: trace(),
       }) as ReturnType<DotdenApi['den']['createGroup']>
     },
     // → IPC channel 'den:move-to-group' (organize-only: never changes access or path)
     moveFileToGroup(targetPath, groupId) {
-      return ipcRenderer.invoke('den:move-to-group', {
+      return invokeWithTrace('den:move-to-group', {
         targetPath,
         groupId,
-        _trace: trace(),
       }) as ReturnType<DotdenApi['den']['moveFileToGroup']>
     },
     // → IPC channel 'den:set-file-workspace' (access-boundary move, issue 1-14)
     setFileWorkspace(targetPath, workspaceId) {
-      return ipcRenderer.invoke('den:set-file-workspace', {
+      return invokeWithTrace('den:set-file-workspace', {
         targetPath,
         workspaceId,
-        _trace: trace(),
       }) as ReturnType<DotdenApi['den']['setFileWorkspace']>
     },
     // → IPC channel 'den:set-file-scope' (OS Scope: clamp+narrow to specific OSes, issue 1-15)
     setFileScope(targetPath, scope) {
-      return ipcRenderer.invoke('den:set-file-scope', {
+      return invokeWithTrace('den:set-file-scope', {
         targetPath,
         scope,
-        _trace: trace(),
       }) as ReturnType<DotdenApi['den']['setFileScope']>
     },
     // → IPC channel 'den:set-group-scope' (OS Scope of a Folder/Group, inherited by children)
     setGroupScope(workspaceId, groupId, scope) {
-      return ipcRenderer.invoke('den:set-group-scope', {
+      return invokeWithTrace('den:set-group-scope', {
         workspaceId,
         groupId,
         scope,
-        _trace: trace(),
       }) as ReturnType<DotdenApi['den']['setGroupScope']>
     },
     // → IPC channel 'den:subscription-state' (returning-flow subscription pick + empty-Den guard)

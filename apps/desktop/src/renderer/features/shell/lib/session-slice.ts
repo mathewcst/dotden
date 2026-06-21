@@ -24,6 +24,7 @@ import type { AutomationLevel } from '@shared/apply'
 import type { FileTreeRenameEvent } from '@pierre/trees'
 import type { RowVerb } from '../../workspace/components/RowContextMenu'
 import type { DenSessionGet, DenSessionSet } from './den-session-store'
+import { operationError, type OperationError } from './operation-error'
 
 /** Discriminates which environment's role this session is driving (A vs B copy/actions). */
 export type Role = 'a' | 'b'
@@ -75,14 +76,16 @@ export interface SessionSlice {
   automationLevel: AutomationLevel
   /** The in-flight Operation, or null. Every pane reads it to disable controls + show spinners. */
   busy: Busy | null
-  /** The current soft error to surface in the inspector (never fail silently), or null. */
-  error: string | null
+  /** The current soft error to surface globally/inspector (never fail silently), or null. */
+  error: OperationError | null
   /** Monotonic guard so an out-of-order diff response can't clobber a newer selection (last wins). */
   diffToken: number
   /** The open confirm dialog's pending verb, or null while none is open. */
   confirm: PendingConfirm | null
   /** Whether the global Diagnostics bottom panel is open. */
   diagnosticsPanelOpen: boolean
+  /** The Diagnostics panel presentation: standing Console or trace-scoped failure Details. */
+  diagnosticsPanelMode: 'console' | 'details'
   /** Completed, already-redacted Command records shown in the bottom panel. */
   diagnosticsRecords: readonly RedactedCommandRecord[]
   /** Failure count from the persisted Command log, independent of the current panel view. */
@@ -149,6 +152,7 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
     diffToken: 0,
     confirm: null,
     diagnosticsPanelOpen: false,
+    diagnosticsPanelMode: 'console',
     diagnosticsRecords: [],
     diagnosticsErrorCount: 0,
     diagnosticsConsoleEnabled: false,
@@ -158,7 +162,7 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
       try {
         await fn()
       } catch (caught) {
-        set({ error: caught instanceof Error ? caught.message : 'Operation failed.' })
+        set({ error: operationError(caught, 'Operation failed.', () => get().run(kind, fn)) })
       } finally {
         set({ busy: null })
       }
@@ -187,7 +191,7 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
       } catch (caught) {
         if (token === get().diffToken) {
           set({
-            error: caught instanceof Error ? caught.message : 'Could not load the diff.',
+            error: operationError(caught, 'Could not load the diff.'),
             diff: null,
           })
         }
@@ -226,7 +230,10 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
           f.targetPath === event.sourcePath ? { ...f, targetPath: event.destinationPath } : f,
         ),
         selected: event.destinationPath,
-        error: `Renamed in the tree. Persisting a rename to chezmoi lands with the row verbs (issue 1-08).`,
+        error: {
+          message:
+            'Renamed in the tree. Persisting a rename to chezmoi lands with the row verbs (issue 1-08).',
+        },
       })),
 
     createWorkspace: (label) =>
@@ -326,13 +333,17 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
         const records = await api.diagnostics.recordsFor(traceId)
         set({
           diagnosticsPanelOpen: true,
+          diagnosticsPanelMode: traceId ? 'details' : 'console',
           diagnosticsRecords: records,
-          diagnosticsErrorCount: records.filter((record) => record.exitCode !== 0).length,
+          diagnosticsErrorCount: traceId
+            ? get().diagnosticsErrorCount
+            : records.filter((record) => record.exitCode !== 0).length,
         })
       } catch (caught) {
         set({
           diagnosticsPanelOpen: true,
-          error: caught instanceof Error ? caught.message : 'Could not load Diagnostics.',
+          diagnosticsPanelMode: traceId ? 'details' : 'console',
+          error: operationError(caught, 'Could not load Diagnostics.'),
         })
       }
     },
@@ -380,7 +391,7 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
           incomingFrom: summary.fromEnvironmentLabel,
         })
       } catch (caught) {
-        set({ error: caught instanceof Error ? caught.message : 'Could not read your Files.' })
+        set({ error: operationError(caught, 'Could not read your Files.') })
       }
     },
   })

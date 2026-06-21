@@ -6,8 +6,10 @@ import { ChevronDown, Copy, Filter, PanelBottomClose, Plus, X } from 'lucide-rea
 /** VSCode-style global bottom panel. Diagnostics is the first tab. */
 export function BottomPanel() {
   const records = useDenSession((s) => s.diagnosticsRecords)
+  const mode = useDenSession((s) => s.diagnosticsPanelMode)
   const close = useDenSession((s) => s.closeDiagnosticsPanel)
   const clear = useDenSession((s) => s.clearDiagnosticsView)
+  const tabLabel = mode === 'details' ? 'Details' : 'Console'
 
   return (
     <section className="border-border bg-card grid min-h-0 grid-rows-[36px_minmax(0,1fr)] border-t">
@@ -17,7 +19,7 @@ export function BottomPanel() {
             type="button"
             className="border-dd-ember-500 text-foreground bg-card flex items-center gap-2 border-t-2 px-3 text-xs font-medium"
           >
-            Console
+            {tabLabel}
             <span className="text-muted-foreground font-mono">{records.length}</span>
           </button>
           <button
@@ -60,7 +62,7 @@ export function BottomPanel() {
           ))
         ) : (
           <div className="text-muted-foreground grid h-full place-items-center text-sm">
-            No Command records yet
+            {mode === 'details' ? 'No records for this Operation' : 'No Command records yet'}
           </div>
         )}
       </div>

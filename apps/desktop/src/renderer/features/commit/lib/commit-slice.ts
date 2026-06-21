@@ -15,6 +15,7 @@
 import type { DotdenApi } from '@shared/ipc-api'
 import type { SecretFinding } from '@shared/secrets'
 import type { DenSessionGet, DenSessionSet } from '../../shell/lib/den-session-store'
+import { operationError } from '../../shell/lib/operation-error'
 
 /** The commit-result fields shared by a plain Commit and a Secret conversion's Commit. */
 export interface CommitOutcome {
@@ -175,7 +176,9 @@ export function createCommitSlice(api: DotdenApi) {
         // A non-offline failure during flush (e.g. a server rejection) surfaces as an error; an
         // offline flush re-queues silently inside the main process (never throws here).
         set({
-          error: caught instanceof Error ? caught.message : 'Could not retry the queued push.',
+          error: operationError(caught, 'Could not retry the queued push.', () =>
+            get().flushQueuedPush(),
+          ),
         })
       } finally {
         await get().refreshPushQueued()
