@@ -62,7 +62,7 @@ Per-file independent — apply every File that can succeed, report failures with
 
 ### Distribution
 
-v1 ships **unsigned**, via GitHub Releases + `electron-updater` (auto-download, apply on restart, user can defer). Packaging: macOS `.dmg`, Windows NSIS `.exe`, Linux AppImage. Code signing/notarization deferred (personal/MVP use) → revisit before public launch. Bundled chezmoi pinned per release. Toolchain → [ADR 0010](adr/0010-electron-desktop-toolchain.md).
+v1 ships **unsigned**, via GitHub Releases + `electron-updater` (auto-download, apply on restart, user can defer). Packaging: macOS `.dmg`, Windows NSIS `.exe`, Linux AppImage. Code signing/notarization deferred (personal/MVP use) → revisit before public launch. Bundled chezmoi pinned per release. Toolchain → [ADR 0010](adr/0010-electron-desktop-toolchain.md). Install notes, including the unsigned macOS right-click → Open path, live in [distribution.md](distribution.md).
 
 ## Deferred
 
