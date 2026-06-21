@@ -58,7 +58,11 @@ import type { DiagnosticsSettings, SyncSettings } from './settings.js'
 import type { PrivacySettings } from './settings.js'
 import type { AppearanceOverride, AppearanceSettings } from './appearance-settings.js'
 import type { AppInfo, UpdateCheckResult } from './app-info.js'
-import type { CopyDiagnosticsResult, RedactedCommandRecord } from './diagnostics.js'
+import type {
+  CopyDiagnosticsResult,
+  RedactedCommandRecord,
+  UnredactedModeState,
+} from './diagnostics.js'
 
 /**
  * Node's `process.platform` value set, declared locally so this shared contract
@@ -117,6 +121,10 @@ export interface DotdenApi {
     getSettings(): Promise<DiagnosticsSettings>
     /** Persist this environment's Diagnostics settings. */
     setSettings(settings: DiagnosticsSettings): Promise<DiagnosticsSettings>
+    /** Read the session-scoped unredacted capture flag. */
+    getUnredactedMode(): Promise<UnredactedModeState>
+    /** Set the session-scoped unredacted capture flag. Never persisted. */
+    setUnredactedMode(enabled: boolean): Promise<UnredactedModeState>
   }
   /** Remote-connection operations, each forwarded to a `remote:*` IPC channel. */
   readonly remote: {

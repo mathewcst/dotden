@@ -29,7 +29,11 @@ import type { SecretFinding } from '../../shared/secrets.js'
 import type { ConvertSecretRequest } from '../../shared/den.js'
 import type { AppearanceOverride, AppearanceSettings } from '../../shared/appearance-settings.js'
 import type { AppInfo, UpdateCheckResult } from '../../shared/app-info.js'
-import type { CopyDiagnosticsResult, RedactedCommandRecord } from '../../shared/diagnostics.js'
+import type {
+  CopyDiagnosticsResult,
+  RedactedCommandRecord,
+  UnredactedModeState,
+} from '../../shared/diagnostics.js'
 
 /**
  * The minimal trace envelope every IPC payload carries.
@@ -162,6 +166,10 @@ export interface IpcBridgeDeps {
   readonly setDiagnosticsSettings?: (
     settings: DiagnosticsSettings,
   ) => Promise<DiagnosticsSettings>
+  /** Read the session-scoped unredacted capture flag. */
+  readonly getUnredactedMode?: () => Promise<UnredactedModeState>
+  /** Set the session-scoped unredacted capture flag. */
+  readonly setUnredactedMode?: (enabled: boolean) => Promise<UnredactedModeState>
 }
 
 /**
@@ -243,6 +251,21 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     }
     const { settings } = payload as TracedPayload & { settings: DiagnosticsSettings }
     return deps.setDiagnosticsSettings(settings)
+  })
+  registrar.handle('diagnostics:get-unredacted-mode', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    if (!deps.getUnredactedMode) {
+      throw new Error('Diagnostics unredacted-mode IPC is not wired')
+    }
+    return deps.getUnredactedMode()
+  })
+  registrar.handle('diagnostics:set-unredacted-mode', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    if (!deps.setUnredactedMode) {
+      throw new Error('Diagnostics unredacted-mode IPC is not wired')
+    }
+    const { enabled } = payload as TracedPayload & { enabled: boolean }
+    return deps.setUnredactedMode(enabled)
   })
 
   // ── Remote channels (issue 1-03), kept here so ALL IPC carries _trace uniformly ──

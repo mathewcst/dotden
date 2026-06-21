@@ -1,22 +1,28 @@
 import { useEffect, useState } from 'react'
-import { ClipboardCopy, FolderOpen, Loader2, SquareTerminal } from 'lucide-react'
+import { ClipboardCopy, FolderOpen, Loader2, SquareTerminal, TriangleAlert } from 'lucide-react'
 import { Button } from '@/ui/button'
 import { Switch } from '@/ui/switch'
 import type { DiagnosticsSettings } from '@shared/settings'
+import type { UnredactedModeState } from '@shared/diagnostics'
 
 /** Settings → Diagnostics: controls the standing Console and local support handoff actions. */
 export function DiagnosticsTab() {
   const [settings, setSettings] = useState<DiagnosticsSettings | null>(null)
+  const [unredactedMode, setUnredactedMode] = useState<UnredactedModeState | null>(null)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
-    window.dotden.diagnostics
-      .getSettings()
-      .then((loaded) => {
-        if (alive) setSettings(loaded)
+    Promise.all([
+      window.dotden.diagnostics.getSettings(),
+      window.dotden.diagnostics.getUnredactedMode(),
+    ])
+      .then(([loadedSettings, loadedUnredactedMode]) => {
+        if (!alive) return
+        setSettings(loadedSettings)
+        setUnredactedMode(loadedUnredactedMode)
       })
       .catch((caught: unknown) => {
         if (alive) setError(messageOf(caught, 'Could not load Diagnostics settings.'))
@@ -38,6 +44,22 @@ export function DiagnosticsTab() {
     } catch (caught) {
       setSettings(previous)
       setError(messageOf(caught, 'Could not save Diagnostics settings.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function updateUnredactedMode(enabled: boolean) {
+    const previous = unredactedMode
+    setUnredactedMode({ enabled })
+    setBusy(true)
+    setError(null)
+    setStatus(null)
+    try {
+      setUnredactedMode(await window.dotden.diagnostics.setUnredactedMode(enabled))
+    } catch (caught) {
+      setUnredactedMode(previous)
+      setError(messageOf(caught, 'Could not change unredacted mode.'))
     } finally {
       setBusy(false)
     }
@@ -71,7 +93,7 @@ export function DiagnosticsTab() {
     }
   }
 
-  if (!settings) {
+  if (!settings || !unredactedMode) {
     return (
       <div className="text-muted-foreground flex items-center gap-2 p-8 text-sm">
         {error ? (
@@ -152,6 +174,29 @@ export function DiagnosticsTab() {
           </Button>
         </div>
       </div>
+
+      <section className="border-dd-amber-500/50 bg-dd-amber-950 flex items-start gap-3 rounded-lg border p-4">
+        <TriangleAlert className="text-dd-amber-400 mt-0.5 size-5 shrink-0" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <div>
+            <h3 className="text-foreground text-sm font-semibold">Unredacted mode</h3>
+            <p className="text-muted-foreground text-xs leading-relaxed">
+              This writes real secret values to disk for this app session only. It resets when
+              dotden restarts. Copy diagnostics still stays redacted.
+            </p>
+          </div>
+          <label className="flex cursor-pointer items-center justify-between gap-4">
+            <span className="text-dd-amber-400 text-xs font-medium">
+              Capture full Command output until restart
+            </span>
+            <Switch
+              checked={unredactedMode.enabled}
+              disabled={busy}
+              onCheckedChange={(checked) => void updateUnredactedMode(checked)}
+            />
+          </label>
+        </div>
+      </section>
 
       <p className="text-muted-foreground border-border bg-card rounded-md border p-3 text-xs leading-relaxed">
         Command records are captured only after a process finishes. The log is redacted before it is

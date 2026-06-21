@@ -19,6 +19,8 @@ export interface CommandLogOptions {
   readonly capacity?: number
   /** Local user facts used by the default redactor. */
   readonly redaction?: RedactionContext
+  /** Session-scoped escape hatch; when true, new writes bypass redaction. Defaults false. */
+  readonly unredactedMode?: () => boolean
   /**
    * Records restored from the environment-local diagnostics file.
    *
@@ -39,12 +41,14 @@ export interface CommandLogOptions {
 export class CommandLog implements DiagnosticsSink {
   private readonly capacity: number
   private readonly redaction: RedactionContext
+  private readonly unredactedMode: () => boolean
   private readonly buffer: CommandRecord[] = []
 
   /** @param options Buffer capacity plus redaction/test seams. */
   constructor(options: CommandLogOptions = {}) {
     this.capacity = options.capacity ?? 256
     this.redaction = options.redaction ?? {}
+    this.unredactedMode = options.unredactedMode ?? (() => false)
     this.buffer.push(
       ...(options.initialRecords
         ?.map((record) => redactCommandRecord(record, this.redaction))
@@ -58,8 +62,8 @@ export class CommandLog implements DiagnosticsSink {
    * @param record Raw completed command record from the `runCommand` seam.
    */
   record(record: CommandRecord): void {
-    const redacted = redactCommandRecord(record, this.redaction)
-    this.buffer.push(redacted)
+    const stored = this.unredactedMode() ? record : redactCommandRecord(record, this.redaction)
+    this.buffer.push(stored)
     if (this.buffer.length > this.capacity) this.buffer.shift()
   }
 

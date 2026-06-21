@@ -103,6 +103,19 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['diagnostics']['setSettings']>
     },
+    // → IPC channel 'diagnostics:get-unredacted-mode' (session-scoped capture escape hatch)
+    getUnredactedMode() {
+      return ipcRenderer.invoke('diagnostics:get-unredacted-mode', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['diagnostics']['getUnredactedMode']>
+    },
+    // → IPC channel 'diagnostics:set-unredacted-mode' (never persisted)
+    setUnredactedMode(enabled) {
+      return ipcRenderer.invoke('diagnostics:set-unredacted-mode', {
+        enabled,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['diagnostics']['setUnredactedMode']>
+    },
   },
   remote: {
     // → IPC channel 'remote:preflight'

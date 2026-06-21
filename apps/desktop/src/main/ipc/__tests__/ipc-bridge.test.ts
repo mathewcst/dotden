@@ -44,6 +44,7 @@ describe('IpcBridge', () => {
     ])
     const copyDiagnostics = vi.fn(async () => ({ recordCount: 1 }))
     const { registrar, handlers } = fakeRegistrar()
+    let unredactedMode = false
     registerIpcBridge(registrar, {
       remoteClient: async () => ({}) as never,
       denService: async () => ({}) as never,
@@ -79,6 +80,11 @@ describe('IpcBridge', () => {
       copyDiagnostics,
       getDiagnosticsSettings,
       setDiagnosticsSettings,
+      getUnredactedMode: async () => ({ enabled: unredactedMode }),
+      setUnredactedMode: async (enabled) => {
+        unredactedMode = enabled
+        return { enabled }
+      },
     })
 
     await handlers.get('diagnostics:open-log-location')?.({}, {
@@ -116,6 +122,17 @@ describe('IpcBridge', () => {
       } as never),
     ).resolves.toEqual({ consoleEnabled: true })
     expect(setDiagnosticsSettings).toHaveBeenCalledWith({ consoleEnabled: true })
+    await expect(
+      handlers.get('diagnostics:get-unredacted-mode')?.({}, {
+        _trace: { traceId: 'diag-6' },
+      } as never),
+    ).resolves.toEqual({ enabled: false })
+    await expect(
+      handlers.get('diagnostics:set-unredacted-mode')?.({}, {
+        enabled: true,
+        _trace: { traceId: 'diag-7' },
+      } as never),
+    ).resolves.toEqual({ enabled: true })
     await expect(handlers.get('diagnostics:open-log-location')?.({}, {} as never)).rejects.toThrow(
       'without a _trace envelope',
     )

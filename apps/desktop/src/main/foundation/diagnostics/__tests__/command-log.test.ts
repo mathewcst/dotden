@@ -139,4 +139,32 @@ describe('CommandLog', () => {
     expect(serialized).toContain(REDACTED_TOKEN)
     expect(serialized).not.toContain(rawSecret)
   })
+
+  it('bypasses redaction only while the session-scoped unredacted callback is on', () => {
+    const rawSecret = 'ghp_1234567890abcdefghijklmnopqrstuvwxyzABCD'
+    let unredacted = false
+    const log = new CommandLog({ capacity: 4, unredactedMode: () => unredacted })
+
+    unredacted = true
+    log.record({
+      command: 'git',
+      args: ['push', rawSecret],
+      exitCode: 1,
+      stdout: rawSecret,
+      stderr: rawSecret,
+      timestamp: 1,
+    })
+    unredacted = false
+    log.record({
+      command: 'git',
+      args: ['push', rawSecret],
+      exitCode: 1,
+      stdout: rawSecret,
+      stderr: rawSecret,
+      timestamp: 2,
+    })
+
+    expect(JSON.stringify(log.records()[0])).toContain(rawSecret)
+    expect(JSON.stringify(log.records()[1])).not.toContain(rawSecret)
+  })
 })

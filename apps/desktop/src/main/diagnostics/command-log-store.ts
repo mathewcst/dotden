@@ -70,6 +70,10 @@ export class PersistentCommandLog implements DiagnosticsSink {
     if (!existsSync(filePath)) {
       await mkdir(dirname(filePath), { recursive: true })
       sink.persist()
+    } else {
+      // Loading always re-redacts hydrated records. Persist that snapshot so a restart after a
+      // session-scoped unredacted run returns the on-disk log to protected form.
+      sink.persist()
     }
 
     return sink

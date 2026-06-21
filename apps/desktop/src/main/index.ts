@@ -21,11 +21,13 @@ import { join } from 'node:path'
 import type { AppInfo, UpdateCheckResult } from '../shared/app-info.js'
 import type { AutomationLevel } from '../shared/apply.js'
 import type { CopyDiagnosticsResult, RedactedCommandRecord } from '../shared/diagnostics.js'
+import type { UnredactedModeState } from '../shared/diagnostics.js'
 import {
   readAutomationLevel,
   writeAutomationLevel,
 } from './foundation/apply/automation-settings.js'
 import { PersistentCommandLog } from './diagnostics/command-log-store.js'
+import { toRedactedCommandRecordDto } from './diagnostics/command-record-dto.js'
 import { buildDiagnosticsBundle } from './foundation/diagnostics/export-bundle.js'
 import { DenService } from './foundation/den-service/den-service.js'
 import { DiscoveryScanner } from './foundation/environments/discovery-scanner.js'
@@ -73,6 +75,8 @@ const tracer = new OperationTracer()
 
 /** Process-wide redacted Command log, persisted under Electron `userData` (ADR 0030). */
 let diagnosticsLog: Promise<PersistentCommandLog> | undefined
+/** Session-scoped escape hatch. Defaults off and is never persisted. */
+let diagnosticsUnredactedMode = false
 
 /** Load the shared restart-safe Command log for this app run. */
 async function getDiagnosticsLog(): Promise<PersistentCommandLog> {
@@ -80,6 +84,7 @@ async function getDiagnosticsLog(): Promise<PersistentCommandLog> {
     redaction: {
       homeDir: app.getPath('home'),
     },
+    unredactedMode: () => diagnosticsUnredactedMode,
   }).catch((error: unknown) => {
     diagnosticsLog = undefined
     throw error
@@ -458,15 +463,11 @@ async function openDiagnosticsLogLocation(): Promise<void> {
 async function diagnosticsRecordsFor(traceId?: string): Promise<readonly RedactedCommandRecord[]> {
   const log = await getDiagnosticsLog()
   const records = traceId ? log.recordsFor(traceId) : log.records()
-  return records.map((record) => ({
-    command: record.command,
-    args: record.args,
-    exitCode: record.exitCode,
-    redactedStdout: record.stdout,
-    redactedStderr: record.stderr,
-    ...(record.traceId ? { traceId: record.traceId } : {}),
-    timestamp: record.timestamp,
-  }))
+  return records.map((record) =>
+    toRedactedCommandRecordDto(record, {
+      homeDir: app.getPath('home'),
+    }),
+  )
 }
 
 /** Copy a re-redacted diagnostics support bundle to the OS clipboard (PRD4 issue 4-06). */
@@ -483,6 +484,15 @@ async function copyDiagnostics(traceId?: string): Promise<CopyDiagnosticsResult>
   })
   clipboard.writeText(bundle)
   return { recordCount: records.length }
+}
+
+function getUnredactedMode(): Promise<UnredactedModeState> {
+  return Promise.resolve({ enabled: diagnosticsUnredactedMode })
+}
+
+function setUnredactedMode(enabled: boolean): Promise<UnredactedModeState> {
+  diagnosticsUnredactedMode = enabled
+  return getUnredactedMode()
 }
 
 /**
@@ -777,6 +787,8 @@ if (!app.requestSingleInstanceLock()) {
       setPrivacySettings,
       getDiagnosticsSettings,
       setDiagnosticsSettings,
+      getUnredactedMode,
+      setUnredactedMode,
       getAppInfo,
       checkForUpdates,
       controlWindow,

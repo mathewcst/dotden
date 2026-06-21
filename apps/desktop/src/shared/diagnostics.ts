@@ -29,3 +29,9 @@ export interface CopyDiagnosticsResult {
   /** Number of Command records included in the copied bundle. */
   readonly recordCount: number
 }
+
+/** Session-scoped unredacted capture state. Never persisted. */
+export interface UnredactedModeState {
+  /** Whether new Command records bypass redaction before entering the local log. */
+  readonly enabled: boolean
+}
