@@ -43,6 +43,11 @@ function makeApi(over: Record<string, unknown> = {}): DotdenApi {
       createWorkspace: vi.fn(async () => ({ id: 'w2', label: 'Work', groups: [] })),
       ...(over.den ?? {}),
     },
+    diagnostics: {
+      recordsFor: vi.fn(async () => []),
+      openLogLocation: vi.fn(async () => undefined),
+      ...(over.diagnostics ?? {}),
+    },
     automation: {
       getLevel: vi.fn(async () => 'auto-sync'),
       ...(over.automation ?? {}),
@@ -65,6 +70,8 @@ describe('session slice — the reset guarantee (key={role} remount proven at th
     expect(s.busy).toBeNull()
     expect(s.error).toBeNull()
     expect(s.confirm).toBeNull()
+    expect(s.diagnosticsPanelOpen).toBe(false)
+    expect(s.diagnosticsRecords).toEqual([])
     // apply-slice session state is part of the same fresh store.
     expect(s.incoming).toEqual([])
     expect(s.remoteAxis.size).toBe(0)
@@ -113,6 +120,68 @@ describe('session slice — run()', () => {
     expect(store.getState().error).toBe('first')
     await store.getState().run('load', async () => {})
     expect(store.getState().error).toBeNull()
+  })
+})
+
+describe('session slice — Diagnostics panel', () => {
+  it('opens the bottom panel with already-redacted records from IPC', async () => {
+    const records = [
+      {
+        command: 'git',
+        args: ['push', 'https://user:[REDACTED]@github.com/dotden/den.git'],
+        exitCode: 128,
+        redactedStdout: '',
+        redactedStderr: 'remote: token [REDACTED]',
+        traceId: 'trace-a',
+        timestamp: 1,
+      },
+    ]
+    const api = makeApi({
+      diagnostics: {
+        recordsFor: vi.fn(async () => records),
+      },
+    })
+    const store = createDenSessionStore('a', api)
+
+    await store.getState().openDiagnosticsPanel('trace-a')
+
+    expect(api.diagnostics.recordsFor).toHaveBeenCalledWith('trace-a')
+    expect(store.getState().diagnosticsPanelOpen).toBe(true)
+    expect(store.getState().diagnosticsRecords).toEqual(records)
+    expect(store.getState().diagnosticsErrorCount).toBe(1)
+  })
+
+  it('re-clicking the Diagnostics badge collapses the panel', async () => {
+    const store = freshStore('a')
+    await store.getState().toggleDiagnosticsPanel()
+    expect(store.getState().diagnosticsPanelOpen).toBe(true)
+
+    await store.getState().toggleDiagnosticsPanel()
+    expect(store.getState().diagnosticsPanelOpen).toBe(false)
+  })
+
+  it('clearing the panel view does not clear the persisted-log error badge count', async () => {
+    const api = makeApi({
+      diagnostics: {
+        recordsFor: vi.fn(async () => [
+          {
+            command: 'git',
+            args: ['push'],
+            exitCode: 128,
+            redactedStdout: '',
+            redactedStderr: 'failed',
+            timestamp: 1,
+          },
+        ]),
+      },
+    })
+    const store = createDenSessionStore('a', api)
+
+    await store.getState().openDiagnosticsPanel()
+    store.getState().clearDiagnosticsView()
+
+    expect(store.getState().diagnosticsRecords).toEqual([])
+    expect(store.getState().diagnosticsErrorCount).toBe(1)
   })
 })
 

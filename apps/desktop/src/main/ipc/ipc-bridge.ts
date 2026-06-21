@@ -29,6 +29,7 @@ import type { SecretFinding } from '../../shared/secrets.js'
 import type { ConvertSecretRequest } from '../../shared/den.js'
 import type { AppearanceOverride, AppearanceSettings } from '../../shared/appearance-settings.js'
 import type { AppInfo, UpdateCheckResult } from '../../shared/app-info.js'
+import type { RedactedCommandRecord } from '../../shared/diagnostics.js'
 
 /**
  * The minimal trace envelope every IPC payload carries.
@@ -151,6 +152,8 @@ export interface IpcBridgeDeps {
   ) => Promise<boolean | void>
   /** Reveal the redacted diagnostics Command log in the OS file manager. */
   readonly openDiagnosticsLogLocation?: () => Promise<void>
+  /** Read already-redacted diagnostics records for the panel shell. */
+  readonly diagnosticsRecordsFor?: (traceId?: string) => Promise<readonly RedactedCommandRecord[]>
 }
 
 /**
@@ -158,7 +161,7 @@ export interface IpcBridgeDeps {
  * each call's `_trace` id through to the foundation.
  *
  * Channels (all payloads carry `_trace`):
- * - `diagnostics:open-log-location` → reveal the persisted redacted Command log
+ * - `diagnostics:open-log-location` / `diagnostics:records` → local redacted Command log
  * - `remote:preflight` / `remote:connect` / `remote:latest-sha` → {@link RemoteClient}
  * - `den:track` / `den:scan-commit` / `den:allowlist-secret` / `den:get-commit-template` /
  *   `den:set-commit-template` / `den:get-appearance` / `den:set-appearance` /
@@ -201,6 +204,14 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
       throw new Error('Diagnostics log-location IPC is not wired')
     }
     return deps.openDiagnosticsLogLocation()
+  })
+  registrar.handle('diagnostics:records', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    if (!deps.diagnosticsRecordsFor) {
+      throw new Error('Diagnostics records IPC is not wired')
+    }
+    const { traceId: requestedTraceId } = payload as TracedPayload & { traceId?: string }
+    return deps.diagnosticsRecordsFor(requestedTraceId)
   })
 
   // ── Remote channels (issue 1-03), kept here so ALL IPC carries _trace uniformly ──

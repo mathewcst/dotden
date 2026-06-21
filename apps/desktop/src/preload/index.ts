@@ -53,6 +53,13 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['diagnostics']['openLogLocation']>
     },
+    // → IPC channel 'diagnostics:records' (read already-redacted Command records)
+    recordsFor(traceId) {
+      return ipcRenderer.invoke('diagnostics:records', {
+        traceId,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['diagnostics']['recordsFor']>
+    },
   },
   remote: {
     // → IPC channel 'remote:preflight'

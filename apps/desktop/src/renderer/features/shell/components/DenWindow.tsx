@@ -1,7 +1,9 @@
+import { BottomPanel } from '@/features/shell/components/BottomPanel'
 import { CenterPane } from '@/features/shell/components/CenterPane'
 import { DialogLayer } from '@/features/shell/components/DialogLayer'
 import { LeftPane } from '@/features/shell/components/LeftPane'
 import { RightInspector } from '@/features/shell/components/RightInspector'
+import { StatusBar } from '@/features/shell/components/StatusBar'
 import { TitleBar } from '@/features/shell/components/TitleBar'
 import { useDenSession } from '@/features/shell/components/DenSessionProvider'
 import { IncomingBanner } from '@/features/sync/components/IncomingBanner'
@@ -75,6 +77,7 @@ export function DenWindow({
   const selected = useDenSession((s) => s.selected)
   const reviewing = useDenSession((s) => s.reviewing)
   const resolving = useDenSession((s) => s.resolving)
+  const diagnosticsPanelOpen = useDenSession((s) => s.diagnosticsPanelOpen)
 
   const selectFile = useDenSession((s) => s.selectFile)
   const onRename = useDenSession((s) => s.onRename)
@@ -83,6 +86,7 @@ export function DenWindow({
   const refreshIncoming = useDenSession((s) => s.refreshIncoming)
   const refreshPushQueued = useDenSession((s) => s.refreshPushQueued)
   const flushQueuedPush = useDenSession((s) => s.flushQueuedPush)
+  const refreshDiagnosticsStatus = useDenSession((s) => s.refreshDiagnosticsStatus)
   const setReviewing = useDenSession((s) => s.setReviewing)
   const setResolving = useDenSession((s) => s.setResolving)
 
@@ -144,6 +148,10 @@ export function DenWindow({
   useEffect(() => {
     void init()
   }, [init])
+
+  useEffect(() => {
+    void refreshDiagnosticsStatus()
+  }, [refreshDiagnosticsStatus])
 
   // Returning onboarding hands off directly to the reviewed Apply surface. The ReviewApply
   // component fetches its own incoming summary on mount, so the shell only needs to flip the route.
@@ -217,7 +225,13 @@ export function DenWindow({
   }
 
   return (
-    <div className="bg-background text-foreground grid h-screen grid-rows-[auto_auto_1fr]">
+    <div
+      className={
+        diagnosticsPanelOpen
+          ? 'bg-background text-foreground grid h-screen grid-rows-[auto_auto_minmax(0,1fr)_minmax(160px,30vh)_auto]'
+          : 'bg-background text-foreground grid h-screen grid-rows-[auto_auto_minmax(0,1fr)_auto]'
+      }
+    >
       <TitleBar
         onSearch={() => model.openSearch()}
         searchDisabled={role !== 'a' || paths.length === 0}
@@ -244,12 +258,14 @@ export function DenWindow({
         <div />
       )}
 
-      <div className="grid grid-cols-[284px_1fr_320px] overflow-hidden">
+      <div className="grid min-h-0 grid-cols-[284px_1fr_320px] overflow-hidden">
         <LeftPane model={model} />
         <CenterPane />
         <RightInspector />
       </div>
 
+      {diagnosticsPanelOpen ? <BottomPanel /> : null}
+      <StatusBar />
       <DialogLayer />
     </div>
   )

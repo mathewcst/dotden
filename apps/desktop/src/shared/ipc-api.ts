@@ -58,6 +58,7 @@ import type { SyncSettings } from './settings.js'
 import type { PrivacySettings } from './settings.js'
 import type { AppearanceOverride, AppearanceSettings } from './appearance-settings.js'
 import type { AppInfo, UpdateCheckResult } from './app-info.js'
+import type { RedactedCommandRecord } from './diagnostics.js'
 
 /**
  * Node's `process.platform` value set, declared locally so this shared contract
@@ -105,6 +106,11 @@ export interface DotdenApi {
   readonly diagnostics: {
     /** Reveal the redacted Command log file in the OS file manager. */
     openLogLocation(): Promise<void>
+    /**
+     * Read redacted Command records. Passing a `traceId` scopes the result to one Operation;
+     * omitting it returns the recent bounded ring for the panel shell.
+     */
+    recordsFor(traceId?: string): Promise<readonly RedactedCommandRecord[]>
   }
   /** Remote-connection operations, each forwarded to a `remote:*` IPC channel. */
   readonly remote: {

@@ -27,8 +27,19 @@ function fakeRegistrar() {
 }
 
 describe('IpcBridge', () => {
-  it('routes diagnostics open-log-location and asserts _trace (PRD4 issue 4-03)', async () => {
+  it('routes diagnostics channels and exposes only redacted record DTOs (PRD4)', async () => {
     const openDiagnosticsLogLocation = vi.fn(async () => undefined)
+    const diagnosticsRecordsFor = vi.fn(async () => [
+      {
+        command: 'git',
+        args: ['push', 'https://user:[REDACTED]@github.com/dotden/den.git'],
+        exitCode: 128,
+        redactedStdout: '',
+        redactedStderr: 'remote: token [REDACTED]',
+        traceId: 'trace-a',
+        timestamp: 1,
+      },
+    ])
     const { registrar, handlers } = fakeRegistrar()
     registerIpcBridge(registrar, {
       remoteClient: async () => ({}) as never,
@@ -61,6 +72,7 @@ describe('IpcBridge', () => {
         detail: 'No update feed is configured for this build yet.',
       }),
       openDiagnosticsLogLocation,
+      diagnosticsRecordsFor,
     })
 
     await handlers.get('diagnostics:open-log-location')?.({}, {
@@ -68,6 +80,17 @@ describe('IpcBridge', () => {
     } as never)
 
     expect(openDiagnosticsLogLocation).toHaveBeenCalledTimes(1)
+    const records = (await handlers.get('diagnostics:records')?.({}, {
+      traceId: 'trace-a',
+      _trace: { traceId: 'diag-2' },
+    } as never)) as readonly Record<string, unknown>[]
+    expect(diagnosticsRecordsFor).toHaveBeenCalledWith('trace-a')
+    expect(records[0]).toMatchObject({
+      redactedStdout: '',
+      redactedStderr: 'remote: token [REDACTED]',
+    })
+    expect(records[0]).not.toHaveProperty('stdout')
+    expect(records[0]).not.toHaveProperty('stderr')
     await expect(handlers.get('diagnostics:open-log-location')?.({}, {} as never)).rejects.toThrow(
       'without a _trace envelope',
     )

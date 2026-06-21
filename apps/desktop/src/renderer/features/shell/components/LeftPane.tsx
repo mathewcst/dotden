@@ -1,4 +1,3 @@
-import { EnvironmentBadge } from '@/features/shell/components/EnvironmentBadge'
 import { FileRow } from '@/features/workspace/components/FileRow'
 import { RowContextMenu } from '@/features/workspace/components/RowContextMenu'
 import { WorkspaceSidebar } from '@/features/workspace/components/WorkspaceSidebar'
@@ -112,8 +111,6 @@ export function LeftPane({ model }: { model: ComponentProps<typeof FileTree>['mo
           </>
         )}
       </div>
-      {/* This environment's editable label + git-log attribution (issue 1-05). */}
-      <EnvironmentBadge />
     </aside>
   )
 }

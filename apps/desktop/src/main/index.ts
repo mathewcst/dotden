@@ -19,6 +19,7 @@ import { autoUpdater } from 'electron-updater'
 import { join } from 'node:path'
 import type { AppInfo, UpdateCheckResult } from '../shared/app-info.js'
 import type { AutomationLevel } from '../shared/apply.js'
+import type { RedactedCommandRecord } from '../shared/diagnostics.js'
 import {
   readAutomationLevel,
   writeAutomationLevel,
@@ -433,6 +434,21 @@ async function openDiagnosticsLogLocation(): Promise<void> {
   shell.showItemInFolder(log.filePath)
 }
 
+/** Read already-redacted records for the renderer Diagnostics panel. */
+async function diagnosticsRecordsFor(traceId?: string): Promise<readonly RedactedCommandRecord[]> {
+  const log = await getDiagnosticsLog()
+  const records = traceId ? log.recordsFor(traceId) : log.records()
+  return records.map((record) => ({
+    command: record.command,
+    args: record.args,
+    exitCode: record.exitCode,
+    redactedStdout: record.stdout,
+    redactedStderr: record.stderr,
+    ...(record.traceId ? { traceId: record.traceId } : {}),
+    timestamp: record.timestamp,
+  }))
+}
+
 /**
  * Apply the OS "open dotden at login" preference (issue 2-08). Electron's
  * `setLoginItemSettings` registers/unregisters the login item on macOS + Windows; it is a
@@ -727,6 +743,7 @@ if (!app.requestSingleInstanceLock()) {
       checkForUpdates,
       controlWindow,
       openDiagnosticsLogLocation,
+      diagnosticsRecordsFor,
     })
     createWindow()
 

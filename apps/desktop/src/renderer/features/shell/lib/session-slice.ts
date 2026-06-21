@@ -17,6 +17,7 @@
  */
 import type { DotdenApi } from '@shared/ipc-api'
 import type { AffectedEnvironment, FileTreeEntry } from '@shared/den'
+import type { RedactedCommandRecord } from '@shared/diagnostics'
 import type { Workspace as WorkspaceModel } from '@shared/workspace'
 import type { Scope } from '@shared/scope'
 import type { AutomationLevel } from '@shared/apply'
@@ -80,6 +81,14 @@ export interface SessionSlice {
   diffToken: number
   /** The open confirm dialog's pending verb, or null while none is open. */
   confirm: PendingConfirm | null
+  /** Whether the global Diagnostics bottom panel is open. */
+  diagnosticsPanelOpen: boolean
+  /** Completed, already-redacted Command records shown in the bottom panel. */
+  diagnosticsRecords: readonly RedactedCommandRecord[]
+  /** Failure count from the persisted Command log, independent of the current panel view. */
+  diagnosticsErrorCount: number
+  /** Whether the standing Console is enabled. Full Settings control lands in issue 4-07. */
+  diagnosticsConsoleEnabled: boolean
 
   /** Run an IPC action with consistent busy/error handling — never fail silently. */
   run(kind: Busy, fn: () => Promise<void>): Promise<void>
@@ -107,6 +116,16 @@ export interface SessionSlice {
   runConfirmedVerb(): void
   /** Open/close the confirm dialog (the dialog layer calls this on dismiss). */
   setConfirm(confirm: PendingConfirm | null): void
+  /** Open the Diagnostics bottom panel and load recent redacted Command records. */
+  openDiagnosticsPanel(traceId?: string): Promise<void>
+  /** Collapse the Diagnostics bottom panel. */
+  closeDiagnosticsPanel(): void
+  /** Toggle the Diagnostics bottom panel from the status-bar badge. */
+  toggleDiagnosticsPanel(): Promise<void>
+  /** Clear the current panel view without deleting the persisted Command log. */
+  clearDiagnosticsView(): void
+  /** Refresh the Diagnostics badge state from the persisted Command log. */
+  refreshDiagnosticsStatus(): Promise<void>
   /** env A boot load: automation level, offline-queue state, the tree, and incoming (issue 1-04/09). */
   init(): Promise<void>
 }
@@ -129,6 +148,10 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
     error: null,
     diffToken: 0,
     confirm: null,
+    diagnosticsPanelOpen: false,
+    diagnosticsRecords: [],
+    diagnosticsErrorCount: 0,
+    diagnosticsConsoleEnabled: false,
 
     run: async (kind, fn) => {
       set({ busy: kind, error: null })
@@ -297,6 +320,44 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
     },
 
     setConfirm: (confirm) => set({ confirm }),
+
+    openDiagnosticsPanel: async (traceId) => {
+      try {
+        const records = await api.diagnostics.recordsFor(traceId)
+        set({
+          diagnosticsPanelOpen: true,
+          diagnosticsRecords: records,
+          diagnosticsErrorCount: records.filter((record) => record.exitCode !== 0).length,
+        })
+      } catch (caught) {
+        set({
+          diagnosticsPanelOpen: true,
+          error: caught instanceof Error ? caught.message : 'Could not load Diagnostics.',
+        })
+      }
+    },
+
+    closeDiagnosticsPanel: () => set({ diagnosticsPanelOpen: false }),
+
+    toggleDiagnosticsPanel: async () => {
+      if (get().diagnosticsPanelOpen) {
+        set({ diagnosticsPanelOpen: false })
+        return
+      }
+      await get().openDiagnosticsPanel()
+    },
+
+    clearDiagnosticsView: () => set({ diagnosticsRecords: [] }),
+
+    refreshDiagnosticsStatus: async () => {
+      try {
+        const records = await api.diagnostics.recordsFor()
+        set({ diagnosticsErrorCount: records.filter((record) => record.exitCode !== 0).length })
+      } catch {
+        // The panel itself surfaces load failures. The status badge should not turn a
+        // startup diagnostics read hiccup into a global app error.
+      }
+    },
 
     // env A boot load (the old `loadInitial` effect, issue 1-04). No `active` unmount guard is
     // needed: a late reply writes to the store, not to React state, so it never warns after
