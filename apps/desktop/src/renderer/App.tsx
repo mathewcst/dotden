@@ -1,5 +1,6 @@
 import { LaunchProvider } from '@/features/launch/components/LaunchProvider'
 import { LaunchRouter } from '@/features/launch/components/LaunchRouter'
+import { ToastViewport } from '@/ui/toast'
 
 /**
  * App — the thin application root (ADR 0027). It mounts the app-scoped {@link LaunchProvider}
@@ -10,6 +11,7 @@ export function App() {
   return (
     <LaunchProvider>
       <LaunchRouter />
+      <ToastViewport />
     </LaunchProvider>
   )
 }

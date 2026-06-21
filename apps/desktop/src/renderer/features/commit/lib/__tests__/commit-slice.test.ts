@@ -5,10 +5,15 @@
  * be untestable inside `Workspace.tsx`. Tested here through the store seam (build a store with a
  * fake API, dispatch, assert state) in vitest's node environment — no React, no DOM.
  */
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createDenSessionStore } from '../../../shell/lib/den-session-store'
 import type { DotdenApi } from '@shared/ipc-api'
 import type { SecretFinding } from '@shared/secrets'
+import { clearToasts, getToasts } from '../../../../ui/toast-store'
+
+afterEach(() => {
+  clearToasts()
+})
 
 function finding(file: string): SecretFinding {
   return { file, kind: 'AWS Access Key ID', line: 1, maskedValue: 'AKIA••••N7QX' }
@@ -73,6 +78,7 @@ describe('commit slice — commitWithScan (scan-then-warn, ADR 0001)', () => {
     expect(api.den.commit).toHaveBeenCalledWith(['.zshrc'])
     expect(store.getState().lastCommitMessage).toBe('Update .zshrc')
     expect(store.getState().lastCommitPushed).toBe(true)
+    expect(getToasts().map((toastMessage) => toastMessage.message)).toContain('Committed 1 file.')
     // An auto-pushed Commit refreshes incoming as part of the round-trip.
     expect(api.den.incomingSummary).toHaveBeenCalled()
   })
@@ -136,7 +142,23 @@ describe('commit slice — push ("Sync now")', () => {
     await vi.waitFor(() => expect(api.den.syncPush).toHaveBeenCalled())
     expect(store.getState().pushQueued).toBe(true)
     expect(store.getState().lastCommitPushed).toBe(false)
+    expect(getToasts().map((toastMessage) => toastMessage.message)).toContain(
+      'Sync queued until you are back online.',
+    )
     expect(api.den.incomingSummary).toHaveBeenCalled()
+  })
+
+  it('confirms a successful Sync', async () => {
+    const api = makeApi({
+      den: {
+        syncPush: vi.fn(async () => ({ pushed: true, queued: false })),
+        incomingSummary: vi.fn(async () => ({ items: [], fromEnvironmentLabel: 'laptop' })),
+      },
+    })
+    const store = createDenSessionStore('a', api)
+    store.getState().push()
+    await vi.waitFor(() => expect(api.den.syncPush).toHaveBeenCalled())
+    expect(getToasts().map((toastMessage) => toastMessage.message)).toContain('Sync complete.')
   })
 })
 

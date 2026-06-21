@@ -11,6 +11,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { Button } from '@/ui/button'
+import { toast } from '@/ui/toast'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import { StatusTag } from '@/shared/components/StatusTag'
 import { ErrorBanner } from '@/features/shell/components/ErrorBanner'
@@ -150,6 +151,12 @@ export function ReviewApply({ onClose }: { onClose: () => void }) {
         // Drop the successfully-applied Files from the incoming list — they are now applied
         // (written, or removed for a confirmed deletion).
         const applied = new Set(result.applied)
+        if (applied.size > 0) {
+          const failed = result.results.some((r) => r.outcome === 'error')
+          const message = `Applied ${applied.size} file${applied.size === 1 ? '' : 's'}.`
+          if (failed) toast.warning(`${message} Some files still need attention.`)
+          else toast.success(message)
+        }
         setSummary((prev) =>
           prev ? { ...prev, items: prev.items.filter((i) => !applied.has(i.targetPath)) } : prev,
         )

@@ -16,6 +16,7 @@ import type { DotdenApi } from '@shared/ipc-api'
 import type { SecretFinding } from '@shared/secrets'
 import type { DenSessionGet, DenSessionSet } from '../../shell/lib/den-session-store'
 import { operationError } from '../../shell/lib/operation-error'
+import { toast } from '../../../ui/toast-store'
 
 /** The commit-result fields shared by a plain Commit and a Secret conversion's Commit. */
 export interface CommitOutcome {
@@ -106,6 +107,7 @@ export function createCommitSlice(api: DotdenApi) {
         pushed: result.pushed,
         queued: result.queued,
       })
+      toast.success(`Committed ${paths.length} file${paths.length === 1 ? '' : 's'}.`)
       await get().reloadTree()
       // An auto-pushed Commit also fetched incoming as part of the round-trip — refresh the
       // Remote axis + banner so they stay live without the user pressing Sync now.
@@ -157,6 +159,8 @@ export function createCommitSlice(api: DotdenApi) {
         // An offline Sync does NOT throw — the push is queued, so we show the offline banner.
         // A successful Sync clears it; the Commit(s) have now left this environment.
         set({ pushQueued: result.queued, lastCommitPushed: result.pushed })
+        if (result.queued) toast.warning('Sync queued until you are back online.')
+        else toast.success('Sync complete.')
         // A Sync also checks for incoming, so refresh the Remote axis + banner afterwards.
         await get().refreshIncoming()
       }),

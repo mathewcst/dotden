@@ -25,6 +25,7 @@ import type { FileTreeRenameEvent } from '@pierre/trees'
 import type { RowVerb } from '../../workspace/components/RowContextMenu'
 import type { DenSessionGet, DenSessionSet } from './den-session-store'
 import { operationError, type OperationError } from './operation-error'
+import { toast } from '../../../ui/toast-store'
 
 /** Discriminates which environment's role this session is driving (A vs B copy/actions). */
 export type Role = 'a' | 'b'
@@ -327,7 +328,8 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
           return
         }
         void get().run('apply', async () => {
-          await api.den.apply([path])
+          const result = await api.den.apply([path])
+          if (result.applied.length > 0) toast.success('Applied 1 file.')
           await get().reloadTree()
         })
         return
@@ -355,7 +357,8 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
       const { verb, path } = confirm
       if (verb === 'apply-deletion') {
         void get().run('apply', async () => {
-          await api.den.apply([path], [path])
+          const result = await api.den.apply([path], [path])
+          if (result.applied.length > 0) toast.success('Applied 1 file.')
           if (get().selected === path) await get().selectFile(null)
           await get().reloadTree()
         })

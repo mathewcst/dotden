@@ -1,6 +1,7 @@
 import { CommitRow } from '@/features/commit/components/CommitRow'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import { Button } from '@/ui/button'
+import { toast } from '@/ui/toast'
 import { FILE_HISTORY_PATCH_DIFF_OPTIONS } from '@/features/file-history/lib/dotden-shiki-theme'
 import { PatchDiff } from '@pierre/diffs/react'
 import { GripHorizontal, History, Loader2, RotateCcw, ShieldCheck } from 'lucide-react'
@@ -148,8 +149,13 @@ export function FileHistory({ targetPath }: { targetPath: string }) {
       setRestoring(true)
       setError(null)
       try {
-        await window.dotden.den.restoreVersion(targetPath, sha)
-        applyVersions(await window.dotden.den.fileHistory(targetPath))
+        const result = await window.dotden.den.restoreVersion(targetPath, sha)
+        if (result.committed) {
+          toast.success(`Restored ${targetPath}.`)
+          applyVersions(await window.dotden.den.fileHistory(targetPath))
+        } else {
+          toast.info('That version is already current.')
+        }
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : 'Could not restore this version.')
       } finally {
