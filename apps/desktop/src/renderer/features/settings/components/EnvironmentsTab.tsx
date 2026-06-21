@@ -3,6 +3,7 @@ import { Check, Loader2, Monitor, MoreHorizontal, Pencil, Shuffle, Trash2, X } f
 import { Menu } from '@base-ui/react/menu'
 import type { EnvironmentWithAttribution } from '@shared/environments'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
+import { SubscriptionSection } from './SubscriptionSection'
 
 /**
  * EnvironmentsTab — the Settings → Environments tab (issue 2-15, stories 45–51; design:
@@ -160,6 +161,8 @@ export function EnvironmentsTab() {
           />
         ))}
       </div>
+
+      <SubscriptionSection />
 
       {/* Retire — Destructive confirm (drops the entry from the synced registry). */}
       <ConfirmDialog

@@ -95,7 +95,10 @@ export function ConfirmDialog({
             </div>
           ) : null}
           <AlertDialog.Title className="text-base font-semibold">{title}</AlertDialog.Title>
-          <AlertDialog.Description className="text-muted-foreground mt-2 text-sm leading-relaxed">
+          <AlertDialog.Description
+            render={<div />}
+            className="text-muted-foreground mt-2 text-sm leading-relaxed"
+          >
             {body}
           </AlertDialog.Description>
           {/* Footer — reused Button instances: Outline Cancel + Primary/Destructive Confirm. */}
