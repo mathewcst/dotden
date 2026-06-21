@@ -37,6 +37,14 @@ export interface WorkspaceSidebarProps {
   readonly onCreateWorkspace: (label: string) => void
   /** Create a nested Group inside a Workspace (organization only). */
   readonly onCreateGroup: (workspaceId: string, label: string, parentId: string | null) => void
+  /** Select a Workspace as the active inspector target while preserving expand/collapse. */
+  readonly onSelectWorkspace: (workspaceId: string) => void
+  /** Select a Group as the active inspector target while preserving expand/collapse. */
+  readonly onSelectGroup: (workspaceId: string, groupId: string) => void
+  /** Currently selected Workspace inspector target. */
+  readonly selectedWorkspace: string | null
+  /** Currently selected Group inspector target. */
+  readonly selectedGroup: { workspaceId: string; groupId: string } | null
   /** Whether an organize action is in flight (disables the affordances). */
   readonly busy: boolean
 }
@@ -76,6 +84,10 @@ export function WorkspaceSidebar({
   renderFiles,
   onCreateWorkspace,
   onCreateGroup,
+  onSelectWorkspace,
+  onSelectGroup,
+  selectedWorkspace,
+  selectedGroup,
   busy,
 }: WorkspaceSidebarProps) {
   // The Workspace concept is surfaced ONLY once a SECOND Workspace exists (issue 1-14):
@@ -129,6 +141,10 @@ export function WorkspaceSidebar({
             hasRootFiles={(fileStatsByWorkspace.get(workspace.id)?.root ?? 0) > 0}
             renderFiles={renderFiles}
             onCreateGroup={onCreateGroup}
+            onSelectWorkspace={onSelectWorkspace}
+            onSelectGroup={onSelectGroup}
+            selectedWorkspace={selectedWorkspace}
+            selectedGroup={selectedGroup}
             busy={busy}
           />
         ))
@@ -141,6 +157,8 @@ export function WorkspaceSidebar({
           hasRootFiles={(fileStatsByWorkspace.get(defaultWorkspace.id)?.root ?? 0) > 0}
           renderFiles={renderFiles}
           onCreateGroup={onCreateGroup}
+          onSelectGroup={onSelectGroup}
+          selectedGroup={selectedGroup}
           busy={busy}
           showGroupAffordance={defaultWorkspace.groups.length > 0}
         />
@@ -156,6 +174,10 @@ function WorkspaceSection({
   hasRootFiles,
   renderFiles,
   onCreateGroup,
+  onSelectWorkspace,
+  onSelectGroup,
+  selectedWorkspace,
+  selectedGroup,
   busy,
 }: {
   workspace: Workspace
@@ -163,6 +185,10 @@ function WorkspaceSection({
   hasRootFiles: boolean
   renderFiles: WorkspaceSidebarProps['renderFiles']
   onCreateGroup: WorkspaceSidebarProps['onCreateGroup']
+  onSelectWorkspace: WorkspaceSidebarProps['onSelectWorkspace']
+  onSelectGroup: WorkspaceSidebarProps['onSelectGroup']
+  selectedWorkspace: WorkspaceSidebarProps['selectedWorkspace']
+  selectedGroup: WorkspaceSidebarProps['selectedGroup']
   busy: boolean
 }) {
   // The Workspace row is collapsible (matching the signature tree): the chevron is the
@@ -172,8 +198,14 @@ function WorkspaceSection({
     <section className="px-2 pt-1">
       <button
         type="button"
-        className="hover:bg-sidebar-accent flex w-full items-center gap-1.5 rounded-sm px-1.5 py-1.5 text-left"
-        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          'hover:bg-sidebar-accent flex w-full items-center gap-1.5 rounded-sm px-1.5 py-1.5 text-left',
+          selectedWorkspace === workspace.id && 'bg-sidebar-accent text-foreground',
+        )}
+        onClick={() => {
+          onSelectWorkspace(workspace.id)
+          setOpen((v) => !v)
+        }}
       >
         <ChevronDown
           className={cn(
@@ -191,6 +223,8 @@ function WorkspaceSection({
           hasRootFiles={hasRootFiles}
           renderFiles={renderFiles}
           onCreateGroup={onCreateGroup}
+          onSelectGroup={onSelectGroup}
+          selectedGroup={selectedGroup}
           busy={busy}
           showGroupAffordance
         />
@@ -205,6 +239,8 @@ function WorkspaceBody({
   hasRootFiles,
   renderFiles,
   onCreateGroup,
+  onSelectGroup,
+  selectedGroup,
   busy,
   showGroupAffordance,
 }: {
@@ -212,6 +248,8 @@ function WorkspaceBody({
   hasRootFiles: boolean
   renderFiles: WorkspaceSidebarProps['renderFiles']
   onCreateGroup: WorkspaceSidebarProps['onCreateGroup']
+  onSelectGroup: WorkspaceSidebarProps['onSelectGroup']
+  selectedGroup: WorkspaceSidebarProps['selectedGroup']
   busy: boolean
   showGroupAffordance: boolean
 }) {
@@ -231,6 +269,8 @@ function WorkspaceBody({
           depth={0}
           renderFiles={renderFiles}
           onCreateGroup={onCreateGroup}
+          onSelectGroup={onSelectGroup}
+          selectedGroup={selectedGroup}
           busy={busy}
         />
       ))}
@@ -278,6 +318,8 @@ function GroupBranch({
   depth,
   renderFiles,
   onCreateGroup,
+  onSelectGroup,
+  selectedGroup,
   busy,
 }: {
   node: GroupNode
@@ -285,6 +327,8 @@ function GroupBranch({
   depth: number
   renderFiles: WorkspaceSidebarProps['renderFiles']
   onCreateGroup: WorkspaceSidebarProps['onCreateGroup']
+  onSelectGroup: WorkspaceSidebarProps['onSelectGroup']
+  selectedGroup: WorkspaceSidebarProps['selectedGroup']
   busy: boolean
 }) {
   const [open, setOpen] = useState(true)
@@ -292,8 +336,16 @@ function GroupBranch({
     <div style={{ paddingLeft: depth * 10 }}>
       <button
         type="button"
-        className="text-foreground hover:bg-sidebar-accent flex w-full items-center gap-1.5 rounded-sm px-1.5 py-1.5 text-left text-[13px]"
-        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          'text-foreground hover:bg-sidebar-accent flex w-full items-center gap-1.5 rounded-sm px-1.5 py-1.5 text-left text-[13px]',
+          selectedGroup?.workspaceId === workspaceId &&
+            selectedGroup.groupId === node.group.id &&
+            'bg-sidebar-accent',
+        )}
+        onClick={() => {
+          onSelectGroup(workspaceId, node.group.id)
+          setOpen((v) => !v)
+        }}
       >
         <ChevronRight
           className={cn('text-muted-foreground size-3.5 transition-transform', open && 'rotate-90')}
@@ -314,6 +366,8 @@ function GroupBranch({
               depth={depth + 1}
               renderFiles={renderFiles}
               onCreateGroup={onCreateGroup}
+              onSelectGroup={onSelectGroup}
+              selectedGroup={selectedGroup}
               busy={busy}
             />
           ))}

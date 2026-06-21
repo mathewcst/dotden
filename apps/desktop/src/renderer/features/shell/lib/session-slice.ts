@@ -2,7 +2,7 @@
  * The `session` slice — the spine of the scoped `den-session` store (ADR 0027, Phase 2).
  *
  * This holds the cross-pane session state every other slice and pane reads: the managed File
- * tree, the Workspace/Group model, the single source of truth for "the selected File", the
+ * tree, the Workspace/Group model, the selected File/Workspace/Group inspector target, the
  * center-pane diff + tab, this environment's automation level, and the shared `busy`/`error`
  * channel. It also owns the lifecycle verbs (Track, organize, the right-click row verbs +
  * their confirm), because those drive selection + tree reloads that the whole window follows.
@@ -68,6 +68,10 @@ export interface SessionSlice {
   workspaces: readonly WorkspaceModel[]
   /** The single source of truth for the selected File — the tree, diff, and inspector follow it. */
   selected: string | null
+  /** Selected Group inspector target, or null when a File/Workspace/nothing is active. */
+  selectedGroup: { workspaceId: string; groupId: string } | null
+  /** Selected Workspace inspector target, or null when a File/Group/nothing is active. */
+  selectedWorkspace: string | null
   /** The selected File's real `chezmoi diff` for the center pane (null when none/incoming-clean). */
   diff: string | null
   /** Which center-pane tab is active. Reset to `changes` whenever selection clears (see selectFile). */
@@ -101,6 +105,10 @@ export interface SessionSlice {
   run(kind: Busy, fn: () => Promise<void>): Promise<void>
   /** Select a File AND fetch its real diff (guarded so the last selection wins). */
   selectFile(path: string | null): Promise<void>
+  /** Select a Workspace as the active inspector target. */
+  selectWorkspace(workspaceId: string | null): void
+  /** Select a Group as the active inspector target. */
+  selectGroup(workspaceId: string, groupId: string): void
   /** Refresh the managed File tree from the main process (the real chezmoi view). */
   reloadTree(): Promise<void>
   /** Switch the active center-pane tab. */
@@ -152,6 +160,8 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
     files: [],
     workspaces: [],
     selected: null,
+    selectedGroup: null,
+    selectedWorkspace: null,
     diff: null,
     centerTab: 'changes',
     automationLevel: 'manual',
@@ -184,7 +194,7 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
     // copy yet), so they carry no local diff. Manages `busy`/`error` itself (not via `run`) because
     // the token guard must wrap the busy/error writes.
     selectFile: async (path) => {
-      set({ selected: path })
+      set({ selected: path, selectedGroup: null, selectedWorkspace: null })
       const token = get().diffToken + 1
       set({ diffToken: token })
       // A cleared selection can't have a History tab to show; snap back to Changes so the
@@ -208,6 +218,26 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
       } finally {
         if (token === get().diffToken) set((s) => ({ busy: s.busy === 'diff' ? null : s.busy }))
       }
+    },
+
+    selectWorkspace: (workspaceId) => {
+      set({
+        selected: null,
+        selectedGroup: null,
+        selectedWorkspace: workspaceId,
+        diff: null,
+        centerTab: 'changes',
+      })
+    },
+
+    selectGroup: (workspaceId, groupId) => {
+      set({
+        selected: null,
+        selectedGroup: { workspaceId, groupId },
+        selectedWorkspace: null,
+        diff: null,
+        centerTab: 'changes',
+      })
     },
 
     reloadTree: () =>

@@ -139,7 +139,8 @@ export function CenterPane() {
       </div>
 
       {/* Tabs — Changes is the everyday diff; History (2-01) is the per-File version list +
-          read-only preview; Scope (1-15) is surfaced in the inspector. History is meaningful for a
+          read-only preview. Scope editing lives in the inspector, so there is no fake disabled tab.
+          History is meaningful for a
           managed File on env A (incoming-review env B has no committed history to show), so it is
           only selectable there. */}
       <div className="border-border text-muted-foreground flex items-center gap-4 border-b px-4 text-xs">
@@ -166,7 +167,6 @@ export function CenterPane() {
         >
           History
         </button>
-        <span className="cursor-default py-2 opacity-50">Scope</span>
       </div>
 
       {/* env A: Track a File by path (a browse-pick stand-in for the MVP shell). */}

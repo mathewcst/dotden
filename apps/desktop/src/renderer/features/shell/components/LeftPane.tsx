@@ -22,8 +22,12 @@ export function LeftPane({ model }: { model: ComponentProps<typeof FileTree>['mo
   const incoming = useDenSession((s) => s.incoming)
   const workspaces = useDenSession((s) => s.workspaces)
   const selected = useDenSession((s) => s.selected)
+  const selectedGroup = useDenSession((s) => s.selectedGroup)
+  const selectedWorkspace = useDenSession((s) => s.selectedWorkspace)
   const busy = useDenSession((s) => s.busy)
   const selectFile = useDenSession((s) => s.selectFile)
+  const selectGroup = useDenSession((s) => s.selectGroup)
+  const selectWorkspace = useDenSession((s) => s.selectWorkspace)
   const onRowVerb = useDenSession((s) => s.onRowVerb)
   const createWorkspace = useDenSession((s) => s.createWorkspace)
   const createGroup = useDenSession((s) => s.createGroup)
@@ -72,6 +76,10 @@ export function LeftPane({ model }: { model: ComponentProps<typeof FileTree>['mo
               busy={busy === 'organize'}
               onCreateWorkspace={createWorkspace}
               onCreateGroup={createGroup}
+              onSelectWorkspace={selectWorkspace}
+              onSelectGroup={selectGroup}
+              selectedWorkspace={selectedWorkspace}
+              selectedGroup={selectedGroup}
               renderFiles={(workspaceId, groupId) =>
                 (filesByWorkspaceAndGroup.get(`${workspaceId}\u0000${groupId ?? ''}`) ?? []).map(
                   (f) => (

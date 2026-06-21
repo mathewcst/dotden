@@ -150,6 +150,19 @@ export function DenWindow({
     model.setGitStatus(gitStatus)
   }, [model, gitStatus])
 
+  // The title-bar advertises the native search chord; bind it at the shell layer that owns the
+  // shared tree model so keyboard and mouse open the exact same search session.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== 'k' || (!event.metaKey && !event.ctrlKey)) return
+      if (role !== 'a' || paths.length === 0) return
+      event.preventDefault()
+      model.openSearch()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [model, paths.length, role])
+
   // env A boot load (issue 1-04). `init` self-guards on role and is a stable store action, so this
   // runs once per mount; the provider's `key={role}` remount re-runs it for the other environment.
   useEffect(() => {

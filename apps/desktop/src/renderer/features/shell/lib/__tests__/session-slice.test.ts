@@ -68,6 +68,8 @@ describe('session slice — the reset guarantee (key={role} remount proven at th
     expect(s.files).toEqual([])
     expect(s.workspaces).toEqual([])
     expect(s.selected).toBeNull()
+    expect(s.selectedGroup).toBeNull()
+    expect(s.selectedWorkspace).toBeNull()
     expect(s.diff).toBeNull()
     expect(s.centerTab).toBe('changes')
     expect(s.busy).toBeNull()
@@ -299,6 +301,8 @@ describe('session slice — selectFile', () => {
     const store = createDenSessionStore('a', api)
     await store.getState().selectFile('.zshrc')
     expect(store.getState().selected).toBe('.zshrc')
+    expect(store.getState().selectedGroup).toBeNull()
+    expect(store.getState().selectedWorkspace).toBeNull()
     expect(store.getState().diff).toBe('diff for .zshrc')
     expect(api.den.diff).toHaveBeenCalledWith('.zshrc')
   })
@@ -319,6 +323,32 @@ describe('session slice — selectFile', () => {
     expect(store.getState().selected).toBeNull()
     expect(store.getState().diff).toBeNull()
     expect(store.getState().centerTab).toBe('changes')
+  })
+
+  it('selects a Workspace as the active inspector target and clears File state', async () => {
+    const store = freshStore('a')
+    await store.getState().selectFile('.zshrc')
+    store.getState().setCenterTab('history')
+
+    store.getState().selectWorkspace('w1')
+
+    expect(store.getState().selected).toBeNull()
+    expect(store.getState().selectedWorkspace).toBe('w1')
+    expect(store.getState().selectedGroup).toBeNull()
+    expect(store.getState().diff).toBeNull()
+    expect(store.getState().centerTab).toBe('changes')
+  })
+
+  it('selects a Group as the active inspector target and clears File state', async () => {
+    const store = freshStore('a')
+    await store.getState().selectFile('.zshrc')
+
+    store.getState().selectGroup('w1', 'g1')
+
+    expect(store.getState().selected).toBeNull()
+    expect(store.getState().selectedWorkspace).toBeNull()
+    expect(store.getState().selectedGroup).toEqual({ workspaceId: 'w1', groupId: 'g1' })
+    expect(store.getState().diff).toBeNull()
   })
 })
 

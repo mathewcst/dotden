@@ -29,23 +29,12 @@ import type { SecretFinding } from '../../shared/secrets.js'
 import type { ConvertSecretRequest } from '../../shared/den.js'
 import type { AppearanceOverride, AppearanceSettings } from '../../shared/appearance-settings.js'
 import type { AppInfo, UpdateCheckResult } from '../../shared/app-info.js'
+import { TraceContextCodec, type TraceEnvelope } from '../../shared/remote.js'
 import type {
   CopyDiagnosticsResult,
   RedactedCommandRecord,
   UnredactedModeState,
 } from '../../shared/diagnostics.js'
-
-/**
- * The minimal trace envelope every IPC payload carries.
- *
- * Mirrors the preload's `_trace` (a correlation id). The full trace-context codec
- * (ADR 0007 `TraceContextCodec`) is a later slice; the MVP only needs the id to
- * line a renderer call up with its wide event.
- */
-export interface TraceEnvelope {
-  /** Correlation id minted per user action in the preload. */
-  readonly traceId: string
-}
 
 /** Any IPC payload shape, constrained so the bridge can read its `_trace`. */
 type TracedPayload = { readonly _trace: TraceEnvelope }
@@ -765,9 +754,5 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
  * @throws Error when `_trace.traceId` is missing or not a string.
  */
 export function traceId(payload: TracedPayload): string {
-  const id = payload._trace?.traceId
-  if (typeof id !== 'string' || id.length === 0) {
-    throw new Error('IPC call reached the bridge without a _trace envelope')
-  }
-  return id
+  return TraceContextCodec.decode(payload._trace).traceId
 }

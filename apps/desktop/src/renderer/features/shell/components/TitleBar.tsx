@@ -6,11 +6,11 @@ import {
   type WindowControlsPlatform,
 } from '@/shared/components/WindowControls'
 import { IconButton } from '@/ui/icon-button'
-import { ArrowDownUp, Bell, ChevronDown, Folder, Search, Settings2 } from 'lucide-react'
+import { ArrowDownUp, ChevronDown, Folder, Search, Settings2 } from 'lucide-react'
 
 /**
  * TitleBar — the den window's top bar (signature screen, Figma `Titlebar` 516:1424): the Workspace
- * switcher · centered ⌘K search · sync status · bell · settings · avatar. The `flex-1` spacers on
+ * switcher · centered ⌘K search · sync status · settings · avatar. The `flex-1` spacers on
  * either side of the search keep it optically centered regardless of the side clusters.
  *
  * The search opens the tree's built-in search session, so `onSearch` + `searchDisabled` are handed
@@ -74,15 +74,12 @@ export function TitleBar({
 
       <div className="h-px flex-1" />
 
-      {/* Right cluster — sync status · bell · settings · avatar. */}
+      {/* Right cluster — sync status · settings · avatar. */}
       <div className="flex shrink-0 items-center gap-1" style={windowNoDragRegionStyle}>
         <span className="text-muted-foreground mr-1 flex items-center gap-1 pr-1 text-xs">
           <ArrowDownUp className="size-3" aria-hidden />
           {role === 'a' && incomingCount > 0 ? `${incomingCount} incoming` : 'Up to date'}
         </span>
-        <IconButton aria-label="notifications">
-          <Bell />
-        </IconButton>
         {/* Open the Settings surface (issue 2-08): the app shows it over the Workspace. */}
         <IconButton aria-label="settings" onClick={onOpenSettings} disabled={!onOpenSettings}>
           <Settings2 />

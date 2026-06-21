@@ -53,8 +53,8 @@ const VERBS: readonly VerbEntry[] = [
  * row offers Commit, Apply, **Untrack**, and **Delete everywhere** — the user acts on a
  * File directly from the tree. Because the tree is a web component, the right-clicked
  * File is recovered from the DOM: every tree row carries `data-item-path="<targetPath>"`
- * (the `@pierre/trees` row attribute), so the trigger's `contextmenu` handler walks up
- * from the event target to that row and remembers its path for the chosen verb.
+ * plus `data-item-type="file" | "folder"` (the `@pierre/trees` row attributes), so the trigger's
+ * `contextmenu` handler walks up from the event target to a real File row and remembers its path.
  *
  * Delete everywhere is rendered visibly distinct from Untrack — separated and in red —
  * so the destructive intent is unmistakably separate from the safe Untrack beside it.
@@ -69,7 +69,9 @@ export function RowContextMenu({ onVerb, children }: RowContextMenuProps) {
   // Resolve the right-clicked row's File path from the DOM. Every tree row exposes
   // `data-item-path`; `closest` walks up from whatever inner element was clicked.
   function onContextMenuCapture(event: React.MouseEvent<HTMLDivElement>) {
-    const row = (event.target as HTMLElement).closest<HTMLElement>('[data-item-path]')
+    const row = (event.target as HTMLElement).closest<HTMLElement>(
+      '[data-item-path][data-item-type="file"]',
+    )
     const path = row?.dataset.itemPath ?? null
     pathRef.current = path
     setHasTarget(path !== null)

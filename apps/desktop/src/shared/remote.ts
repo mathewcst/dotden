@@ -17,6 +17,29 @@ export interface TraceEnvelope {
 }
 
 /**
+ * Single codec for trace context that crosses the renderer↔main IPC boundary.
+ *
+ * The preload creates this envelope, the bridge decodes it, and tests round-trip through this one
+ * owner so trace validation cannot drift between duplicated local shapes.
+ */
+export const TraceContextCodec = {
+  encode(traceId: string): TraceEnvelope {
+    if (typeof traceId !== 'string' || traceId.length === 0) {
+      throw new Error('Trace context requires a non-empty traceId')
+    }
+    return { traceId }
+  },
+
+  decode(envelope: unknown): TraceEnvelope {
+    const traceId = (envelope as TraceEnvelope | null | undefined)?.traceId
+    if (typeof traceId !== 'string' || traceId.length === 0) {
+      throw new Error('IPC call reached the bridge without a _trace envelope')
+    }
+    return { traceId }
+  },
+}
+
+/**
  * Result of checking whether the user's git credentials can reach a Remote.
  *
  * Maps to: resolve chezmoi's effective `git.command`, then run
