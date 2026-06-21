@@ -9,6 +9,7 @@ import {
   BrowserWindow,
   clipboard,
   ipcMain,
+  Menu,
   nativeImage,
   Notification,
   powerMonitor,
@@ -625,9 +626,11 @@ async function readNotifyOn(): Promise<NotifyOn> {
 }
 
 /** Show one native OS notification if supported. */
-function showNotification(title: string, body: string): void {
+function showNotification(title: string, body: string, onClick?: () => void): void {
   if (!Notification.isSupported()) return
-  new Notification({ title, body }).show()
+  const notification = new Notification({ title, body })
+  if (onClick) notification.on('click', onClick)
+  notification.show()
 }
 
 /** Gate an OS notification through the user-authored `notifyOn` settings. */
@@ -635,10 +638,11 @@ async function notifyIfEnabled(
   kind: keyof NotifyOn,
   title: string,
   body: string,
+  onClick?: () => void,
 ): Promise<void> {
   const notifyOn = await readNotifyOn()
   if (!notificationEnabled(notifyOn, kind)) return
-  showNotification(title, body)
+  showNotification(title, body, onClick)
 }
 
 /** Manual/held-item incoming prompt, respecting the user's `notifyOn.incoming` switch. */
@@ -647,6 +651,7 @@ function notifyIncomingReview(): void {
     'incoming',
     'dotden — incoming changes',
     'Another environment changed your Den. Open dotden to review and Apply.',
+    () => showMainWindow('review'),
   )
   // Nudge an open window to re-check the Remote so its in-app banner stays in step.
   mainWindow?.webContents.send('tray-poller:incoming')
@@ -654,6 +659,24 @@ function notifyIncomingReview(): void {
 
 function pushTrayAutomationAction(action: 'refresh' | 'review' | 'resolve'): void {
   mainWindow?.webContents.send('tray-poller:automation-action', action)
+}
+
+function showMainWindow(action?: 'review' | 'resolve'): void {
+  const sendAction = () => {
+    if (action) pushTrayAutomationAction(action)
+  }
+
+  const hadWindow = mainWindow !== null
+  const window = mainWindow ?? createWindow()
+  if (hadWindow) {
+    sendAction()
+  } else {
+    window.once('ready-to-show', sendAction)
+  }
+
+  if (window.isMinimized()) window.restore()
+  window.show()
+  window.focus()
 }
 
 /**
@@ -699,6 +722,39 @@ function notifyApplied(fileCount: number): void {
 /** Main-process notification surface. Conflict/applied are used by follow-up automation hooks. */
 const desktopNotifier = { notifyIncoming, notifyConflict, notifyApplied }
 
+function trayIconImage(): Electron.NativeImage {
+  const iconPath = app.isPackaged
+    ? join(process.resourcesPath, 'tray-icon.png')
+    : join(app.getAppPath(), 'resources/packaging/icon.png')
+  const image = nativeImage.createFromPath(iconPath)
+  if (image.isEmpty()) return image
+  return image.resize({ width: 16, height: 16 })
+}
+
+function quitFromTray(): void {
+  trayPoller?.stop()
+  trayPoller = null
+  tray?.destroy()
+  tray = null
+  app.quit()
+}
+
+function installTrayChrome(): void {
+  if (!tray) return
+  tray.setToolTip('dotden — watching for incoming changes')
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Open dotden', click: () => showMainWindow() },
+      { type: 'separator' },
+      { label: 'Quit', click: quitFromTray },
+    ]),
+  )
+  tray.removeAllListeners('click')
+  tray.removeAllListeners('double-click')
+  tray.on('click', () => showMainWindow())
+  tray.on('double-click', () => showMainWindow())
+}
+
 /**
  * Arm the always-on {@link TrayPoller} (issue 1-12): a system-tray presence keeps the app
  * (and therefore the watcher) alive when the window is closed, and the poller checks the
@@ -724,13 +780,10 @@ async function armTrayPoller(): Promise<void> {
     const remoteUrl = snapshot.remoteUrl
 
     // A minimal tray presence so closing the window does not quit the app on Win/Linux —
-    // that is what lets the watcher keep running with the window closed. The native menu +
-    // live-state icon is issue 3-06; here the tray is functional chrome only.
+    // that is what lets the watcher keep running with the window closed.
     if (!tray) {
-      // An empty NativeImage is a valid (blank) tray icon — functional chrome only; the
-      // real branded/state-driven tray art + native menu is issue 3-06.
-      tray = new Tray(nativeImage.createEmpty())
-      tray.setToolTip('dotden — watching for incoming changes')
+      tray = new Tray(trayIconImage())
+      installTrayChrome()
     }
 
     const client = await getRemoteClient()
@@ -826,7 +879,7 @@ async function flushQueuedPushes(): Promise<void> {
  * contents are pinned to the local app — outbound navigation and new windows are
  * denied as defense-in-depth atop the sandbox + CSP.
  */
-function createWindow(): void {
+function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
     width: 1100,
     height: 760,
@@ -886,6 +939,8 @@ function createWindow(): void {
   } else {
     void window.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  return window
 }
 
 // Single-instance guard (P1): dotden is a sync app — a second launch must focus the

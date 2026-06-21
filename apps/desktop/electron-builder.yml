@@ -41,6 +41,8 @@ extraResources:
       - '**/*'
       - '!tools.lock.json'
       - '!README.md'
+  - from: resources/packaging/icon.png
+    to: tray-icon.png
 
 # Populate resources/bin/<platform>/<arch>/ with the pinned chezmoi + git for the target
 # being packaged, before electron-builder copies extraResources. A clean checkout ships
