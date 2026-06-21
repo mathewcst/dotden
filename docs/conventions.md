@@ -120,8 +120,8 @@ that enforces the graph. This supersedes ADR 0027's flat feature layout.
 ```
 src/renderer/
   app/                      # composition root — MAY import features + den-session + shared
-    App.tsx · main.tsx · providers/        (Tooltip, Launch, DenSession key={role})
-    launch/  boot routing      shell/  DenWindow · panes · DialogLayer · TitleBar
+    App.tsx · main.tsx · providers/  (AppProviders→Tooltip · DenSessionProvider key={role})
+    launch/  boot routing + LaunchProvider      shell/  DenWindow · panes · DialogLayer · TitleBar
     update/  root-mounted prompt
   features/                 # capabilities only — MAY import den-session + shared,
     onboarding  returning  workspace  commit  sync  apply         NEVER app or another feature
@@ -132,6 +132,7 @@ src/renderer/
   components/               # shared presentational — NEVER imports features/app
     ui/   vanilla shadcn (CLI-owned)       den/   dotden-branded surface (ADR 0036)
   lib/   cn · toast · operation-error · apply-theme · ipc-timeout    hooks/   use-mobile · …
+  index.html · index.css    # renderer-root entry + global ember/Tailwind CSS (← app/main.tsx)
 ```
 
 > The **file Tree stays a feature** (`features/workspace/`) — only its _model_
@@ -167,7 +168,10 @@ lib, hooks, den-session}`. A feature never imports `app/` or another feature's i
   rendered surface, so `app/providers/` imports them straight from `ui/` with **no `den/`
   wrapper**. The carve-out is the _providers_ directory only — `shell/`, `launch/`, and every
   feature still render through `den/`. Branding a toast's _box_ is a `den/` job; the `<Toaster/>`
-  _provider_ is not.
+  _provider_ is not. Concretely, the mount is `app/providers/AppProviders.tsx` (the
+  `TooltipProvider` today; sonner's `<Toaster/>` joins it in Phase B). It exists _because_ `App.tsx`
+  is `app`-tier and may not import `ui/` — only `providers/` and `den/` may — so the lone `ui/`
+  touch is quarantined there.
 - **Bespoke-native allowlist.** A few rows render native `<button>`/`<div>` for keyboard a11y
   and are _not_ shadcn-migration targets: TreeRow/FileRow (`features/workspace/`), CommitRow
   (`commit/`), SidebarItem, ListRow/SelectRow, DiffLine/DiffLineSplit/MergeHunk
@@ -201,7 +205,8 @@ lib, hooks, den-session}`. A feature never imports `app/` or another feature's i
   `@/den-session`, `@/lib/…`); reach for `@`, not deep `../../` chains. The **IPC contract** is
   reached via **`@shared/*`** (ADR 0031), _not_ `@/` — `@` only maps `src/renderer/*`, and the
   renderer never imports `src/main/**`. The old `@/shared/*` (renderer junk drawer) and
-  `@/ui/*` (hand-authored primitives) are **retired** — both are gone (ADR 0033/0036).
+  `@/ui/*` (hand-authored primitives) are **retired** — use `@/components/{ui,den}` and `@/lib`;
+  the legacy folders are deleted as their last consumers migrate (the A4 step; ADR 0033/0036).
 
 ## Comments: over-comment, but only what earns its line
 

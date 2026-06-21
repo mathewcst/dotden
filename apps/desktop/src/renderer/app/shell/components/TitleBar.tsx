@@ -1,5 +1,5 @@
 import { useDenSession } from '@/den-session'
-import { syncStatus } from '@/features/shell/lib/sync-status'
+import { syncStatus } from '@/app/shell/lib/sync-status'
 import { WindowTitleBar, windowNoDragRegionStyle } from '@/shared/components/WindowControls'
 import { IconButton } from '@/ui/icon-button'
 import { ArrowDownUp, ChevronDown, Folder, Search, Settings2 } from 'lucide-react'

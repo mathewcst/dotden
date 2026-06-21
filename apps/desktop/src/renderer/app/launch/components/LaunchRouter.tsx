@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react'
-import { useLaunch } from '@/features/launch/components/LaunchProvider'
-import { LandingChooser } from '@/features/launch/components/LandingChooser'
+import { useLaunch } from '@/app/launch/components/LaunchProvider'
+import { LandingChooser } from '@/app/launch/components/LandingChooser'
 import { DenSessionProvider } from '@/app/providers/DenSessionProvider'
 import { WindowTitleBar } from '@/shared/components/WindowControls'
 // DenWindow is EAGER, not lazy: it is the hot path — a set-up environment boots straight to the
@@ -8,7 +8,7 @@ import { WindowTitleBar } from '@/shared/components/WindowControls'
 // flash on the single most common launch (splash → splash → app). The cold setup/settings shells
 // below stay split — a set-up user never loads them — and are warmed on idle by
 // `preloadLaunchChunks` so their fallbacks never actually show either.
-import { DenWindow } from '@/features/shell/components/DenWindow'
+import { DenWindow } from '@/app/shell/components/DenWindow'
 
 const OnboardingShell = lazy(() =>
   import('@/features/onboarding/components/OnboardingShell').then((module) => ({
