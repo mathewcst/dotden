@@ -29,13 +29,8 @@ import {
   type CommitMessageTemplate,
   type RenderedCommitMessage,
 } from './commit/commit-message-renderer.js'
-import {
-  DEFAULT_WORKSPACE_ID,
-  DenStore,
-  type Group,
-  type Workspace,
-  type WorkspacesDoc,
-} from './den-store.js'
+import { DEFAULT_WORKSPACE_ID, DenStore, type WorkspacesDoc } from './den-store.js'
+import type { Group, Workspace } from '../../shared/workspace.js'
 import type { EnvironmentEntry } from '../../shared/environments.js'
 import type { OperationTracer } from './platform/operation-tracer.js'
 import { SyncEngine, type AutoApplyHoldReason, type IncomingFile } from './sync/sync-engine.js'

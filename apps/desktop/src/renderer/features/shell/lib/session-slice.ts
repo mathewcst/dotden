@@ -17,7 +17,7 @@
  */
 import type { DotdenApi } from '@shared/ipc-api'
 import type { AffectedEnvironment, FileTreeEntry } from '../../../../main/foundation/den-service'
-import type { Workspace as WorkspaceModel } from '../../../../main/foundation/den-store'
+import type { Workspace as WorkspaceModel } from '@shared/workspace'
 import type { Scope } from '@shared/scope'
 import type { AutomationLevel } from '@shared/apply'
 import type { FileTreeRenameEvent } from '@pierre/trees'
