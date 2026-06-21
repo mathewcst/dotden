@@ -18,19 +18,22 @@ import { cn } from '@/shared/lib/utils'
  * WorkspaceSidebar — the user-authored organization layer of the left pane (issue 1-14).
  *
  * dotden organization is two-tiered (ADR 0005):
- * - **Workspaces** are the **access boundary** an environment subscribes to. The
- *   Workspace concept **stays invisible until a SECOND Workspace exists** — with only
- *   the default one, this component surfaces no Workspace UI at all, so simple setups
- *   stay simple. Creating a second Workspace (via the header `+`) reveals the sections.
+ * - **Workspaces** are the **access boundary** an environment subscribes to. The default
+ *   Workspace is **seeded for the user** — issue 1-14's "the Workspace concept stays
+ *   invisible" means the user never has to *manually create* it, NOT that the `WORKSPACES`
+ *   section is hidden. The section + each Workspace node are always shown (matching the
+ *   signature-screen design), so the `+` to add a second Workspace is always reachable.
  * - **Groups** are **pure organization** nested inside a Workspace — they change
  *   NEITHER access NOR a File's on-disk path. The user can create and nest them freely
  *   to tidy their Den.
  *
- * This renders the Workspace sections + nested Group tree and the affordances to create
- * each; the actual File rows (with their `@pierre/trees` git-status decorations) are
- * rendered by the parent via {@link WorkspaceSidebarProps.renderFiles}, scoped to the
- * Workspace/Group whose Files belong there. The whole tree is read from / written to the
- * synced `.dotden/` over IPC by the parent — nothing here is a fixture.
+ * This renders one labelled section per Workspace + its nested Group tree and the
+ * affordances to create each; the actual File rows (with their `@pierre/trees` git-status
+ * decorations) are rendered by the parent via {@link WorkspaceSidebarProps.renderFiles},
+ * scoped to the Workspace/Group whose Files belong there. The `WORKSPACES` header itself is
+ * owned by the parent (see {@link WorkspacesHeader}) so it can stay pinned above the scroll
+ * region. The whole tree is read from / written to the synced `.dotden/` over IPC by the
+ * parent — nothing here is a fixture.
  */
 export interface WorkspaceSidebarProps {
   /** Every Workspace in the Den (each carrying its nested Group tree), from `den:tree`. */
@@ -43,8 +46,6 @@ export interface WorkspaceSidebarProps {
    * `groupId` is `null` for Files sitting directly under the Workspace root.
    */
   readonly renderFiles: (workspaceId: string, groupId: string | null) => ReactNode
-  /** Create a new Workspace (the access boundary). Reveals the concept once a 2nd exists. */
-  readonly onCreateWorkspace: (label: string) => void
   /** Create a nested Group inside a Workspace (organization only). */
   readonly onCreateGroup: (workspaceId: string, label: string, parentId: string | null) => void
   /** Rename a Workspace label. */
@@ -92,15 +93,44 @@ function buildGroupForest(groups: readonly Group[]): readonly GroupNode[] {
 }
 
 /**
- * The organization sidebar. Below a second Workspace exists, it renders nothing but the
- * default Workspace's Files (the concept stays invisible); from the second on, it
- * renders the labelled Workspace sections with their nested Groups.
+ * The `WORKSPACES` section header, owned by the parent so it can stay pinned above the
+ * scroll region. Always shown (the default Workspace is seeded, not hidden — issue 1-14),
+ * so the `+` to add a second Workspace is always reachable.
+ */
+export function WorkspacesHeader({
+  busy,
+  onCreateWorkspace,
+}: {
+  busy: boolean
+  onCreateWorkspace: (label: string) => void
+}) {
+  return (
+    <div className="flex items-center px-3 pt-2 pr-2 pb-1">
+      <span className="text-muted-foreground font-mono text-[11px] font-medium tracking-[0.8px] uppercase">
+        Workspaces
+      </span>
+      <div className="flex-1" />
+      <AddInline
+        title="New Workspace"
+        icon={<Plus className="size-3.5" />}
+        triggerClassName="hover:bg-sidebar-accent inline-flex size-6 items-center justify-center rounded-md"
+        placeholder="Workspace name…"
+        disabled={busy}
+        onSubmit={(label) => onCreateWorkspace(label)}
+      />
+    </div>
+  )
+}
+
+/**
+ * The organization sidebar body: one labelled, collapsible section per Workspace with its
+ * nested Group tree. Every Workspace is always rendered (including the lone default one) —
+ * the `WORKSPACES` header is rendered separately by the parent via {@link WorkspacesHeader}.
  */
 export function WorkspaceSidebar({
   workspaces,
   files,
   renderFiles,
-  onCreateWorkspace,
   onCreateGroup,
   onRenameWorkspace,
   onRenameGroup,
@@ -112,10 +142,6 @@ export function WorkspaceSidebar({
   selectedGroup,
   busy,
 }: WorkspaceSidebarProps) {
-  // The Workspace concept is surfaced ONLY once a SECOND Workspace exists (issue 1-14):
-  // a single default Workspace is never named in the UI, so simple setups stay simple.
-  const conceptVisible = workspaces.length > 1
-  const defaultWorkspace = workspaces[0]
   const fileStatsByWorkspace = useMemo(() => {
     const stats = new Map<string, { total: number; root: number }>()
     for (const file of files) {
@@ -129,68 +155,25 @@ export function WorkspaceSidebar({
 
   return (
     <div className="flex flex-col">
-      {conceptVisible ? (
-        /* WORKSPACES header — shown only after a second Workspace exists. */
-        <div className="flex items-center px-3 pt-2 pr-2 pb-1">
-          <span className="text-muted-foreground font-mono text-[11px] font-medium tracking-[0.8px] uppercase">
-            Workspaces
-          </span>
-          <div className="flex-1" />
-          <AddInline
-            title="New Workspace"
-            icon={<Plus className="size-3.5" />}
-            triggerClassName="hover:bg-sidebar-accent inline-flex size-6 items-center justify-center rounded-md"
-            placeholder="Workspace name…"
-            disabled={busy}
-            onSubmit={(label) => onCreateWorkspace(label)}
-          />
-        </div>
-      ) : (
-        <div className="flex items-center px-3 pt-2 pr-2 pb-1">
-          <span className="text-muted-foreground font-mono text-[11px] font-medium tracking-[0.8px] uppercase">
-            Files
-          </span>
-        </div>
-      )}
-
-      {conceptVisible ? (
-        // ≥2 Workspaces: render each as a labelled section with its nested Group tree.
-        workspaces.map((workspace) => (
-          <WorkspaceSection
-            key={workspace.id}
-            workspace={workspace}
-            fileCount={fileStatsByWorkspace.get(workspace.id)?.total ?? 0}
-            hasRootFiles={(fileStatsByWorkspace.get(workspace.id)?.root ?? 0) > 0}
-            renderFiles={renderFiles}
-            onCreateGroup={onCreateGroup}
-            onRenameWorkspace={onRenameWorkspace}
-            onRenameGroup={onRenameGroup}
-            onDeleteWorkspace={onDeleteWorkspace}
-            onDeleteGroup={onDeleteGroup}
-            onSelectWorkspace={onSelectWorkspace}
-            onSelectGroup={onSelectGroup}
-            selectedWorkspace={selectedWorkspace}
-            selectedGroup={selectedGroup}
-            busy={busy}
-          />
-        ))
-      ) : defaultWorkspace ? (
-        // Exactly one Workspace: the concept is invisible. We still render the default
-        // Workspace's Groups (so a user who made Groups before adding a 2nd Workspace
-        // keeps them) and its Files — but with NO Workspace chrome around them.
-        <WorkspaceBody
-          workspace={defaultWorkspace}
-          hasRootFiles={(fileStatsByWorkspace.get(defaultWorkspace.id)?.root ?? 0) > 0}
+      {workspaces.map((workspace) => (
+        <WorkspaceSection
+          key={workspace.id}
+          workspace={workspace}
+          fileCount={fileStatsByWorkspace.get(workspace.id)?.total ?? 0}
+          hasRootFiles={(fileStatsByWorkspace.get(workspace.id)?.root ?? 0) > 0}
           renderFiles={renderFiles}
           onCreateGroup={onCreateGroup}
+          onRenameWorkspace={onRenameWorkspace}
           onRenameGroup={onRenameGroup}
+          onDeleteWorkspace={onDeleteWorkspace}
           onDeleteGroup={onDeleteGroup}
+          onSelectWorkspace={onSelectWorkspace}
           onSelectGroup={onSelectGroup}
+          selectedWorkspace={selectedWorkspace}
           selectedGroup={selectedGroup}
           busy={busy}
-          showGroupAffordance={defaultWorkspace.groups.length > 0}
         />
-      ) : null}
+      ))}
     </div>
   )
 }
@@ -252,7 +235,9 @@ function WorkspaceSection({
               !open && '-rotate-90',
             )}
           />
-          <span className="text-foreground truncate text-[13px] font-medium">{workspace.label}</span>
+          <span className="text-foreground truncate text-[13px] font-medium">
+            {workspace.label}
+          </span>
           <span className="flex-1" />
           <span className="text-muted-foreground text-[11px]">{fileCount}</span>
         </button>
@@ -464,7 +449,7 @@ function GroupBranch({
   )
 }
 
-function WorkspaceActionsMenu({
+export function WorkspaceActionsMenu({
   label,
   disabled,
   onRename,

@@ -50,7 +50,12 @@ export function FileRow({
   return (
     <button
       type="button"
+      // Mirror the `@pierre/trees` row attributes so the same RowContextMenu selector
+      // (`[data-item-path][data-item-type="file"]`) resolves these grouped rows too — without
+      // `data-item-type` the right-click menu came up empty in the organized view (issue 1-08).
       data-item-path={file.targetPath}
+      data-item-type="file"
+      data-type="item"
       className={cn(
         'hover:bg-sidebar-accent flex w-full items-center gap-1.5 rounded-sm px-1.5 py-1.5 text-left',
         selected && 'bg-secondary',
