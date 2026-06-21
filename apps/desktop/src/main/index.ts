@@ -81,10 +81,10 @@ import { registerIpcBridge } from './ipc/ipc-bridge.js'
 
 /**
  * Process-wide observability core (ADR 0007): one wide event per Operation lands in
- * its bounded local ring buffer. It is the only always-on sink and never egresses;
- * the IpcBridge threads each call's `_trace` id into it via the DenService.
+ * its bounded local ring buffer. Production also folds each finalized event into the
+ * persisted CommandLog so the renderer reads one canonical Diagnostics stream.
  */
-const tracer = new OperationTracer()
+let tracer: OperationTracer | undefined
 
 /** Process-wide redacted Command log, persisted under Electron `userData` (ADR 0030). */
 let diagnosticsLog: Promise<PersistentCommandLog> | undefined
@@ -103,6 +103,16 @@ async function getDiagnosticsLog(): Promise<PersistentCommandLog> {
     throw error
   })
   return diagnosticsLog
+}
+
+/** One process-wide tracer, initialized with CommandLog as its production event consumer. */
+async function getOperationTracer(): Promise<OperationTracer> {
+  if (tracer) return tracer
+  const log = await getDiagnosticsLog()
+  tracer = new OperationTracer({
+    eventSink: (event) => log.recordOperationEvent(event),
+  })
+  return tracer
 }
 
 /**
@@ -194,6 +204,7 @@ async function buildDenService(): Promise<DenService> {
   const tools = await resolveBundledTools()
   const identity = await loadEnvironmentIdentity(app.getPath('userData'))
   const diagnosticsSink = await getDiagnosticsLog()
+  const operationTracer = await getOperationTracer()
   // The DenService's AutomationPolicy is fixed at construction, so it is built with THIS
   // environment's current rung (issue 1-12). Changing the level rebuilds the service (see
   // setAutomationLevel) so a later Commit uses the new auto-push decision.
@@ -205,7 +216,7 @@ async function buildDenService(): Promise<DenService> {
     destinationDir: app.getPath('home'),
     configPath: chezmoiConfigPath(),
     environment: { id: identity.id, label: identity.label, os: identity.os },
-    tracer,
+    tracer: operationTracer,
     automationLevel,
     diagnosticsSink,
     // Environment-local "Remember my choice" PM preference (issue 2-05) lives under userData,

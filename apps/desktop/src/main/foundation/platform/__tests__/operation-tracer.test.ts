@@ -85,6 +85,15 @@ describe('OperationTracer', () => {
     expect(tracer.events()).toHaveLength(1)
   })
 
+  it('sends finalized wide events to an optional production sink', () => {
+    const events: unknown[] = []
+    const tracer = new OperationTracer({ eventSink: (event) => events.push(event) })
+
+    const event = tracer.startOperation('commit', 'trace-sink').end('error')
+
+    expect(events).toEqual([event])
+  })
+
   it('establishes and restores the ambient diagnostics trace context', async () => {
     const tracer = new OperationTracer()
 

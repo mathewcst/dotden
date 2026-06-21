@@ -64,6 +64,37 @@ describe('PersistentCommandLog', () => {
     expect(persisted.records.map((record) => record.timestamp)).toEqual([2, 3])
   })
 
+  it('persists OperationTracer wide events as canonical diagnostics records', async () => {
+    const log = await PersistentCommandLog.load(dir, { capacity: 4 })
+
+    log.recordOperationEvent({
+      traceId: 'trace-operation',
+      kind: 'sync',
+      outcome: 'error',
+      durationMs: 75,
+      finishedAt: 10,
+      attributes: {
+        fileCount: 2,
+        durationMs: 75,
+      },
+    })
+
+    expect(log.recordsFor('trace-operation')).toEqual([
+      {
+        command: 'dotden-operation',
+        args: ['sync', 'error'],
+        exitCode: 1,
+        stdout: JSON.stringify({ fileCount: 2, durationMs: 75 }, null, 2),
+        stderr: '',
+        traceId: 'trace-operation',
+        timestamp: 10,
+      },
+    ])
+
+    const reloaded = await PersistentCommandLog.load(dir, { capacity: 4 })
+    expect(reloaded.recordsFor('trace-operation')).toHaveLength(1)
+  })
+
   it('can capture full output only while unredacted mode is on, then re-redacts on restart', async () => {
     const rawSecret = 'ghp_1234567890abcdefghijklmnopqrstuvwxyzABCD'
     let unredacted = true

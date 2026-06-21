@@ -43,17 +43,19 @@ export class CommandLog implements DiagnosticsSink {
   private readonly redaction: RedactionContext
   private readonly unredactedMode: () => boolean
   private readonly buffer: CommandRecord[] = []
+  private readonly failedTraceIds = new Set<string>()
 
   /** @param options Buffer capacity plus redaction/test seams. */
   constructor(options: CommandLogOptions = {}) {
     this.capacity = options.capacity ?? 256
     this.redaction = options.redaction ?? {}
     this.unredactedMode = options.unredactedMode ?? (() => false)
-    this.buffer.push(
-      ...(options.initialRecords
-        ?.map((record) => redactCommandRecord(record, this.redaction))
-        .slice(-this.capacity) ?? []),
-    )
+    for (const record of options.initialRecords ?? []) {
+      if (record.traceId && record.exitCode !== 0) this.failedTraceIds.add(record.traceId)
+    }
+    for (const record of options.initialRecords ?? []) {
+      this.append(redactCommandRecord(record, this.redaction))
+    }
   }
 
   /**
@@ -63,8 +65,32 @@ export class CommandLog implements DiagnosticsSink {
    */
   record(record: CommandRecord): void {
     const stored = this.unredactedMode() ? record : redactCommandRecord(record, this.redaction)
-    this.buffer.push(stored)
-    if (this.buffer.length > this.capacity) this.buffer.shift()
+    if (stored.traceId && stored.exitCode !== 0) this.failedTraceIds.add(stored.traceId)
+    this.append(stored)
+  }
+
+  /**
+   * Append one already-redacted record, preferring to evict successful records first.
+   *
+   * Failed traces are what the Details surface needs most after something goes wrong, so capacity
+   * pressure drops the oldest record from a non-failed trace when one exists. If every retained
+   * record belongs to a failed trace, the ring still stays bounded by evicting the oldest record.
+   */
+  private append(record: CommandRecord): void {
+    if (this.buffer.length < this.capacity) {
+      this.buffer.push(record)
+      return
+    }
+
+    const oldestUnpinnedIndex = this.buffer.findIndex(
+      (entry) => !entry.traceId || !this.failedTraceIds.has(entry.traceId),
+    )
+    if (oldestUnpinnedIndex >= 0) {
+      this.buffer.splice(oldestUnpinnedIndex, 1)
+    } else {
+      this.buffer.shift()
+    }
+    this.buffer.push(record)
   }
 
   /**

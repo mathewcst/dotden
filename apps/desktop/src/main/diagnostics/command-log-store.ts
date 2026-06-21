@@ -16,6 +16,7 @@ import {
   type DiagnosticsSink,
 } from '../foundation/diagnostics/command-log.js'
 import { type CommandRecord, redactCommandRecord } from '../foundation/diagnostics/redactor.js'
+import type { WideEvent } from '../foundation/platform/operation-tracer.js'
 
 /** Relative location of the persisted redacted Command log under `userData`. */
 export const COMMAND_LOG_RELATIVE_PATH = join('diagnostics', 'command-log.json')
@@ -89,6 +90,25 @@ export class PersistentCommandLog implements DiagnosticsSink {
     this.persist()
   }
 
+  /**
+   * Fold one finalized Operation wide event into the canonical persisted Diagnostics stream.
+   *
+   * The renderer intentionally reads only CommandLog records. These synthetic records make the
+   * ADR 0007 wide-event ring visible there without adding a second local-capture API.
+   */
+  recordOperationEvent(event: WideEvent): void {
+    this.log.record({
+      command: 'dotden-operation',
+      args: [event.kind, event.outcome],
+      exitCode: event.outcome === 'ok' ? 0 : 1,
+      stdout: JSON.stringify(event.attributes, null, 2),
+      stderr: '',
+      traceId: event.traceId,
+      timestamp: event.finishedAt,
+    })
+    this.persist()
+  }
+
   /** Snapshot retained Command records, oldest first. */
   records(): readonly CommandRecord[] {
     return this.log.records()
@@ -121,7 +141,7 @@ async function readPersisted(
   try {
     const parsed = JSON.parse(await readFile(filePath, 'utf8')) as Partial<PersistedCommandLog>
     const records = Array.isArray(parsed.records) ? parsed.records.filter(isCommandRecord) : []
-    return records.slice(-(options.capacity ?? 256)).map((record) =>
+    return records.map((record) =>
       // Persisted records should already be redacted. Re-running the redactor keeps reload
       // tolerant of old files without creating a raw-at-rest path.
       redactCommandRecord(record, options.redaction),

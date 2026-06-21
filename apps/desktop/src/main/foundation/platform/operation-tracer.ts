@@ -138,6 +138,13 @@ export interface OperationTracerOptions {
   readonly capacity?: number
   /** Clock used for span timing; defaults to `Date.now`. Injectable for tests. */
   readonly now?: Clock
+  /**
+   * Optional production consumer for finalized wide events.
+   *
+   * The in-memory ring remains the pure ADR 0007 buffer; production folds each event into the
+   * persisted Diagnostics CommandLog so the renderer has one canonical local-capture stream.
+   */
+  readonly eventSink?: (event: WideEvent) => void
 }
 
 /**
@@ -152,6 +159,7 @@ export interface OperationTracerOptions {
 export class OperationTracer {
   private readonly capacity: number
   private readonly now: Clock
+  private readonly eventSink?: (event: WideEvent) => void
   /** Bounded ring buffer of finalized wide events; oldest evicted when full. */
   private readonly buffer: WideEvent[] = []
 
@@ -161,6 +169,7 @@ export class OperationTracer {
   constructor(options: OperationTracerOptions = {}) {
     this.capacity = options.capacity ?? 256
     this.now = options.now ?? Date.now
+    this.eventSink = options.eventSink
   }
 
   /**
@@ -216,5 +225,6 @@ export class OperationTracer {
   private append(event: WideEvent): void {
     this.buffer.push(event)
     if (this.buffer.length > this.capacity) this.buffer.shift()
+    this.eventSink?.(event)
   }
 }

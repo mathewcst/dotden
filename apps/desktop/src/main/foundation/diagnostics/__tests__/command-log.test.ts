@@ -47,6 +47,54 @@ describe('CommandLog', () => {
     expect(JSON.stringify(records)).not.toContain('ghp_1234567890abcdefghijklmnopqrstuvwxyzABCD')
   })
 
+  it('prefers evicting non-failed trace records so failed trace details survive capacity pressure', () => {
+    const log = new CommandLog({ capacity: 3 })
+
+    log.record({
+      command: 'git',
+      args: ['status'],
+      exitCode: 0,
+      stdout: 'before failure',
+      stderr: '',
+      traceId: 'failed-trace',
+      timestamp: 1,
+    })
+    log.record({
+      command: 'git',
+      args: ['push'],
+      exitCode: 1,
+      stdout: '',
+      stderr: 'failed',
+      traceId: 'failed-trace',
+      timestamp: 2,
+    })
+    log.record({
+      command: 'git',
+      args: ['status'],
+      exitCode: 0,
+      stdout: 'ok',
+      stderr: '',
+      traceId: 'ok-trace',
+      timestamp: 3,
+    })
+    log.record({
+      command: 'dotden-operation',
+      args: ['sync', 'ok'],
+      exitCode: 0,
+      stdout: '{}',
+      stderr: '',
+      traceId: 'new-trace',
+      timestamp: 4,
+    })
+
+    expect(log.records().map((record) => record.traceId)).toEqual([
+      'failed-trace',
+      'failed-trace',
+      'new-trace',
+    ])
+    expect(log.recordsFor('failed-trace').map((record) => record.timestamp)).toEqual([1, 2])
+  })
+
   it('records() returns a defensive copy', () => {
     const log = new CommandLog({ capacity: 4 })
     log.record({
