@@ -16,5 +16,17 @@ export function isConnectBusy(state: ConnectState): boolean {
  * URL step to a recoverable refused state.
  */
 export function stateAfterConnectResult(result: ConnectResult): ConnectState {
-  return result.repositoryKind === 'foreign-chezmoi' ? 'refused' : 'reachable'
+  switch (result.repositoryKind) {
+    case 'greenfield':
+    case 'dotden':
+      return 'reachable'
+    case 'foreign-chezmoi':
+      return 'refused'
+    default:
+      return assertNever(result.repositoryKind)
+  }
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled repository kind: ${String(value)}`)
 }

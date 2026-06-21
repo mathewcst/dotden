@@ -40,6 +40,8 @@ catalogs:
     '@fontsource-variable/geist-mono': ^5.2.8
     '@rolldown/plugin-babel': ^0.2.3
     '@tailwindcss/vite': ^4.3.1
+    '@testing-library/react': ^16.3.2
+    '@testing-library/user-event': ^14.6.1
     # HELD on v24 to track the Node 24 runtime (engines.node >=24). Don't float the
     # ambient node types ahead of the runtime major. See ADR 0028.
     '@types/node': ^24.10.1
@@ -55,6 +57,7 @@ catalogs:
     # desktop electron-builder.yml mirrors this version via `extraMetadata`. Keep in sync.
     electron-updater: ^6.8.9
     electron-vite: 6.0.0-beta.1
+    happy-dom: ^20.10.6
     lucide-react: ^1.20.0
     tailwind-merge: ^3.6.0
     tailwindcss: ^4.3.1

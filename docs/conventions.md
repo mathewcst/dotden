@@ -26,7 +26,12 @@ src/main/foundation/__tests__/    # root holds the den-store suite…
 
 - Imports step up one level: `./remote-client.js` → `../remote-client.js`. Imports
   _between_ test/fixture files in the same `__tests__/` stay `./`.
-- Vitest's default globs pick up `**/__tests__/**` with no extra config.
+- Vitest's default globs pick up `**/__tests__/**`; `apps/desktop/vitest.config.ts`
+  keeps the default environment as Node and only supplies renderer/shared aliases.
+- Renderer component tests opt into a DOM per file with `// @vitest-environment happy-dom`.
+  Use Testing Library plus `src/renderer/test/dotden-test-api.ts` to stub `window.dotden` at
+  the IPC boundary. Any renderer component that owns a busy state around IPC must have a
+  liveness regression proving reject/timeout exits busy with a usable recovery affordance.
 - See **ADR 0019** (amended 2026-06-15) for the rationale and the runner choice.
 
 ## Components: one primary per file, split before it sprawls
@@ -96,8 +101,8 @@ boundary that matches the _runtime_ boundary (ADR 0004). See **ADR 0031**.
 - **`src/shared` is pure** — no `node:`, no `electron`, no `main/**` imports. That is what lets the
   renderer typecheck without `@types/node` (`tsconfig.web.json` carries only `vite/client`).
 - **`@shared/*`** addresses the contract from both processes (no deep `../../../shared` chains).
-  Same caveat as `@/`: node-env vitest has no alias, so a **value** import reachable from a node-env
-  test stays **relative**; **type-only** imports and renderer **component** value-imports may use `@shared`.
+  Type-only imports and renderer component value-imports may use `@shared`; plain Node store-slice
+  tests should still prefer straightforward relative imports for their internal cluster.
 - The standing invariant (grep-checkable): 0 renderer/preload imports from `main/**`, 0 `src/shared`
   imports from `main/**`, 0 `src/shared` imports of `node:`/`electron`.
 
@@ -153,9 +158,8 @@ src/renderer/
   `@`, not deep `../../` chains. Two deliberate exceptions: (1) the **IPC contract** is reached via
   **`@shared/*`** (ADR 0031), not `@/` — `@` only maps `src/renderer/*`; the renderer never imports
   `src/main/**` at all; (2) the **store slices** (`*/lib/*-slice.ts` + `shell/lib/den-session-store.ts`)
-  import each other **relatively**, because the node-env slice tests value-import them and vitest
-  runs with **no `@/` alias** (no vitest config, by design — it keeps the slices testable in plain
-  Node). `@/` resolves under `tsc` but throws at test runtime, so the cluster stays relative.
+  import each other **relatively**, because the node-env slice tests value-import them and keeping
+  the cluster relative makes those tests independent of renderer alias wiring.
 - **The scoped store is structurally enforced, not lint-enforced.** A guardrail _is_ cheaply
   available — a one-line `no-restricted-syntax` rule
   (`VariableDeclarator[init.callee.name='createStore']`) catches a module-level `const xStore =

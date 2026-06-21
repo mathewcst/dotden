@@ -2,6 +2,7 @@ import { Button } from '@/ui/button'
 import { Loader2, Plus, ScanSearch } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DiscoverySuggestion } from '@shared/environments'
+import { withIpcTimeout } from '@/shared/lib/ipc-timeout'
 import { ListRow } from './ListRow'
 import { warnedPathsFromFindings } from '../lib/secret-warn'
 
@@ -164,7 +165,10 @@ export function OBDiscover({
     try {
       // Track sequentially so each `chezmoi add` + placement is recorded deterministically.
       for (const targetPath of paths) {
-        await window.dotden.den.track(targetPath)
+        await withIpcTimeout(
+          window.dotden.den.track(targetPath),
+          `Tracking ${targetPath} did not respond. Retry or skip for now.`,
+        )
       }
       onTracked(paths)
     } catch (caught) {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { GitBranch, Loader2, MonitorSmartphone } from 'lucide-react'
 import { Button } from '@/ui/button'
 import type { ClaimSuggestion } from '@shared/environments'
+import { withIpcTimeout } from '@/shared/lib/ipc-timeout'
 
 /**
  * The new-or-returning *identity* choice surfaced after the Den is detected (issue 1-13).
@@ -48,7 +49,10 @@ export function OBFoundDen({ onChoose }: { onChoose: (choice: FoundDenChoice) =>
     let active = true
     async function load() {
       try {
-        const found = await window.dotden.environment.suggestClaims()
+        const found = await withIpcTimeout(
+          window.dotden.environment.suggestClaims(),
+          'Reading your Den did not respond. You can continue as a new environment or retry.',
+        )
         if (!active) return
         setSuggestions(found)
         // Pre-select the strongest match AND default to "returning" when a candidate exists —
