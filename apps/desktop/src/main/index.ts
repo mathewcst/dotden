@@ -1,9 +1,8 @@
 /**
  * Electron main-process entry point for the dotden desktop app.
  *
- * Owns the single hardened BrowserWindow, the (intentionally inert) auto-updater
- * wiring, and cross-platform app lifecycle (re-create the window on macOS
- * "activate", quit when all windows close everywhere except macOS).
+ * Owns the single hardened BrowserWindow, auto-updater wiring, and cross-platform app lifecycle
+ * (re-create the window on macOS "activate", quit when all windows close everywhere except macOS).
  */
 import {
   app,
@@ -18,7 +17,7 @@ import {
 } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { join } from 'node:path'
-import type { AppInfo, UpdateCheckResult } from '../shared/app-info.js'
+import type { AppInfo, DownloadedUpdate, UpdateCheckResult } from '../shared/app-info.js'
 import type { AutomationLevel } from '../shared/apply.js'
 import type { CopyDiagnosticsResult, RedactedCommandRecord } from '../shared/diagnostics.js'
 import type { UnredactedModeState } from '../shared/diagnostics.js'
@@ -67,7 +66,7 @@ import {
   TrayPoller,
   type PollCadence,
 } from './foundation/system/tray-poller.js'
-import { noFeed, checkForUpdates as runUpdateCheck } from './foundation/system/update-check.js'
+import { checkForUpdates as runUpdateCheck, type UpdateFeed } from './foundation/system/update-check.js'
 import { notificationEnabled } from './foundation/system/notification-policy.js'
 import { registerIpcBridge } from './ipc/ipc-bridge.js'
 
@@ -454,8 +453,54 @@ async function controlWindow(
  * so that is a one-line wiring change here, not a rewrite. NO download/install path is wired in
  * this slice — only the honest "are there updates?" answer (never a fake "you're current").
  */
+const updateFeed: UpdateFeed = {
+  async latest() {
+    const result = await autoUpdater.checkForUpdates()
+    if (result === null) return { unavailable: 'Updater is disabled for this build.' }
+    return { latestVersion: result.updateInfo.version }
+  },
+}
+
 function checkForUpdates(): Promise<UpdateCheckResult> {
-  return runUpdateCheck(app.getVersion(), noFeed)
+  return runUpdateCheck(app.getVersion(), updateFeed)
+}
+
+async function quitAndInstallUpdate(): Promise<void> {
+  autoUpdater.quitAndInstall()
+}
+
+let updaterArmed = false
+
+/** Configure the GitHub Releases feed and push update lifecycle events to the renderer. */
+function armAutoUpdater(): void {
+  if (updaterArmed) return
+  updaterArmed = true
+
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = false
+  autoUpdater.setFeedURL({
+    provider: 'github',
+    owner: 'mathewcst',
+    repo: 'dotden',
+  })
+
+  autoUpdater.on('update-available', () => {
+    autoUpdater.downloadUpdate().catch(() => {
+      // The explicit About check still reports failures; background download should not crash boot.
+    })
+  })
+  autoUpdater.on('update-downloaded', (event) => {
+    const update: DownloadedUpdate = {
+      version: event.version,
+      releaseName: typeof event.releaseName === 'string' ? event.releaseName : null,
+      releaseDate: typeof event.releaseDate === 'string' ? event.releaseDate : null,
+    }
+    mainWindow?.webContents.send('app:update-downloaded', update)
+  })
+
+  void checkForUpdates().catch(() => {
+    // Best-effort background check; the About tab check surfaces the error path on demand.
+  })
 }
 
 /** Reveal the persisted, redacted Command log in the OS file manager (PRD4 issue 4-03). */
@@ -846,6 +891,7 @@ if (!app.requestSingleInstanceLock()) {
       setUnredactedMode,
       getAppInfo,
       checkForUpdates,
+      quitAndInstallUpdate,
       controlWindow,
       openDiagnosticsLogLocation,
       diagnosticsRecordsFor,
@@ -863,12 +909,7 @@ if (!app.requestSingleInstanceLock()) {
     // with the window closed. Best-effort — it never blocks startup.
     void armTrayPoller()
 
-    // Scaffold has no published update feed, so this resolves/rejects with nothing
-    // actionable. The call is kept so real auto-update wiring is a config change,
-    // not a code change; the rejection is swallowed to avoid an unhandled promise.
-    autoUpdater.checkForUpdatesAndNotify().catch(() => {
-      // No published feed exists in the scaffold. Update wiring is intentionally inert.
-    })
+    armAutoUpdater()
 
     // macOS convention: clicking the dock icon with no open windows should
     // re-open one rather than do nothing.

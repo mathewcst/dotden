@@ -57,7 +57,7 @@ import type { AutomationLevel } from './apply.js'
 import type { DiagnosticsSettings, SyncSettings } from './settings.js'
 import type { PrivacySettings } from './settings.js'
 import type { AppearanceOverride, AppearanceSettings } from './appearance-settings.js'
-import type { AppInfo, UpdateCheckResult } from './app-info.js'
+import type { AppInfo, DownloadedUpdate, UpdateCheckResult } from './app-info.js'
 import type {
   CopyDiagnosticsResult,
   RedactedCommandRecord,
@@ -703,6 +703,15 @@ export interface DotdenApi {
      * does. Never throws for "no feed" — a missing feed is a surfaced state, not an error.
      */
     checkForUpdates(): Promise<UpdateCheckResult>
+    /**
+     * Subscribe to a downloaded update waiting for explicit restart/install confirmation.
+     *
+     * Receiving this event must never install the update by itself; the renderer must ask the user
+     * first and only then call {@link quitAndInstallUpdate}.
+     */
+    onUpdateDownloaded(listener: (update: DownloadedUpdate) => void): () => void
+    /** Restart and install the already-downloaded update after explicit user confirmation. */
+    quitAndInstallUpdate(): Promise<void>
   }
   /**
    * The TrayPoller's detect-only incoming notifications (issue 1-12), pushed FROM the

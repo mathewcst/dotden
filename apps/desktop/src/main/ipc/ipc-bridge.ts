@@ -135,6 +135,8 @@ export interface IpcBridgeDeps {
    * never a fake "you're current". NO download/install path is wired here (those are PRD 3).
    */
   readonly checkForUpdates: () => Promise<UpdateCheckResult>
+  /** Restart and install a downloaded update after explicit user confirmation. */
+  readonly quitAndInstallUpdate?: () => Promise<void>
   /**
    * Apply a chrome action to the BrowserWindow that sent the IPC request. Kept as a callback so
    * this bridge remains testable without importing Electron.
@@ -739,6 +741,11 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   registrar.handle('app:check-updates', async (_event, payload: TracedPayload) => {
     traceId(payload)
     return deps.checkForUpdates()
+  })
+  registrar.handle('app:quit-and-install-update', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    if (!deps.quitAndInstallUpdate) throw new Error('Update install is not configured.')
+    return deps.quitAndInstallUpdate()
   })
 }
 

@@ -1136,6 +1136,7 @@ describe('IpcBridge', () => {
       latestVersion: null,
       detail: 'No update feed is configured for this build yet.',
     }))
+    const quitAndInstallUpdate = vi.fn(async () => undefined)
     const { registrar, handlers } = fakeRegistrar()
     registerIpcBridge(registrar, {
       remoteClient: async () => ({}) as never,
@@ -1162,6 +1163,7 @@ describe('IpcBridge', () => {
       launchState: async () => ({ status: 'ready' as const }),
       getAppInfo,
       checkForUpdates,
+      quitAndInstallUpdate,
     })
 
     // get-info forwards the running build's version + platform for the About tab.
@@ -1174,12 +1176,19 @@ describe('IpcBridge', () => {
       handlers.get('app:check-updates')?.({}, { _trace: { traceId: 'i2' } } as never),
     ).resolves.toMatchObject({ status: 'unavailable', detail: expect.any(String) })
     expect(checkForUpdates).toHaveBeenCalledTimes(1)
+    await expect(
+      handlers.get('app:quit-and-install-update')?.({}, { _trace: { traceId: 'i3' } } as never),
+    ).resolves.toBeUndefined()
+    expect(quitAndInstallUpdate).toHaveBeenCalledTimes(1)
 
     // Both channels still hard-fail without a _trace envelope (uniform correlation).
     await expect(handlers.get('app:get-info')?.({}, {} as never)).rejects.toThrow(
       'without a _trace envelope',
     )
     await expect(handlers.get('app:check-updates')?.({}, {} as never)).rejects.toThrow(
+      'without a _trace envelope',
+    )
+    await expect(handlers.get('app:quit-and-install-update')?.({}, {} as never)).rejects.toThrow(
       'without a _trace envelope',
     )
   })

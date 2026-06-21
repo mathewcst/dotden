@@ -154,6 +154,8 @@ export function installDotdenTestApi(overrides: DeepPartial<DotdenApi> = {}): Do
         latestVersion: null,
         detail: 'No feed configured.',
       })),
+      onUpdateDownloaded: vi.fn(() => () => undefined),
+      quitAndInstallUpdate: unimplemented,
     },
     trayPoller: {
       onIncoming: vi.fn(() => () => undefined),

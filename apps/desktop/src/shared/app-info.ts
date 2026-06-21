@@ -66,6 +66,16 @@ export interface UpdateCheckResult {
   readonly detail: string | null
 }
 
+/** A downloaded update waiting for an explicit user restart/install confirmation. */
+export interface DownloadedUpdate {
+  /** Version that was downloaded. */
+  readonly version: string
+  /** Release name when the feed provides it. */
+  readonly releaseName: string | null
+  /** Release date when the feed provides it. */
+  readonly releaseDate: string | null
+}
+
 /**
  * The chezmoi credit shown in the About tab — the faithful-wrapper acknowledgement (ADR 0003).
  *

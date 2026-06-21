@@ -570,6 +570,17 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['app']['checkForUpdates']>
     },
+    onUpdateDownloaded(listener) {
+      const handler = (_event: Electron.IpcRendererEvent, update: Parameters<typeof listener>[0]) =>
+        listener(update)
+      ipcRenderer.on('app:update-downloaded', handler)
+      return () => ipcRenderer.removeListener('app:update-downloaded', handler)
+    },
+    quitAndInstallUpdate() {
+      return ipcRenderer.invoke('app:quit-and-install-update', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['app']['quitAndInstallUpdate']>
+    },
   },
   trayPoller: {
     // ← main→renderer push: the TrayPoller fires 'tray-poller:incoming' when the Remote
