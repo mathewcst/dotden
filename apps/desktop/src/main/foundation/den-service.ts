@@ -40,17 +40,15 @@ import {
 import type { OperationTracer } from './platform/operation-tracer.js'
 import { SyncEngine, type AutoApplyHoldReason, type IncomingFile } from './sync/sync-engine.js'
 import type { ApplyChangeKind } from './apply/apply-planner.js'
-import { ConflictModel, type ResolutionChoice } from './apply/conflict-model.js'
+import { ConflictModel } from './apply/conflict-model.js'
+import type { ResolutionChoice } from '../../shared/apply.js'
 import {
   parseChezmoiStatus,
   parseIncomingDeletions,
   type FileGitStatus,
 } from './chezmoi/chezmoi-status.js'
-import {
-  AutomationPolicy,
-  DEFAULT_AUTOMATION_LEVEL,
-  type AutomationLevel,
-} from './apply/automation-policy.js'
+import { AutomationPolicy, DEFAULT_AUTOMATION_LEVEL } from './apply/automation-policy.js'
+import type { AutomationLevel } from '../../shared/apply.js'
 import type { Os, Scope } from '../../shared/scope.js'
 import { PushQueue } from './sync/push-queue.js'
 import { isOfflineError } from './sync/offline.js'

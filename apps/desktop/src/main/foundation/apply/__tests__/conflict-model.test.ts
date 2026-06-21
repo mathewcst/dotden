@@ -10,12 +10,8 @@
  * consumes — and that an auto-merged (non-overlapping) File is NOT a Conflict at all.
  */
 import { describe, expect, it } from 'vitest'
-import {
-  ConflictModel,
-  isResolvedConflict,
-  type ConflictFile,
-  type ResolutionChoice,
-} from '../conflict-model.js'
+import { ConflictModel, isResolvedConflict, type ConflictFile } from '../conflict-model.js'
+import type { ResolutionChoice } from '../../../../shared/apply.js'
 
 /** A true Conflict on `.zshrc`: the same File changed both here and on the Remote. */
 function conflictFile(overrides: Partial<ConflictFile> = {}): ConflictFile {

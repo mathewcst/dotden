@@ -14,11 +14,8 @@
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import {
-  DEFAULT_AUTOMATION_LEVEL,
-  isSelectableAutomationLevel,
-  type AutomationLevel,
-} from './automation-policy.js'
+import { DEFAULT_AUTOMATION_LEVEL, isSelectableAutomationLevel } from './automation-policy.js'
+import type { AutomationLevel } from '../../../shared/apply.js'
 
 /** Relative filename of the local automation-settings file inside the userData dir. */
 const AUTOMATION_FILE = 'automation-settings.json'

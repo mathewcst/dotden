@@ -21,20 +21,7 @@
  * the renderer's `@pierre/diffs` merge view must route through `ConflictModel.resolve`
  * (carried over IPC) and **never** call the library's own `resolveConflict()` directly.
  */
-
-/**
- * The user's three-way resolution of one conflicting File — the only inputs that can
- * mint resolved bytes. The names map 1:1 onto the UI's Keep mine / Take theirs / Open
- * both, and onto `@pierre/diffs`' `MergeConflictResolution` union so the merge view's
- * choice flows straight through without translation:
- *
- * - `current` — **Keep mine**: the bytes this environment Committed (git's "ours"/HEAD).
- * - `incoming` — **Take theirs**: the bytes the Remote Committed (git's "theirs").
- * - `both` — **Open both**: the union with the `<<<<<<<`/`=======`/`>>>>>>>` markers
- *   left in, so the user consciously hand-edits the merged result. Still an explicit
- *   choice — never an automatic union.
- */
-export type ResolutionChoice = 'current' | 'incoming' | 'both'
+import type { ResolutionChoice } from '../../../shared/apply.js'
 
 /**
  * Module-private brand symbol for {@link ResolvedConflict}.

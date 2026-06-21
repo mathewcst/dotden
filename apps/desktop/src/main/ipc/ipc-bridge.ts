@@ -15,12 +15,12 @@
  * `ipcMain`).
  */
 import type { DenService } from '../foundation/den-service.js'
-import type { ResolutionChoice } from '../foundation/apply/conflict-model.js'
+import type { ResolutionChoice } from '../../shared/apply.js'
 import type { DiscoveryScanner } from '../foundation/environments/discovery-scanner.js'
 import type { EnvironmentRegistry } from '../foundation/environments/environment-registry.js'
 import type { LaunchState } from '../foundation/environments/launch-state.js'
 import type { RemoteClient } from '../foundation/sync/remote-client.js'
-import type { AutomationLevel } from '../foundation/apply/automation-policy.js'
+import type { AutomationLevel } from '../../shared/apply.js'
 import type { SyncSettings } from '../foundation/settings/sync-settings.js'
 import type { PrivacySettings } from '../foundation/settings/privacy-settings.js'
 import type { Scope } from '../../shared/scope.js'

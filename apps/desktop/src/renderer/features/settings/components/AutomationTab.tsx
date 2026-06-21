@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Loader2, Shield } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
-import type { AutomationLevel } from '../../../../main/foundation/apply/automation-policy'
+import type { AutomationLevel } from '@shared/apply'
 
 /**
  * AutomationTab — the Settings → Automation tab (issues 2-12 + 2-13, stories 27–32; design:

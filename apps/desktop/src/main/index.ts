@@ -18,7 +18,7 @@ import {
 import { autoUpdater } from 'electron-updater'
 import { join } from 'node:path'
 import type { AppInfo, UpdateCheckResult } from '../shared/app-info.js'
-import type { AutomationLevel } from './foundation/apply/automation-policy.js'
+import type { AutomationLevel } from '../shared/apply.js'
 import {
   readAutomationLevel,
   writeAutomationLevel,

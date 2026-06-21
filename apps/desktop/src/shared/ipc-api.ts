@@ -47,7 +47,7 @@ import type { SecretAllowlist } from '../main/foundation/secrets/secret-allowlis
 import type { DetectedPasswordManager } from '../main/foundation/secrets/pm-detect.js'
 import type { PmPreference } from '../main/foundation/secrets/pm-preference.js'
 import type { FileVersion } from '../main/foundation/file-history/file-history.js'
-import type { ResolutionChoice } from '../main/foundation/apply/conflict-model.js'
+import type { ResolutionChoice } from './apply.js'
 import type { Group, Workspace } from '../main/foundation/den-store.js'
 import type { Scope } from './scope.js'
 import type {
@@ -58,7 +58,7 @@ import type {
   DiscoveryScanResult,
   DiscoverySuggestion,
 } from '../main/foundation/environments/discovery-scanner.js'
-import type { AutomationLevel } from '../main/foundation/apply/automation-policy.js'
+import type { AutomationLevel } from './apply.js'
 import type { SyncSettings } from '../main/foundation/settings/sync-settings.js'
 import type { PrivacySettings } from '../main/foundation/settings/privacy-settings.js'
 import type { AppearanceOverride, AppearanceSettings } from './appearance-settings.js'

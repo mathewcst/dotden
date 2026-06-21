@@ -40,24 +40,7 @@
  */
 import type { AppliesHere } from '../environments/applicability-resolver.js'
 import type { ApplyPlanItem } from './apply-planner.js'
-
-/**
- * The rungs of dotden's automation ladder (CONTEXT.md).
- *
- * - `manual` — the default. Nothing happens without the user: Commits are pushed by an
- *   explicit **Sync now**, incoming changes wait for review.
- * - `auto-sync` — low-risk, environment-local: Committed changes **push automatically**
- *   and incoming changes **notify**, but **Apply stays manual** (CONTEXT.md "Auto-sync").
- * - `auto-apply` — clean incoming changes apply without review (Conflicts/risky changes
- *   still ask). **Selectable as of issue 2-12** (Warned in the ladder UI).
- * - `yolo` — full hands-off (auto-Commit local edits, Sync, Apply except Conflicts).
- *   **Selectable as of issue 2-13** (Strongly-warned in the ladder UI). Its auto-apply
- *   verdict routes through {@link mayAutoApply} exactly like Auto-apply, and it ADDITIONALLY
- *   permits auto-Committing local edits before a merge ({@link mayAutoCommitBeforeMerge}) so
- *   hands-off local work survives as Commits. Even YOLO can never auto-resolve a Conflict —
- *   that is `ConflictModel`'s job, not the policy's (invariant #1).
- */
-export type AutomationLevel = 'manual' | 'auto-sync' | 'auto-apply' | 'yolo'
+import type { AutomationLevel } from '../../../shared/apply.js'
 
 /**
  * The levels the app actually exposes for selection (through issue 2-13): **Manual,
