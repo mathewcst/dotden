@@ -26,6 +26,26 @@ const api: DotdenApi = {
     electron: process.versions.electron,
     chrome: process.versions.chrome,
   },
+  window: {
+    // → IPC channel 'window:minimize' (frameless titlebar minimize button)
+    minimize() {
+      return ipcRenderer.invoke('window:minimize', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['window']['minimize']>
+    },
+    // → IPC channel 'window:toggle-maximize' (frameless titlebar maximize/restore button)
+    toggleMaximize() {
+      return ipcRenderer.invoke('window:toggle-maximize', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['window']['toggleMaximize']>
+    },
+    // → IPC channel 'window:close' (frameless titlebar close button)
+    close() {
+      return ipcRenderer.invoke('window:close', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['window']['close']>
+    },
+  },
   remote: {
     // → IPC channel 'remote:preflight'
     preflight(url) {

@@ -50,6 +50,11 @@ This is a **guide, not a lint gate** — judgment over mechanical caps.
   transitively); this is what keeps the faithful-wrapper seam testable in plain Node.
 - **IPC registration + service wiring** splits out of `index.ts` into `ipc/`
   (or `services/`) as it grows; `index.ts` keeps lifecycle + the window only.
+- **Frameless window chrome** is renderer-owned for layout, main-owned for native
+  effects. Titlebar controls call a narrow preload/IPC API (`window.minimize`,
+  `window.toggleMaximize`, `window.close`); only `index.ts` resolves the sending
+  `BrowserWindow`. Drag regions live in renderer CSS (`app-region: drag`), and
+  every clickable titlebar element must opt out with `app-region: no-drag`.
 - Dependency direction is one-way: `index.ts` / `ipc` → `foundation`, never back.
 - See **ADR 0023**.
 
@@ -61,8 +66,8 @@ alternatives).
 
 ```
 src/renderer/
-  App.tsx                 # thin root: renders the launch router, wraps the
-                          # 'app' route in <DenSessionProvider key={role}>
+  App.tsx                 # thin root: <LaunchProvider> → LaunchRouter (which
+                          # wraps <DenSessionProvider key={role}> on the 'app' route)
   features/
     launch/   shell/   workspace/   commit/   sync/   apply/
     secrets/  scope/   file-history/   onboarding/   returning/   settings/
@@ -83,10 +88,24 @@ src/renderer/
 - **Placement rule.** A module imported by **one** feature lives in that feature's
   `components/`/`lib/`; imported by **2+**, it moves to `shared/`. shadcn primitives
   (`button`, `switch`…) stay in `ui/`.
-- **Shared state is the scoped `den-session` store** — one Zustand store composed from
-  per-feature slices, created inside `<DenSessionProvider>` and passed via Context,
-  **never a module-level singleton** (so `key={role}` still resets the A/B thread).
+- **Shared state uses scoped Zustand stores via Context** — the app-scoped `launch` store
+  (`<LaunchProvider>`) owns boot + routing; the `den-session` store (composed from per-feature
+  slices, created inside `<DenSessionProvider>`) owns the den window session. Both are
+  **never module-level singletons** (`key={role}` still resets the A/B den-session thread).
   Ephemeral UI state (input text, open menus) stays in `useState`. See **ADR 0027**.
+- **Code-split cold paths only; eager the hot path; warm the rest on idle.** We ship a desktop
+  Electron app — the renderer bundle is read from **local disk**, not the network, so `React.lazy`
+  buys far less than on the web: the only real win is keeping cold code out of the **boot-path
+  parse**, and the cost (a `Suspense` fallback flash on first navigation) is pure downside. So:
+  (1) **eager-import the hot path** — `DenWindow` is a plain import in `LaunchRouter`, because a
+  set-up environment boots straight to the `app` route and a lazy split would flash the splash
+  twice. (2) **`lazy` the cold paths** a set-up user may never open (the setup flows, Settings + its
+  tabs, the full-window Apply views, file history). (3) **warm those chunks on idle after boot** via
+  `launch/lib/preload-chunks.ts` (`preloadLaunchChunks`, fired from `<LaunchProvider>` once `boot()`
+  resolves) — the module registry dedupes `import()` by resolved file, so warming there resolves the
+  same chunk the `lazy()` site requests later, and `Suspense` unwraps in the same render with no
+  visible fallback. Keep the fallbacks anyway (honest safety net; never a blank screen). When you
+  add a new `lazy()` site, add its specifier to `COLD_CHUNKS`.
 - **`@/` for renderer-internal imports** (`@/features/…`, `@/shared/…`, `@/ui/…`); reach for
   `@`, not deep `../../` chains. Two deliberate exceptions: (1) imports into `src/shared/**`
   and `src/main/**` use relative paths — the `@` alias only maps `src/renderer/*`, so there

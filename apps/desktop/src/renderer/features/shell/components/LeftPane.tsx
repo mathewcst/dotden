@@ -5,7 +5,7 @@ import { WorkspaceSidebar } from '@/features/workspace/components/WorkspaceSideb
 import { useDenSession } from '@/features/shell/components/DenSessionProvider'
 import { FileTree } from '@pierre/trees/react'
 import { Loader2 } from 'lucide-react'
-import type { ComponentProps } from 'react'
+import { useMemo, type ComponentProps } from 'react'
 
 /**
  * LeftPane — the den window's left Workspace tree (issue 1-07/1-14). Renders, by precedence:
@@ -30,7 +30,23 @@ export function LeftPane({ model }: { model: ComponentProps<typeof FileTree>['mo
   const createGroup = useDenSession((s) => s.createGroup)
 
   // The paths the tree renders: real managed Files on A, incoming Files on B.
-  const paths = role === 'a' ? files.map((f) => f.targetPath) : incoming.map((i) => i.targetPath)
+  const paths = useMemo(
+    () => (role === 'a' ? files.map((f) => f.targetPath) : incoming.map((i) => i.targetPath)),
+    [role, files, incoming],
+  )
+  const filesByWorkspaceAndGroup = useMemo(() => {
+    const buckets = new Map<string, (typeof files)[number][]>()
+    for (const file of files) {
+      const key = `${file.workspaceId}\u0000${file.groupId ?? ''}`
+      let bucket = buckets.get(key)
+      if (!bucket) {
+        bucket = []
+        buckets.set(key, bucket)
+      }
+      bucket.push(file)
+    }
+    return buckets
+  }, [files])
 
   // Switch to the grouped Workspace/Group sidebar (issue 1-14) once the organization layer is in
   // play: a SECOND Workspace exists OR the user has created any Group. Until then the flat tree is
@@ -58,16 +74,16 @@ export function LeftPane({ model }: { model: ComponentProps<typeof FileTree>['mo
               onCreateWorkspace={createWorkspace}
               onCreateGroup={createGroup}
               renderFiles={(workspaceId, groupId) =>
-                files
-                  .filter((f) => f.workspaceId === workspaceId && f.groupId === groupId)
-                  .map((f) => (
+                (filesByWorkspaceAndGroup.get(`${workspaceId}\u0000${groupId ?? ''}`) ?? []).map(
+                  (f) => (
                     <FileRow
                       key={f.targetPath}
                       file={f}
                       selected={selected === f.targetPath}
                       onSelect={(path) => void selectFile(path)}
                     />
-                  ))
+                  ),
+                )
               }
             />
           </RowContextMenu>

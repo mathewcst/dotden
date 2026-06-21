@@ -1,32 +1,40 @@
+import { lazy, Suspense } from 'react'
+import { useLaunch } from '@/features/launch/components/LaunchProvider'
 import { LandingChooser } from '@/features/launch/components/LandingChooser'
-import { OnboardingShell } from '@/features/onboarding/components/OnboardingShell'
-import { ReturningShell } from '@/features/returning/components/ReturningShell'
-import { SettingsShell } from '@/features/settings/components/SettingsShell'
 import { DenSessionProvider } from '@/features/shell/components/DenSessionProvider'
+// DenWindow is EAGER, not lazy: it is the hot path — a set-up environment boots straight to the
+// `app` route (the launch gate returns `ready`), so lazy-splitting it would put a Suspense fallback
+// flash on the single most common launch (splash → splash → app). The cold setup/settings shells
+// below stay split — a set-up user never loads them — and are warmed on idle by
+// `preloadLaunchChunks` so their fallbacks never actually show either.
 import { DenWindow } from '@/features/shell/components/DenWindow'
-import { useEffect, useState } from 'react'
 
-/**
- * The top-level route: a brief boot splash, a landing chooser, the first-run onboarding, the
- * second-environment returning flow, the main three-pane app, or the Settings surface.
- *
- * `'booting'` is the initial route: the app shows a quiet splash while it asks the launch gate
- * (ADR 0026) whether this environment is already set up, so the chooser/onboarding never flashes
- * for a returning user.
- */
-type Route = 'booting' | 'landing' | 'onboarding' | 'returning' | 'app' | 'settings'
+const OnboardingShell = lazy(() =>
+  import('@/features/onboarding/components/OnboardingShell').then((module) => ({
+    default: module.OnboardingShell,
+  })),
+)
+const ReturningShell = lazy(() =>
+  import('@/features/returning/components/ReturningShell').then((module) => ({
+    default: module.ReturningShell,
+  })),
+)
+const SettingsShell = lazy(() =>
+  import('@/features/settings/components/SettingsShell').then((module) => ({
+    default: module.SettingsShell,
+  })),
+)
 
 /**
  * LaunchRouter — the top-level router between the landing chooser, the two setup flows, and the main
- * app shell (issues 1-06 + 1-13; ADR 0026/0027). Extracted from `App.tsx` so the routing machine
- * and the den-session lifecycle live together (ADR 0027): the `app` route is wrapped in
- * `<DenSessionProvider key={role}>`, which replaces the old `<Workspace key={role}>` remount — the
- * session reset now happens at the store seam.
+ * app shell (issues 1-06 + 1-13; ADR 0026/0027). Consumes the app-scoped launch store for routing;
+ * the `app` route is wrapped in `<DenSessionProvider key={role}>`, which replaces the old
+ * `<Workspace key={role}>` remount — the session reset now happens at the store seam.
  *
- * On boot the app does NOT assume the landing chooser: it starts on a `'booting'` splash and asks
- * the launch gate (`den.launchState()`, ADR 0026) whether THIS environment is already set up here.
- * A `ready` environment routes straight to the app; everything else (`fresh` / `incomplete`) falls
- * to the chooser — so a set-up user never re-sees onboarding on every boot.
+ * On boot the app does NOT assume the landing chooser: it starts on a `'booting'` splash while
+ * {@link LaunchProvider} runs the launch gate (`den.launchState()`, ADR 0026). A `ready` environment
+ * routes straight to the app; everything else (`fresh` / `incomplete`) falls to the chooser — so a
+ * set-up user never re-sees onboarding on every boot.
  *
  * The chooser itself is the first-run fork: **set up a new Den** (the first-environment onboarding,
  * issue 1-06) or **connect an existing Den** (the second-environment returning flow, issue 1-13).
@@ -40,70 +48,58 @@ type Route = 'booting' | 'landing' | 'onboarding' | 'returning' | 'app' | 'setti
  * of the end-to-end thread (issue 1-04).
  */
 export function LaunchRouter() {
-  const [route, setRoute] = useState<Route>('booting')
-  const [role, setRole] = useState<'a' | 'b'>('a')
-  const [openReviewOnAppMount, setOpenReviewOnAppMount] = useState(false)
-
-  // Launch gate (ADR 0026): ask the main process whether THIS environment is already set up, then
-  // route — `ready` → straight to the app, everything else → the landing chooser. This runs once on
-  // mount and replaces the old hardcoded `'landing'` start, so a set-up environment no longer
-  // re-sees onboarding on every boot. A failed read falls back to `landing` (a usable re-choice)
-  // rather than stranding the user on the splash — never fail silently, never dead-end.
-  useEffect(() => {
-    window.dotden.den
-      .launchState()
-      .then(({ status }) => setRoute(status === 'ready' ? 'app' : 'landing'))
-      .catch((error) => {
-        console.error('[dotden] Launch gate failed; falling back to the chooser:', error)
-        setRoute('landing')
-      })
-  }, [])
+  const route = useLaunch((s) => s.route)
+  const role = useLaunch((s) => s.role)
+  const openReviewOnAppMount = useLaunch((s) => s.openReviewOnAppMount)
+  const goToOnboarding = useLaunch((s) => s.goToOnboarding)
+  const goToReturning = useLaunch((s) => s.goToReturning)
+  const goToApp = useLaunch((s) => s.goToApp)
+  const goToSettings = useLaunch((s) => s.goToSettings)
+  const closeSettings = useLaunch((s) => s.closeSettings)
+  const clearOpenReviewOnAppMount = useLaunch((s) => s.clearOpenReviewOnAppMount)
 
   if (route === 'booting') {
     return <BootingSplash />
   }
 
   if (route === 'landing') {
-    return (
-      <LandingChooser
-        onNew={() => setRoute('onboarding')}
-        onConnect={() => setRoute('returning')}
-      />
-    )
+    return <LandingChooser onNew={() => goToOnboarding()} onConnect={() => goToReturning()} />
   }
 
   if (route === 'onboarding') {
     return (
-      <OnboardingShell
-        onComplete={() => {
-          setRole('a')
-          setOpenReviewOnAppMount(false)
-          setRoute('app')
-        }}
-        onExistingDen={() => setRoute('returning')}
-      />
+      <Suspense fallback={<BootingSplash />}>
+        <OnboardingShell
+          onComplete={() => goToApp({ role: 'a', openReview: false })}
+          onExistingDen={() => goToReturning()}
+        />
+      </Suspense>
     )
   }
 
   if (route === 'returning') {
     return (
-      <ReturningShell
-        onComplete={() => {
-          // Open the app on the second-environment (Review & Apply) role: the returning user lands
-          // on the reviewed Apply of the Den they just connected (issue 1-13).
-          setRole('b')
-          setOpenReviewOnAppMount(true)
-          setRoute('app')
-        }}
-        onNewDen={() => setRoute('onboarding')}
-      />
+      <Suspense fallback={<BootingSplash />}>
+        <ReturningShell
+          onComplete={() => {
+            // Open the app on the second-environment (Review & Apply) role: the returning user lands
+            // on the reviewed Apply of the Den they just connected (issue 1-13).
+            goToApp({ role: 'b', openReview: true })
+          }}
+          onNewDen={() => goToOnboarding()}
+        />
+      </Suspense>
     )
   }
 
   if (route === 'settings') {
     // The Settings surface (issue 2-08) is a full-window route shown OVER the den window, mirroring
     // how onboarding/returning are full-window routes; closing returns to the app on the same role.
-    return <SettingsShell onClose={() => setRoute('app')} />
+    return (
+      <Suspense fallback={<BootingSplash />}>
+        <SettingsShell onClose={() => closeSettings()} />
+      </Suspense>
+    )
   }
 
   return (
@@ -113,8 +109,8 @@ export function LaunchRouter() {
       <div className="relative">
         <DenWindow
           openReviewOnMount={openReviewOnAppMount}
-          onReviewOpened={() => setOpenReviewOnAppMount(false)}
-          onOpenSettings={() => setRoute('settings')}
+          onReviewOpened={() => clearOpenReviewOnAppMount()}
+          onOpenSettings={() => goToSettings()}
         />
       </div>
     </DenSessionProvider>

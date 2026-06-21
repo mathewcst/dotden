@@ -8,6 +8,15 @@ The Electron security split — `main` / `preload` / `renderer` — is already f
 
 **IPC registration + service wiring becomes its own layer as it grows.** Today `src/main/index.ts` mixes three concerns: window/app lifecycle, the (inert) auto-updater, and `ipcMain.handle` bridge registration + lazy `RemoteClient` construction. The first IPC-shaped concern that arrives after `RemoteClient` should pull the bridge + service wiring out of `index.ts` into a dedicated `src/main/ipc/` (or `services/`) layer, leaving `index.ts` owning lifecycle and the window only. `index.ts` is allowed to import Electron and `foundation/`; the dependency direction is one-way (`index.ts` / `ipc` → `foundation`, never back).
 
+**Frameless window chrome follows the same boundary.** The desktop window uses a custom renderer
+titlebar (`frame: false`) so dotden can keep one visual shell across macOS, Windows, and Linux. The
+renderer may choose platform-specific chrome layout from the read-only preload `platform`, and may
+mark drag/no-drag DOM regions, but it must not import Electron or receive a `BrowserWindow`. Window
+buttons (`minimize`, `toggleMaximize`, `close`) cross the same typed preload + `IpcBridge` seam as
+other renderer requests; `index.ts` resolves the sender's `BrowserWindow` and performs the native
+action. This keeps the security boundary narrow while still letting the titlebar contain real OS
+controls instead of decorative dots.
+
 ## Alternatives considered
 
 - **No layering rule — let `main/` organize itself.** Rejected: `index.ts` would keep accreting IPC handlers and service construction with no seam, and the temptation to reach for an Electron API from inside an adapter would quietly destroy the in-Node testability that ADR 0019 depends on.
@@ -17,4 +26,6 @@ The Electron security split — `main` / `preload` / `renderer` — is already f
 
 - The `foundation/`-never-imports-`electron` rule is a convention today (see `../conventions.md`); it is cheap to make mechanical later via `no-restricted-imports` in `@dotden/eslint-config` scoped to `foundation/**`, and that is the recommended follow-up the day a contributor first reaches for `electron` inside an adapter.
 - New main-process code chooses its layer by its dependencies: needs a binary or domain logic and no Electron → `foundation/`; needs `ipcMain`/`app`/`BrowserWindow` → `ipc/` or `index.ts`.
+- Renderer-owned window chrome stays HTML/CSS for layout and uses preload IPC for native actions;
+  native Electron objects stay in `index.ts`.
 - This keeps the ADR 0008 invariant-ownership story coherent: the orchestration seam where the four safety invariants compose will sit in the Electron-free layer (or just above it), testable without the Electron runtime.

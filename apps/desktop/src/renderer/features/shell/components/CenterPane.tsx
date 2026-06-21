@@ -1,10 +1,19 @@
 import { ChangesDiff } from '@/features/commit/components/ChangesDiff'
-import { FileHistory } from '@/features/file-history/components/FileHistory'
 import { StatusTag, type FileStatus } from '@/shared/components/StatusTag'
 import { Button } from '@/ui/button'
 import { useDenSession } from '@/features/shell/components/DenSessionProvider'
 import { Download, FilePlus2, GitCommitVertical, Loader2, RefreshCw } from 'lucide-react'
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
+
+const FileHistory = lazy(() =>
+  import('@/features/file-history/components/FileHistory').then((module) => ({
+    default: module.FileHistory,
+  })),
+)
+
+function HistoryLoading() {
+  return <p className="text-muted-foreground p-4 text-sm">Loading history…</p>
+}
 
 /**
  * CenterPane — the den window's center column: the selected-File header + verb toolbar (Commit/Sync
@@ -19,8 +28,14 @@ import { useState } from 'react'
 export function CenterPane() {
   const role = useDenSession((s) => s.role)
   const selected = useDenSession((s) => s.selected)
-  const files = useDenSession((s) => s.files)
-  const incoming = useDenSession((s) => s.incoming)
+  const selectedFile = useDenSession((s) => s.files.find((f) => f.targetPath === selected))
+  const selectedIncoming = useDenSession((s) =>
+    s.incoming.find((item) => item.targetPath === selected),
+  )
+  const changedCount = useDenSession(
+    (s) => s.files.filter((f) => !f.muted && f.status !== null).length,
+  )
+  const incomingCount = useDenSession((s) => s.incoming.length)
   const busy = useDenSession((s) => s.busy)
   const centerTab = useDenSession((s) => s.centerTab)
   const automationLevel = useDenSession((s) => s.automationLevel)
@@ -34,15 +49,12 @@ export function CenterPane() {
   // The Track input text — ephemeral UI state, kept local (per ADR 0027).
   const [newPath, setNewPath] = useState('')
 
-  const selectedFile = files.find((f) => f.targetPath === selected)
-  const selectedIncoming = incoming.find((i) => i.targetPath === selected)
   // The header/inspector status pill for the selected File (the honest dotden state).
   const headerStatus: FileStatus | null = selectedIncoming
     ? 'incoming'
     : selectedFile && !selectedFile.muted && selectedFile.status !== null
       ? 'tracked'
       : null
-  const changedCount = files.filter((f) => !f.muted && f.status !== null).length
   const autoSyncOn = automationLevel === 'auto-sync'
 
   // Track the typed path; the store clears the input (via the callback) the instant the Track lands.
@@ -111,7 +123,7 @@ export function CenterPane() {
               </Button>
               <Button
                 size="sm"
-                disabled={busy !== null || incoming.length === 0}
+                disabled={busy !== null || incomingCount === 0}
                 onClick={() => setReviewing(true)}
               >
                 {busy === 'apply' ? (
@@ -185,7 +197,9 @@ export function CenterPane() {
           the active tab is History but the selection no longer qualifies (e.g. the File was
           deselected), fall through to the Changes body. */}
       {centerTab === 'history' && role === 'a' && selectedFile ? (
-        <FileHistory key={selected} targetPath={selectedFile.targetPath} />
+        <Suspense fallback={<HistoryLoading />}>
+          <FileHistory key={selected} targetPath={selectedFile.targetPath} />
+        </Suspense>
       ) : (
         <ChangesDiff />
       )}

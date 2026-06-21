@@ -141,6 +141,14 @@ export interface IpcBridgeDeps {
    * never a fake "you're current". NO download/install path is wired here (those are PRD 3).
    */
   readonly checkForUpdates: () => Promise<UpdateCheckResult>
+  /**
+   * Apply a chrome action to the BrowserWindow that sent the IPC request. Kept as a callback so
+   * this bridge remains testable without importing Electron.
+   */
+  readonly controlWindow?: (
+    event: unknown,
+    action: 'minimize' | 'toggle-maximize' | 'close',
+  ) => Promise<boolean | void>
 }
 
 /**
@@ -166,6 +174,23 @@ export interface IpcBridgeDeps {
  * @param deps Lazy accessors for the RemoteClient and DenService.
  */
 export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps): void {
+  // ── Frameless window chrome channels: TitleBar buttons over the preload bridge ──
+  registrar.handle('window:minimize', async (event, payload: TracedPayload) => {
+    traceId(payload)
+    if (!deps.controlWindow) throw new Error('Window control IPC is not wired')
+    return deps.controlWindow(event, 'minimize')
+  })
+  registrar.handle('window:toggle-maximize', async (event, payload: TracedPayload) => {
+    traceId(payload)
+    if (!deps.controlWindow) throw new Error('Window control IPC is not wired')
+    return deps.controlWindow(event, 'toggle-maximize')
+  })
+  registrar.handle('window:close', async (event, payload: TracedPayload) => {
+    traceId(payload)
+    if (!deps.controlWindow) throw new Error('Window control IPC is not wired')
+    return deps.controlWindow(event, 'close')
+  })
+
   // ── Remote channels (issue 1-03), kept here so ALL IPC carries _trace uniformly ──
   registrar.handle('remote:preflight', async (_event, payload: TracedPayload) => {
     const { url } = payload as TracedPayload & { url: string }

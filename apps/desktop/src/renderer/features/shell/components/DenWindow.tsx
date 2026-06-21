@@ -4,15 +4,32 @@ import { LeftPane } from '@/features/shell/components/LeftPane'
 import { RightInspector } from '@/features/shell/components/RightInspector'
 import { TitleBar } from '@/features/shell/components/TitleBar'
 import { useDenSession } from '@/features/shell/components/DenSessionProvider'
-import { ConflictResolver } from '@/features/apply/components/ConflictResolver'
-import { ReviewApply } from '@/features/apply/components/ReviewApply'
 import { IncomingBanner } from '@/features/sync/components/IncomingBanner'
 import { OfflineBanner } from '@/features/sync/components/OfflineBanner'
 import { remoteAxisDecoration } from '@/features/shell/lib/remote-axis'
 import type { FileTreeRowDecorationRenderer, GitStatusEntry } from '@pierre/trees'
 import { useFileTree } from '@pierre/trees/react'
-import { useCallback, useEffect, useMemo } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo } from 'react'
 import type { FileTreeEntry } from '../../../../main/foundation/den-service'
+
+const ConflictResolver = lazy(() =>
+  import('@/features/apply/components/ConflictResolver').then((module) => ({
+    default: module.ConflictResolver,
+  })),
+)
+const ReviewApply = lazy(() =>
+  import('@/features/apply/components/ReviewApply').then((module) => ({
+    default: module.ReviewApply,
+  })),
+)
+
+function FullWindowLoading({ label }: { label: string }) {
+  return (
+    <div className="bg-background text-muted-foreground grid h-screen place-items-center text-sm">
+      {label}
+    </div>
+  )
+}
 
 /**
  * Map dotden's local-axis status (the `chezmoi status` letters parsed in the main process) onto
@@ -88,20 +105,32 @@ export function DenWindow({
     [remoteAxis],
   )
 
+  const handleSelectionChange = useCallback(
+    (selectedPaths: readonly string[]) => void selectFile(selectedPaths[0] ?? null),
+    [selectFile],
+  )
+
+  const initialSelectedPaths = useMemo(() => (selected ? [selected] : []), [selected])
+  const renaming = useMemo(() => ({ onRename }), [onRename])
+  const fileTreeOptions = useMemo(
+    () => ({
+      paths,
+      initialExpansion: 'open' as const,
+      initialSelectedPaths,
+      gitStatus,
+      renderRowDecoration,
+      // Inline rename + drag-reorganize so managing many Files stays fast (issue 1-07).
+      renaming,
+      dragAndDrop: true,
+      // Drive selection straight off the model so the center/inspector follow the tree.
+      onSelectionChange: handleSelectionChange,
+    }),
+    [paths, initialSelectedPaths, gitStatus, renderRowDecoration, renaming, handleSelectionChange],
+  )
+
   // Build the tree model with all interactions the issue asks for: search, inline rename,
   // drag-reorganize, the git-status axis, and the Remote decoration lane.
-  const { model } = useFileTree({
-    paths,
-    initialExpansion: 'open',
-    initialSelectedPaths: selected ? [selected] : [],
-    gitStatus,
-    renderRowDecoration,
-    // Inline rename + drag-reorganize so managing many Files stays fast (issue 1-07).
-    renaming: { onRename },
-    dragAndDrop: true,
-    // Drive selection straight off the model so the center/inspector follow the tree.
-    onSelectionChange: (selectedPaths) => void selectFile(selectedPaths[0] ?? null),
-  })
+  const { model } = useFileTree(fileTreeOptions)
 
   // Keep the live model's git-status axis in sync when the File set/status changes (useFileTree only
   // seeds `gitStatus` at construction; later refreshes go through the model's imperative
@@ -159,13 +188,15 @@ export function DenWindow({
   // Remote + tree so the decorations reflect what was resolved.
   if (resolving) {
     return (
-      <ConflictResolver
-        onClose={() => {
-          setResolving(false)
-          void refreshIncoming()
-          void reloadTree()
-        }}
-      />
+      <Suspense fallback={<FullWindowLoading label="Loading conflict resolver…" />}>
+        <ConflictResolver
+          onClose={() => {
+            setResolving(false)
+            void refreshIncoming()
+            void reloadTree()
+          }}
+        />
+      </Suspense>
     )
   }
 
@@ -173,13 +204,15 @@ export function DenWindow({
   // re-checks the Remote so the tree decorations + banner reflect what is left.
   if (reviewing) {
     return (
-      <ReviewApply
-        onClose={() => {
-          setReviewing(false)
-          void refreshIncoming()
-          void reloadTree()
-        }}
-      />
+      <Suspense fallback={<FullWindowLoading label="Loading review…" />}>
+        <ReviewApply
+          onClose={() => {
+            setReviewing(false)
+            void refreshIncoming()
+            void reloadTree()
+          }}
+        />
+      </Suspense>
     )
   }
 

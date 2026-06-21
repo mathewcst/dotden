@@ -250,14 +250,19 @@ mirroring `<AppShell left center right />` in React:
 - **`AppShell`** COMPONENT — window chrome (a **`Titlebar` instance**, see below) + body with **three
   `INSTANCE_SWAP` slots**: `Left#114:0`, `Center#114:1`, `Right#114:2`. Each main-app screen = one
   AppShell instance with the three panes swapped.
-- **`Titlebar`** (`516:1424`) COMPONENT (Batch F, 2026-06-14) — the shared window titlebar: traffic
-  lights · workspace switcher · `SearchField` · sync status · `Bell`/`Settings2` `IconButton`s ·
-  `Avatar`. **`SyncStatus`** TEXT prop (the right-side sync label) + **`SyncIcon`** INSTANCE_SWAP (its
-  glyph — `ArrowDownUp` default, `Cloud` for offline). Extracted from the inline AppShell titlebar
-  frame via **detach-extract** (`detachInstance` preserves bindings → `createComponentFromNode`),
-  then AppShell + all 20 app-screen titlebars were migrated to instances (the 6 detached screens also
-  picked up the M8 Lucide icons they'd missed). Per-screen sync labels ("1 to push", "Cloned · just
-  now", "Offline" + Cloud) are now clean `SyncStatus`/`SyncIcon` overrides instead of deep node edits.
+- **`Titlebar`** (`516:1424`) COMPONENT (Batch F, 2026-06-14) — the shared window titlebar: OS window
+  controls · workspace switcher · `SearchField` · sync status · `Bell`/`Settings2` `IconButton`s ·
+  `Avatar`. In code, the controls are real, not decorative: macOS renders traffic-light buttons on
+  the left; Windows/Linux render minimize/maximize/close buttons on the right. The titlebar itself is
+  the Electron drag region, while every control/search/settings hit target is `no-drag` so clicks
+  still work. Native actions cross the preload/IPC seam (`window.minimize`,
+  `window.toggleMaximize`, `window.close`); the renderer never imports Electron. **`SyncStatus`** TEXT
+  prop (the right-side sync label) + **`SyncIcon`** INSTANCE_SWAP (its glyph — `ArrowDownUp` default,
+  `Cloud` for offline). Extracted from the inline AppShell titlebar frame via **detach-extract**
+  (`detachInstance` preserves bindings → `createComponentFromNode`), then AppShell + all 20
+  app-screen titlebars were migrated to instances (the 6 detached screens also picked up the M8
+  Lucide icons they'd missed). Per-screen sync labels ("1 to push", "Cloned · just now", "Offline" +
+  Cloud) are now clean `SyncStatus`/`SyncIcon` overrides instead of deep node edits.
 - Default pane components (same page): **`AppPane/Workspaces`** (284w) · **`AppPane/Diff`** (716w) ·
   **`AppPane/Inspector`** (320w). The home screen `App · Main` uses these defaults.
   - The panes were extracted from the original Phase-3 screen via `createComponentFromNode` (note the

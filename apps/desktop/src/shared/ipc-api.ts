@@ -97,6 +97,15 @@ export interface DotdenApi {
     readonly electron: string
     readonly chrome: string
   }
+  /** Window chrome operations for the frameless shell titlebar. */
+  readonly window: {
+    /** Minimize the current BrowserWindow. */
+    minimize(): Promise<void>
+    /** Toggle maximize/restore for the current BrowserWindow; returns the new maximized state. */
+    toggleMaximize(): Promise<boolean>
+    /** Close the current BrowserWindow. */
+    close(): Promise<void>
+  }
   /** Remote-connection operations, each forwarded to a `remote:*` IPC channel. */
   readonly remote: {
     /** Preflight a Remote URL against the user's existing git credentials. */

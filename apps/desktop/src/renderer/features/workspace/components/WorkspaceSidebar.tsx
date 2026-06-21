@@ -49,10 +49,19 @@ interface GroupNode {
 
 /** Build the nested Group forest for a Workspace from its flat `parentId`-linked list. */
 function buildGroupForest(groups: readonly Group[]): readonly GroupNode[] {
+  const groupsByParent = new Map<string, Group[]>()
+  for (const group of groups) {
+    const key = group.parentId ?? ''
+    const siblings = groupsByParent.get(key) ?? []
+    siblings.push(group)
+    groupsByParent.set(key, siblings)
+  }
+
   const childrenOf = (parentId: string | null): readonly GroupNode[] =>
-    groups
-      .filter((g) => g.parentId === parentId)
-      .map((group) => ({ group, children: childrenOf(group.id) }))
+    (groupsByParent.get(parentId ?? '') ?? []).map((group) => ({
+      group,
+      children: childrenOf(group.id),
+    }))
   return childrenOf(null)
 }
 
@@ -73,6 +82,16 @@ export function WorkspaceSidebar({
   // a single default Workspace is never named in the UI, so simple setups stay simple.
   const conceptVisible = workspaces.length > 1
   const defaultWorkspace = workspaces[0]
+  const fileStatsByWorkspace = useMemo(() => {
+    const stats = new Map<string, { total: number; root: number }>()
+    for (const file of files) {
+      const current = stats.get(file.workspaceId) ?? { total: 0, root: 0 }
+      current.total += 1
+      if (file.groupId === null) current.root += 1
+      stats.set(file.workspaceId, current)
+    }
+    return stats
+  }, [files])
 
   return (
     <div className="flex flex-col">
@@ -106,7 +125,8 @@ export function WorkspaceSidebar({
           <WorkspaceSection
             key={workspace.id}
             workspace={workspace}
-            files={files}
+            fileCount={fileStatsByWorkspace.get(workspace.id)?.total ?? 0}
+            hasRootFiles={(fileStatsByWorkspace.get(workspace.id)?.root ?? 0) > 0}
             renderFiles={renderFiles}
             onCreateGroup={onCreateGroup}
             busy={busy}
@@ -118,7 +138,7 @@ export function WorkspaceSidebar({
         // keeps them) and its Files — but with NO Workspace chrome around them.
         <WorkspaceBody
           workspace={defaultWorkspace}
-          files={files}
+          hasRootFiles={(fileStatsByWorkspace.get(defaultWorkspace.id)?.root ?? 0) > 0}
           renderFiles={renderFiles}
           onCreateGroup={onCreateGroup}
           busy={busy}
@@ -132,13 +152,15 @@ export function WorkspaceSidebar({
 /** One labelled Workspace section (rendered only when the concept is visible). */
 function WorkspaceSection({
   workspace,
-  files,
+  fileCount,
+  hasRootFiles,
   renderFiles,
   onCreateGroup,
   busy,
 }: {
   workspace: Workspace
-  files: readonly FileTreeEntry[]
+  fileCount: number
+  hasRootFiles: boolean
   renderFiles: WorkspaceSidebarProps['renderFiles']
   onCreateGroup: WorkspaceSidebarProps['onCreateGroup']
   busy: boolean
@@ -146,7 +168,6 @@ function WorkspaceSection({
   // The Workspace row is collapsible (matching the signature tree): the chevron is the
   // only affordance and the trailing count is the number of Files this Workspace owns.
   const [open, setOpen] = useState(true)
-  const fileCount = files.filter((f) => f.workspaceId === workspace.id).length
   return (
     <section className="px-2 pt-1">
       <button
@@ -167,7 +188,7 @@ function WorkspaceSection({
       {open ? (
         <WorkspaceBody
           workspace={workspace}
-          files={files}
+          hasRootFiles={hasRootFiles}
           renderFiles={renderFiles}
           onCreateGroup={onCreateGroup}
           busy={busy}
@@ -181,22 +202,20 @@ function WorkspaceSection({
 /** The Groups (nested) + root-level Files of one Workspace, with the add-Group affordance. */
 function WorkspaceBody({
   workspace,
-  files,
+  hasRootFiles,
   renderFiles,
   onCreateGroup,
   busy,
   showGroupAffordance,
 }: {
   workspace: Workspace
-  files: readonly FileTreeEntry[]
+  hasRootFiles: boolean
   renderFiles: WorkspaceSidebarProps['renderFiles']
   onCreateGroup: WorkspaceSidebarProps['onCreateGroup']
   busy: boolean
   showGroupAffordance: boolean
 }) {
   const forest = useMemo(() => buildGroupForest(workspace.groups), [workspace.groups])
-  // Whether this Workspace owns any File sitting directly under its root (no Group).
-  const hasRootFiles = files.some((f) => f.workspaceId === workspace.id && f.groupId === null)
 
   return (
     <div className="px-1">

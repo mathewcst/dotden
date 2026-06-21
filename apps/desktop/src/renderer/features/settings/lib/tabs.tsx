@@ -15,7 +15,7 @@
  * the demoable surface is honestly "shell + working Sync tab", never a rail advertising six
  * unbuilt tabs (never fail silently / never promise UI that does not exist).
  */
-import type { ComponentType } from 'react'
+import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
 import {
   ArrowDownUp,
   Cloud,
@@ -27,14 +27,30 @@ import {
   Shield,
   type LucideIcon,
 } from 'lucide-react'
-import { SyncTab } from '../components/SyncTab'
-import { CommitTab } from '../components/CommitTab'
-import { AppearanceTab } from '../components/AppearanceTab'
-import { AutomationTab } from '../components/AutomationTab'
-import { AccountTab } from '../components/AccountTab'
-import { PrivacyTab } from '../components/PrivacyTab'
-import { EnvironmentsTab } from '../components/EnvironmentsTab'
-import { AboutTab } from '../components/AboutTab'
+const AutomationTab = lazy(() =>
+  import('../components/AutomationTab').then((module) => ({ default: module.AutomationTab })),
+)
+const CommitTab = lazy(() =>
+  import('../components/CommitTab').then((module) => ({ default: module.CommitTab })),
+)
+const AppearanceTab = lazy(() =>
+  import('../components/AppearanceTab').then((module) => ({ default: module.AppearanceTab })),
+)
+const SyncTab = lazy(() =>
+  import('../components/SyncTab').then((module) => ({ default: module.SyncTab })),
+)
+const AccountTab = lazy(() =>
+  import('../components/AccountTab').then((module) => ({ default: module.AccountTab })),
+)
+const PrivacyTab = lazy(() =>
+  import('../components/PrivacyTab').then((module) => ({ default: module.PrivacyTab })),
+)
+const EnvironmentsTab = lazy(() =>
+  import('../components/EnvironmentsTab').then((module) => ({ default: module.EnvironmentsTab })),
+)
+const AboutTab = lazy(() =>
+  import('../components/AboutTab').then((module) => ({ default: module.AboutTab })),
+)
 
 /** A tab's lifecycle: `live` = built + selectable; `placeholder` = inert until its slice ships. */
 export type SettingsTabStatus = 'live' | 'placeholder'
@@ -53,7 +69,7 @@ export interface SettingsTab {
    * The content component swapped into the shell's content area when this tab is active. Present
    * only for `live` tabs; a `placeholder` has none (the shell renders the inert empty-state copy).
    */
-  readonly Content?: ComponentType
+  readonly Content?: ComponentType | LazyExoticComponent<ComponentType>
 }
 
 /**

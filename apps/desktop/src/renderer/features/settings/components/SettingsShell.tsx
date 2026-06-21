@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
 import { DEFAULT_SETTINGS_TAB_ID, SETTINGS_TABS, type SettingsTab } from '../lib/tabs'
@@ -63,7 +63,9 @@ export function SettingsShell({ onClose }: { onClose: () => void }) {
           {active && active.status === 'live' && active.Content ? (
             // Key by id so switching tabs remounts the content (fresh state per tab), exactly
             // like the OnboardingShell keys its step content — the instance-swap pattern.
-            <active.Content key={active.id} />
+            <Suspense fallback={<TabLoading label={active.label} />}>
+              <active.Content key={active.id} />
+            </Suspense>
           ) : (
             <PlaceholderTab label={active?.label ?? 'Settings'} />
           )}
@@ -118,6 +120,10 @@ function SidebarItem({
  * The inert placeholder content shown for a not-yet-built tab — an honest empty state (a
  * first-class fallback, never a blank screen), explaining the tab is coming in a later slice.
  */
+function TabLoading({ label }: { label: string }) {
+  return <p className="text-muted-foreground p-8 text-sm">Loading {label} settings…</p>
+}
+
 function PlaceholderTab({ label }: { label: string }) {
   return (
     <div className="flex h-full flex-col items-start justify-center gap-2 p-8">

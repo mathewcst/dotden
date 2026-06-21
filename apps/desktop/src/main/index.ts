@@ -16,29 +16,29 @@ import {
 } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { join } from 'node:path'
+import type { AppInfo, UpdateCheckResult } from '../shared/app-info.js'
+import type { AutomationLevel } from './foundation/automation-policy.js'
+import { readAutomationLevel, writeAutomationLevel } from './foundation/automation-settings.js'
 import { DenService } from './foundation/den-service.js'
 import { DiscoveryScanner } from './foundation/discovery-scanner.js'
 import { claimLocalIdentity, loadEnvironmentIdentity } from './foundation/environment-identity.js'
 import { EnvironmentRegistry } from './foundation/environment-registry.js'
 import { computeLaunchState, type LaunchState } from './foundation/launch-state.js'
 import { OperationTracer } from './foundation/operation-tracer.js'
+import type { PrivacySettings } from './foundation/privacy-settings.js'
+import { readPrivacySettings, writePrivacySettings } from './foundation/privacy-settings.js'
 import { RemoteClient } from './foundation/remote-client.js'
-import { resolveBundledTools } from './foundation/tools.js'
-import { registerIpcBridge } from './ipc/ipc-bridge.js'
-import { readAutomationLevel, writeAutomationLevel } from './foundation/automation-settings.js'
-import type { AutomationLevel } from './foundation/automation-policy.js'
+import type { UnsubscribeDisposition } from './foundation/subscription-settings.js'
 import {
   readUnsubscribeDisposition,
   writeUnsubscribeDisposition,
 } from './foundation/subscription-settings.js'
-import type { UnsubscribeDisposition } from './foundation/subscription-settings.js'
-import { DEFAULT_POLL_CADENCE, TrayPoller, type PollCadence } from './foundation/tray-poller.js'
-import { readSyncSettings, writeSyncSettings } from './foundation/sync-settings.js'
 import type { PollCadenceProfile, SyncSettings } from './foundation/sync-settings.js'
-import { readPrivacySettings, writePrivacySettings } from './foundation/privacy-settings.js'
-import type { PrivacySettings } from './foundation/privacy-settings.js'
-import { checkForUpdates as runUpdateCheck, noFeed } from './foundation/update-check.js'
-import type { AppInfo, UpdateCheckResult } from '../shared/app-info.js'
+import { readSyncSettings, writeSyncSettings } from './foundation/sync-settings.js'
+import { resolveBundledTools } from './foundation/tools.js'
+import { DEFAULT_POLL_CADENCE, TrayPoller, type PollCadence } from './foundation/tray-poller.js'
+import { noFeed, checkForUpdates as runUpdateCheck } from './foundation/update-check.js'
+import { registerIpcBridge } from './ipc/ipc-bridge.js'
 
 /**
  * Process-wide observability core (ADR 0007): one wide event per Operation lands in
@@ -349,6 +349,37 @@ function getAppInfo(): Promise<AppInfo> {
 }
 
 /**
+ * Run a frameless-titlebar action against the BrowserWindow that originated the IPC call.
+ *
+ * The renderer never receives an Electron object; it only asks for a narrow verb through preload,
+ * and the main process resolves the sender window at the boundary.
+ */
+async function controlWindow(
+  event: unknown,
+  action: 'minimize' | 'toggle-maximize' | 'close',
+): Promise<boolean | void> {
+  const sender = (event as { sender?: Electron.WebContents }).sender
+  const window = sender ? BrowserWindow.fromWebContents(sender) : null
+
+  if (!window) throw new Error('Window control IPC had no sender window')
+
+  if (action === 'minimize') {
+    window.minimize()
+    return
+  }
+
+  if (action === 'close') {
+    window.close()
+    return
+  }
+
+  if (window.isMaximized()) window.unmaximize()
+  else window.maximize()
+
+  return window.isMaximized()
+}
+
+/**
  * Run the About tab's update check (issue 2-16). Today it uses the {@link noFeed} placeholder, so
  * it honestly resolves to `'unavailable'` with a reason — mirroring the inert
  * `autoUpdater.checkForUpdatesAndNotify()` below (no published feed exists in the scaffold). Issue
@@ -546,6 +577,9 @@ function createWindow(): void {
     minHeight: 560,
     title: 'dotden',
     backgroundColor: '#050505',
+    roundedCorners: true,
+    darkTheme: true,
+    frame: false,
     webPreferences: {
       // Preload is the ONLY trusted bridge: it runs with the privileges below
       // and selectively exposes IPC to the otherwise-sandboxed renderer.
@@ -602,6 +636,7 @@ app.whenReady().then(() => {
     setPrivacySettings,
     getAppInfo,
     checkForUpdates,
+    controlWindow,
   })
   createWindow()
 

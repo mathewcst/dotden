@@ -32,7 +32,7 @@ export function DenSessionProvider({ role, children }: { role: Role; children: R
   // stable per mounted instance because the provider is keyed by role — a role change is a remount,
   // which runs this initializer again for a clean store.
   const [store] = useState(() => createDenSessionStore(role))
-  return <DenSessionContext.Provider value={store}>{children}</DenSessionContext.Provider>
+  return <DenSessionContext value={store}>{children}</DenSessionContext>
 }
 
 /**
