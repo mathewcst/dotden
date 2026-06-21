@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Layers, Loader2 } from 'lucide-react'
 import { Button } from '@/ui/button'
-import type { SubscribableWorkspace } from '../../../../main/foundation/den-service'
+import type { SubscribableWorkspace } from '@shared/den'
 
 /**
  * OBPickWorkspaces — returning-flow step 3 (design: returning-environment.md

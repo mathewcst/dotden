@@ -23,7 +23,7 @@ import {
   isResolvedConflict,
   type ResolvedConflict,
 } from '../../apply/conflict-model.js'
-import type { WorkspacesDoc } from '../../den-store.js'
+import type { WorkspacesDoc } from '../../../../shared/workspace.js'
 import type { EnvironmentEntry } from '../../../../shared/environments.js'
 import { SyncEngine, type IncomingFile } from '../sync-engine.js'
 

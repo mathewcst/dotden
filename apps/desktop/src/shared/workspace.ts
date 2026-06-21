@@ -96,3 +96,11 @@ export interface Workspace {
    */
   readonly scope: Scope
 }
+
+/** The synced Workspace tree + File placements (`workspaces.json`). */
+export interface WorkspacesDoc {
+  /** All Workspaces in the Den. The MVP thread seeds exactly one (default). */
+  readonly workspaces: readonly Workspace[]
+  /** Where each managed File lives in the Workspace tree. */
+  readonly placements: readonly FilePlacement[]
+}

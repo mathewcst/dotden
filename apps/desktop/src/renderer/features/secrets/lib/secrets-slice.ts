@@ -15,7 +15,7 @@
  */
 import type { DotdenApi } from '@shared/ipc-api'
 import type { SecretFinding } from '@shared/secrets'
-import type { ConvertSecretRequest } from '../../../../main/foundation/den-service'
+import type { ConvertSecretRequest } from '@shared/den'
 import type { DetectedPasswordManager } from '@shared/secrets'
 import type { PmPreference } from '@shared/secrets'
 import type { DenSessionGet, DenSessionSet } from '../../shell/lib/den-session-store'

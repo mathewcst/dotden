@@ -13,11 +13,7 @@ import {
 import { Button } from '@/ui/button'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import { StatusTag } from '@/shared/components/StatusTag'
-import type {
-  ApplyFileResult,
-  IncomingReviewItem,
-  IncomingSummary,
-} from '../../../../main/foundation/den-service'
+import type { ApplyFileResult, IncomingReviewItem, IncomingSummary } from '@shared/den'
 
 /**
  * ReviewApply — the **Review & Apply** surface (issue 1-09), modeled on the

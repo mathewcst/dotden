@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/ui/button'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
-import type { ConflictReviewItem } from '../../../../main/foundation/den-service'
+import type { ConflictReviewItem } from '@shared/den'
 import type { ResolutionChoice } from '@shared/apply'
 
 /**

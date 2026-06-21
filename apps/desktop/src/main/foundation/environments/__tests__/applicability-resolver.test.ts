@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { ApplicabilityResolver, isAppliesHere } from '../applicability-resolver.js'
-import type { WorkspacesDoc } from '../../den-store.js'
+import type { WorkspacesDoc } from '../../../../shared/workspace.js'
 import type { EnvironmentEntry } from '../../../../shared/environments.js'
 
 const workspaces: WorkspacesDoc = {

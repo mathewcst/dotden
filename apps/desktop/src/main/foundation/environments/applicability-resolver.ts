@@ -15,7 +15,7 @@
  * "applied to a non-applicable File" *unrepresentable* (ADR 0008's "cannot express
  * the unsafe state"), not merely "remembered to check".
  */
-import type { WorkspacesDoc } from '../den-store.js'
+import type { WorkspacesDoc } from '../../../shared/workspace.js'
 import type { EnvironmentEntry } from '../../../shared/environments.js'
 import { effectiveScope, narrowScope, scopeAppliesOn } from '../platform/os-scope.js'
 import type { Os, Scope } from '../../../shared/scope.js'

@@ -1,4 +1,4 @@
-import type { RemoteAxisMarker } from '../../../../main/foundation/den-service'
+import type { RemoteAxisMarker } from '@shared/den'
 
 /**
  * The `@pierre/trees` `renderRowDecoration` return shape for one row's Remote axis.

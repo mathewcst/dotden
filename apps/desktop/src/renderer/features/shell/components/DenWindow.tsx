@@ -10,7 +10,7 @@ import { remoteAxisDecoration } from '@/features/shell/lib/remote-axis'
 import type { FileTreeRowDecorationRenderer, GitStatusEntry } from '@pierre/trees'
 import { useFileTree } from '@pierre/trees/react'
 import { lazy, Suspense, useCallback, useEffect, useMemo } from 'react'
-import type { FileTreeEntry } from '../../../../main/foundation/den-service'
+import type { FileTreeEntry } from '@shared/den'
 
 const ConflictResolver = lazy(() =>
   import('@/features/apply/components/ConflictResolver').then((module) => ({

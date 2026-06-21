@@ -33,17 +33,7 @@
  * conflicting Files simply never reach the planner.
  */
 import type { AppliesHere } from '../environments/applicability-resolver.js'
-
-/**
- * The kind of change an Apply plan item represents.
- *
- * - `create` — a File present on the Remote but absent locally (incoming-clean).
- * - `update` — a File present on both that the Remote changed (the planner shape is
- *   ready for it; the incoming-update diff path is the Review & Apply slice, 1-09).
- * - `delete` — a File the Remote removed; per invariant #4 it is always
- *   `requiresConfirmation: true` and never written without explicit user confirmation.
- */
-export type ApplyChangeKind = 'create' | 'update' | 'delete'
+import type { ApplyChangeKind } from '../../../shared/apply.js'
 
 /**
  * Why a plan item is **blocked** from being applied, or `null` when it is ready.

@@ -23,10 +23,8 @@ import { resolveContainedPath } from '../platform/path-safety.js'
 import { scopedOutPaths } from '../platform/os-scope.js'
 import type { Os, Scope } from '../../../shared/scope.js'
 import { renderSubscriptionIgnore } from '../settings/subscription-ignore.js'
-import {
-  renderSecretReferenceTemplate,
-  type SecretReferenceRequest,
-} from '../secrets/secret-reference.js'
+import { renderSecretReferenceTemplate } from '../secrets/secret-reference.js'
+import type { SecretReferenceRequest } from '../../../shared/secrets.js'
 import { runCommand } from '../platform/process.js'
 import type { CommitTemplateData } from '../../../shared/commit-template.js'
 

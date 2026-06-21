@@ -19,7 +19,7 @@ import { OnboardingMenu } from './OnboardingMenu'
 import { OBConnectUrl } from './OBConnectUrl'
 import { OBDiscover } from './OBDiscover'
 import { nextStep, type OnboardingStep } from '../lib/steps'
-import type { CommitResult } from '../../../../main/foundation/den-service'
+import type { CommitResult } from '@shared/den'
 
 /**
  * OnboardingShell — the window chrome + step router for the V1-Lean first-run flow

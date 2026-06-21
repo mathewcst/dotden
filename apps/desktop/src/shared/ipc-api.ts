@@ -39,7 +39,7 @@ import type {
   SubscriptionState,
   SyncPushResult,
   YoloSyncResult,
-} from '../main/foundation/den-service.js'
+} from './den.js'
 import type { LaunchState } from './environments.js'
 import type { UnsubscribeDisposition } from './settings.js'
 import type { SecretFinding } from './secrets.js'

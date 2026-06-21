@@ -26,7 +26,7 @@ import {
   ready,
   type IncomingChange,
 } from '../apply-planner.js'
-import type { WorkspacesDoc } from '../../den-store.js'
+import type { WorkspacesDoc } from '../../../../shared/workspace.js'
 import type { EnvironmentEntry } from '../../../../shared/environments.js'
 
 /**

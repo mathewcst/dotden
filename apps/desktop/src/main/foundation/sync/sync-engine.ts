@@ -21,18 +21,19 @@
  */
 import {
   planIncoming,
-  type ApplyChangeKind,
   type ApplyPlan,
   type ApplyPlanItem,
   type IncomingChange,
   type LocalEditState,
 } from '../apply/apply-planner.js'
+import type { ApplyChangeKind } from '../../../shared/apply.js'
 import { ApplicabilityResolver, isAppliesHere } from '../environments/applicability-resolver.js'
 import type { AutomationPolicy } from '../apply/automation-policy.js'
 import { isResolvedConflict, type ResolvedConflict } from '../apply/conflict-model.js'
-import type { WorkspacesDoc } from '../den-store.js'
+import type { WorkspacesDoc } from '../../../shared/workspace.js'
 import type { EnvironmentEntry } from '../../../shared/environments.js'
 import type { OperationTracer } from '../platform/operation-tracer.js'
+import type { AutoApplyHoldReason } from '../../../shared/den.js'
 
 /**
  * One incoming File observed during a Sync fetch, classified by its Remote-vs-local
@@ -71,30 +72,6 @@ export interface IncomingCleanRouting {
    */
   readonly deferred: readonly { targetPath: string; reason: 'conflict' | 'not-applicable' }[]
 }
-
-/**
- * Why a routed incoming item still needs the **user** rather than auto-applying — the
- * verdict that kept it off the auto-apply path (issue 2-12). Every value here is *read*
- * from an invariant owner; `SyncEngine` never re-derives it (ADR 0008):
- *
- * - `conflict` — a true Conflict, deferred before the planner. NEVER auto-resolved
- *   (invariant #1, `ConflictModel`'s job).
- * - `not-applicable` — outside this environment's subscription/Scope; no witness was
- *   minted (invariant #3, `ApplicabilityResolver`).
- * - `uncommitted-edit` — the File has uncommitted local edits here; auto-applying would
- *   silently overwrite in-progress work (invariant #2, `ApplyPlanner`'s edit guard).
- * - `needs-confirmation` — an incoming deletion; never applied without an explicit
- *   confirmation (invariant #4, `ApplyPlanner`).
- * - `clean` — a ready, applicable, non-deletion item the policy still did NOT auto-apply
- *   because the current LEVEL leaves Apply manual (Manual / Auto-sync). It is held purely
- *   by the level gate, not by a safety owner — so it surfaces for ordinary review.
- */
-export type AutoApplyHoldReason =
-  | 'conflict'
-  | 'not-applicable'
-  | 'uncommitted-edit'
-  | 'needs-confirmation'
-  | 'clean'
 
 /**
  * The result of routing one Sync's incoming Files through the **Auto-apply** event path

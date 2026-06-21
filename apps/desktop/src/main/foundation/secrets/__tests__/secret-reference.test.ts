@@ -13,8 +13,8 @@ import {
   PASSWORD_MANAGERS,
   renderSecretReferenceTemplate,
   sourceTemplateName,
-  type SecretReferenceRequest,
 } from '../secret-reference.js'
+import type { SecretReferenceRequest } from '../../../../shared/secrets.js'
 
 describe('renderSecretReferenceTemplate — 1Password (op)', () => {
   it('renders {{ onepasswordRead "op://vault/item/field" }} for the default account', () => {

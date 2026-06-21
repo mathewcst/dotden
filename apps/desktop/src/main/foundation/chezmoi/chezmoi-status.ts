@@ -40,28 +40,8 @@
  * out-of-OS-Scope rendering, issue 1-15) is layered on by the caller from
  * `.chezmoiignore`, not from `status`.
  */
-
-/**
- * The `@pierre/trees` git-status union, redeclared locally so this main-process
- * module pulls in **no** renderer/`@pierre` dependency (ADR 0023 keeps the
- * foundation Electron- and UI-free). It is structurally identical to
- * `@pierre/trees`' `GitStatus`, so the renderer assigns it without a cast.
- */
-export type FileGitStatusCode =
-  | 'added'
-  | 'deleted'
-  | 'ignored'
-  | 'modified'
-  | 'renamed'
-  | 'untracked'
-
-/** One File's local status, the row shape `@pierre/trees` `setGitStatus` consumes. */
-export interface FileGitStatus {
-  /** Destination-relative File path (e.g. `.zshrc`), matching the tree's path id. */
-  readonly path: string
-  /** The local-axis status letter chezmoi reports for this File. */
-  readonly status: FileGitStatusCode
-}
+import type { FileGitStatus } from '../../../shared/den.js'
+import type { FileGitStatusCode } from '../../../shared/den.js'
 
 /**
  * Translate one chezmoi status column character into dotden's local-axis code.

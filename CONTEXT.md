@@ -88,6 +88,18 @@ _Avoid_: log line, metric.
 **Allowlisted attribute key** _(dotden-internal)_: The compile-time-restricted set of counts/enums permitted on a **Wide event** (`fileCount`, `workspaceCount`, `environmentCount`, `outcome`, `errorClass`, `chezmoiExitCode`, `durationMs`, `automationLevel`, `queued`). Paths, file contents, secrets, `op://` references, repo URLs, and hostnames are not representable by construction — the privacy invariant lives in the type system.
 _Avoid_: tag, label, field.
 
+**Diagnostics** _(dotden — user-facing)_: The area where a user inspects what dotden actually did underneath — the real CLI commands and their (redacted) output — to self-diagnose a problem and gather the details for a bug report. The one surface that shows real, redacted command output, as opposed to **Operation trace** and **Wide event**, which are internal and scrubbed.
+_Avoid_: logs (too generic), debug console (that names one view — the **Console**), telemetry.
+
+**Command record** _(dotden-internal)_: One captured CLI invocation underneath an Operation — its command, arguments, exit code, redacted stdout/stderr, `traceId`, and timestamp. Correlated to its **Operation trace** and **Wide event** by `traceId`. Secrets are redacted at the moment of capture (structure-preserving) before the record is ever persisted.
+_Avoid_: log line, log entry, span (that's the **Operation trace**).
+
+**Command log** _(dotden-internal, environment-local)_: The bounded, on-disk ring buffer of **Command records** for an environment — the store the **Diagnostics** surfaces read from. Lives in the Electron-free foundation beside the operation tracer (ADR 0023). Redacted at rest; an opt-in, explicitly-warned unredacted mode is session-scoped and never the default.
+_Avoid_: log file (it is a bounded buffer, not raw text on disk), history (that's File version history), trace buffer.
+
+**Console** _(dotden — user-facing, opt-in view)_: The live tail view of the **Command log**, surfaced behind an opt-in setting for users who want to watch what dotden is doing in real time. One of several **Diagnostics** surfaces; the everyday surfaces are the on-error **Details** disclosure and the **Copy diagnostics** export, not the Console.
+_Avoid_: terminal (implies interactive input), debugger, log viewer.
+
 ## Flagged ambiguities
 
 **"Sync"** — resolved: **Sync = transport** — moving already-Committed changes between environments and landing clean incoming changes. It is explicitly **not** Commit; _nothing syncs that you didn't Commit_ (transport-not-commit, ADR 0006). "Sync now" (manual round-trip) and "Auto-sync" are valid labels. **Commit** (record, up) and **Apply** (write, down) remain the precise sub-operations that transport carries.

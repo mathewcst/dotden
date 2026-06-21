@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight, Folder, FolderPlus, Plus } from 'lucide-react'
 import type { Group, Workspace } from '@shared/workspace'
-import type { FileTreeEntry } from '../../../../main/foundation/den-service'
+import type { FileTreeEntry } from '@shared/den'
 import { cn } from '@/shared/lib/utils'
 
 /**

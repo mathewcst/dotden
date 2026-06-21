@@ -30,7 +30,8 @@
  *   the field defaults to `password`).
  * - pass → `{{ pass "<entry>" }}` (the first line of `pass show <entry>`).
  */
-import type { PasswordManagerId, PasswordManagerInfo } from '../../../shared/secrets.js'
+import type { PasswordManagerInfo } from '../../../shared/secrets.js'
+import type { SecretReferenceRequest } from '../../../shared/secrets.js'
 
 /**
  * The v1 password-manager catalog (1Password / Bitwarden / pass) — the SINGLE source of truth for
@@ -63,33 +64,6 @@ export const PASSWORD_MANAGERS: readonly PasswordManagerInfo[] = [
     referenceExample: 'entry path (e.g. github/token)',
   },
 ]
-
-/**
- * A request to convert a flagged value into a Secret reference — the user's picker choice plus the
- * vault coordinates the reference points at. Notably this carries NO raw secret value: the value
- * stays in the user's vault, so it is not even representable here (the privacy posture is in the
- * type — mirrors the operation-tracer allowlist).
- */
-export interface SecretReferenceRequest {
-  /** Which password manager the reference resolves from (the user's picker choice). */
-  readonly manager: PasswordManagerId
-  /**
-   * The vault reference: for 1Password the `op://vault/item/field` URI; for Bitwarden the item
-   * name; for pass the entry path. This is the only coordinate that enters source state — never
-   * the secret value.
-   */
-  readonly reference: string
-  /**
-   * (1Password only) a non-default account identifier — when set, the template adds the account
-   * arg (`--account <account>`). Omitted/blank ⇒ the default account.
-   */
-  readonly account?: string
-  /**
-   * (Bitwarden only) which custom field of the item to read; defaults to `password`. Ignored by
-   * the other managers.
-   */
-  readonly field?: string
-}
 
 /**
  * Escape a string for embedding inside a Go-template **double-quoted** string literal.

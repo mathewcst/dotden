@@ -32,7 +32,8 @@ import {
   normalizeAppearanceSettings,
 } from '../../shared/appearance-settings.js'
 import type { EnvironmentEntry } from '../../shared/environments.js'
-import type { Group, FilePlacement, Workspace } from '../../shared/workspace.js'
+import type { Group, Workspace } from '../../shared/workspace.js'
+import type { WorkspacesDoc } from '../../shared/workspace.js'
 
 /**
  * The default Workspace id every Den is seeded with.
@@ -42,14 +43,6 @@ import type { Group, FilePlacement, Workspace } from '../../shared/workspace.js'
  * subscription default reference the same id.
  */
 export const DEFAULT_WORKSPACE_ID = 'personal'
-
-/** The synced Workspace tree + File placements (`workspaces.json`). */
-export interface WorkspacesDoc {
-  /** All Workspaces in the Den. The MVP thread seeds exactly one (default). */
-  readonly workspaces: readonly Workspace[]
-  /** Where each managed File lives in the Workspace tree. */
-  readonly placements: readonly FilePlacement[]
-}
 
 /** The synced environment registry (`environments.json`). */
 export interface EnvironmentsDoc {

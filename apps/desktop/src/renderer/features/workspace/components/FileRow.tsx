@@ -1,6 +1,6 @@
 import { File } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
-import type { FileTreeEntry } from '../../../../main/foundation/den-service'
+import type { FileTreeEntry } from '@shared/den'
 
 /**
  * The local-axis git-status letter shown on a grouped File row, color-bound to dd/*
