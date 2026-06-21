@@ -5,7 +5,8 @@
  * The About tab answers three questions, all honestly (never fail silently):
  * 1. **What version am I on?** — {@link AppInfo.version}, the running dotden build.
  * 2. **Am I current?** — the result of an {@link UpdateCheckResult update check}.
- * 3. **What is dotden built on?** — the **chezmoi credit** ({@link CHEZMOI_CREDIT}); dotden is a
+ * 3. **How should updates behave here?** — {@link UpdateSettings}, persisted per environment.
+ * 4. **What is dotden built on?** — the **chezmoi credit** ({@link CHEZMOI_CREDIT}); dotden is a
  *    FAITHFUL WRAPPER over chezmoi (ADR 0003), so the relationship is acknowledged in the UI.
  *
  * This module is the SINGLE source of truth for those shapes + the pure copy/derivation helpers,
@@ -13,10 +14,8 @@
  * drift. It is intentionally **pure** — no Electron, no Node, no I/O — so it imports cleanly into
  * the renderer bundle (ADR 0023) and its decisions are unit-testable in plain Node.
  *
- * **Scope (the load-bearing rule, issue 2-16):** this surfaces the version, an update-check
- * *affordance*, and the credit — it builds NO packaging/auto-update mechanics. The real update
- * engine (electron-updater against the GitHub Releases feed) is PRD 3 (issue 3-20); until that
- * ships the check honestly reports {@link UpdateCheckStatus 'unavailable'} rather than pretending.
+ * Auto-update mechanics stay in the main process; this file only carries typed shared data and
+ * pure copy helpers.
  */
 
 /**
@@ -36,18 +35,16 @@ export interface AppInfo {
 /**
  * The outcome of an update check — a discriminated status the About tab renders verbatim.
  *
- * - **`up-to-date`** — the check ran and this build is the latest. (Reachable once 3-20 wires a
- *   real feed; the placeholder never returns it.)
+ * - **`up-to-date`** — the check ran and this build is the latest.
  * - **`update-available`** — a newer version exists; {@link UpdateCheckResult.latestVersion}
- *   carries it so the tab can name it. (Reachable once 3-20 ships; the placeholder never returns
- *   it — this slice deliberately installs NO download/install path.)
+ *   carries it so the tab can name it.
  * - **`unavailable`** — the check could not be performed (no published feed yet, offline, or the
- *   updater is disabled in this build). This is the placeholder's honest answer until 3-20: the
- *   tab says "couldn't check" + why, never a fake "you're up to date".
+ *   updater is disabled in this build). The tab says "couldn't check" + why, never a fake "you're
+ *   up to date".
  */
 export type UpdateCheckStatus = 'up-to-date' | 'update-available' | 'unavailable'
 
-/** The result of an update check (issue 2-16); a real feed fills it in fully in issue 3-20. */
+/** The result of an update check. */
 export interface UpdateCheckResult {
   /** Which of the three outcomes this check produced. */
   readonly status: UpdateCheckStatus
@@ -64,6 +61,21 @@ export interface UpdateCheckResult {
    * (never a silent failure); `null` otherwise.
    */
   readonly detail: string | null
+  /** ISO timestamp when this check completed. Drives About's last-checked surface. */
+  readonly checkedAt: string
+}
+
+/** Which release channel the updater should consult. */
+export type UpdateChannel = 'stable' | 'beta'
+
+/** Environment-local update preferences for the About tab. */
+export interface UpdateSettings {
+  /** Whether background checks/downloads run automatically. Manual checks remain available. */
+  readonly autoUpdateEnabled: boolean
+  /** Release channel to check. */
+  readonly channel: UpdateChannel
+  /** Last completed update-check time, or null when never checked. */
+  readonly lastCheckedAt: string | null
 }
 
 /** A downloaded update waiting for an explicit user restart/install confirmation. */

@@ -39,7 +39,7 @@ export interface UpdateFeed {
  */
 export const noFeed: UpdateFeed = {
   latest: async () => ({
-      unavailable: 'No update feed is available for this build.',
+    unavailable: 'No update feed is available for this build.',
   }),
 }
 
@@ -59,6 +59,7 @@ export const noFeed: UpdateFeed = {
 export async function checkForUpdates(
   currentVersion: string,
   feed: UpdateFeed = noFeed,
+  checkedAt = new Date().toISOString(),
 ): Promise<UpdateCheckResult> {
   const answer = await feed.latest(currentVersion)
 
@@ -69,6 +70,7 @@ export async function checkForUpdates(
       currentVersion,
       latestVersion: null,
       detail: answer.unavailable,
+      checkedAt,
     }
   }
 
@@ -79,5 +81,6 @@ export async function checkForUpdates(
     currentVersion,
     latestVersion: answer.latestVersion,
     detail: null,
+    checkedAt,
   }
 }

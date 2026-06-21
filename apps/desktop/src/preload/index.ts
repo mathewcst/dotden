@@ -570,6 +570,17 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['app']['checkForUpdates']>
     },
+    getUpdateSettings() {
+      return ipcRenderer.invoke('app:get-update-settings', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['app']['getUpdateSettings']>
+    },
+    setUpdateSettings(settings) {
+      return ipcRenderer.invoke('app:set-update-settings', {
+        settings,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['app']['setUpdateSettings']>
+    },
     onUpdateDownloaded(listener) {
       const handler = (_event: Electron.IpcRendererEvent, update: Parameters<typeof listener>[0]) =>
         listener(update)

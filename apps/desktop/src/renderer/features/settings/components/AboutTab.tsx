@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
 import { ExternalLink, Info, Loader2, RefreshCw } from 'lucide-react'
+import { Switch } from '@/ui/switch'
 import {
   CHEZMOI_CREDIT,
   describeUpdateStatus,
   isUpdateCheckUnavailable,
   type AppInfo,
   type UpdateCheckResult,
+  type UpdateChannel,
+  type UpdateSettings,
 } from '@shared/app-info'
 
 /**
@@ -17,22 +20,15 @@ import {
  * - **Version** — the running build's version, read from `app.getVersion()` over the `app:get-info`
  *   IPC seam, so the user always knows exactly what they are on (with the platform as a diagnostic
  *   hint for bug reports).
- * - **Update check** — a "Check for updates" affordance. The real engine (electron-updater against
- *   the GitHub Releases feed) is PRD 3 (issue 3-20); this slice wires the affordance to the
- *   placeholder check, which honestly reports it **couldn't check** (no feed yet) rather than a
- *   misleading "you're up to date" — a failed check must never look like a successful one (never
- *   fail silently). When 3-20 lands a real feed, the same affordance starts reporting up-to-date /
- *   update-available with no change here.
+ * - **Update check + preferences** — the manual check runs through electron-updater's GitHub
+ *   Releases feed, and the auto-update/channel preferences stay environment-local in userData.
  * - **chezmoi credit** — the faithful-wrapper acknowledgement (ADR 0003): dotden is the GUI; the
  *   user's Den stays a plain chezmoi repository. Crediting chezmoi keeps that relationship honest
  *   and visible.
- *
- * **Scope (the load-bearing rule, issue 2-16):** NO packaging/auto-update mechanics are built here
- * — only the version display, the check affordance, and the credit. There is deliberately no
- * "download / install update" button (that path is PRD 3); the check is information-only.
  */
 export function AboutTab() {
   const [info, setInfo] = useState<AppInfo | null>(null)
+  const [settings, setSettings] = useState<UpdateSettings | null>(null)
   // The last update-check result; null until the user runs a check (we don't auto-check on mount,
   // so the tab never makes a network-shaped call the user didn't ask for).
   const [update, setUpdate] = useState<UpdateCheckResult | null>(null)
@@ -42,13 +38,14 @@ export function AboutTab() {
   // Load the running build's version once on mount (cheap, local, no network).
   useEffect(() => {
     let alive = true
-    window.dotden.app
-      .getInfo()
-      .then((loaded) => {
-        if (alive) setInfo(loaded)
+    Promise.all([window.dotden.app.getInfo(), window.dotden.app.getUpdateSettings()])
+      .then(([loadedInfo, loadedSettings]) => {
+        if (!alive) return
+        setInfo(loadedInfo)
+        setSettings(loadedSettings)
       })
       .catch((caught: unknown) => {
-        if (alive) setError(messageOf(caught, 'Could not read the app version.'))
+        if (alive) setError(messageOf(caught, 'Could not load the update settings.'))
       })
     return () => {
       alive = false
@@ -66,6 +63,7 @@ export function AboutTab() {
     try {
       const result = await window.dotden.app.checkForUpdates()
       setUpdate(result)
+      setSettings(await window.dotden.app.getUpdateSettings())
     } catch (caught) {
       setError(messageOf(caught, 'Could not check for updates.'))
     } finally {
@@ -73,7 +71,21 @@ export function AboutTab() {
     }
   }
 
-  if (!info) {
+  async function saveSettings(patch: Partial<UpdateSettings>) {
+    if (!settings) return
+    const previous = settings
+    const next: UpdateSettings = { ...settings, ...patch }
+    setSettings(next)
+    setError(null)
+    try {
+      setSettings(await window.dotden.app.setUpdateSettings(next))
+    } catch (caught) {
+      setSettings(previous)
+      setError(messageOf(caught, 'Could not save update settings.'))
+    }
+  }
+
+  if (!info || !settings) {
     return (
       <div className="text-muted-foreground flex items-center gap-2 p-8 text-sm">
         {error ? (
@@ -149,6 +161,23 @@ export function AboutTab() {
             </span>
           ) : null}
         </div>
+
+        <div className="border-border divide-border divide-y border-t">
+          <SwitchRow
+            title="Automatic updates"
+            sub="Download updates in the background after dotden finds one. Installing still waits for you to restart."
+            checked={settings.autoUpdateEnabled}
+            onCheckedChange={(autoUpdateEnabled) => void saveSettings({ autoUpdateEnabled })}
+          />
+          <ChannelRow
+            value={settings.channel}
+            onChange={(channel) => void saveSettings({ channel })}
+          />
+        </div>
+
+        <p className="text-muted-foreground text-xs">
+          Last checked: {formatCheckedAt(update?.checkedAt ?? settings.lastCheckedAt)}
+        </p>
       </div>
 
       {/* The chezmoi credit — the faithful-wrapper acknowledgement (ADR 0003). */}
@@ -180,6 +209,80 @@ function ResourceLink({ href, label }: { href: string; label: string }) {
       <ExternalLink className="size-3" />
     </a>
   )
+}
+
+function SwitchRow({
+  title,
+  sub,
+  checked,
+  onCheckedChange,
+}: {
+  title: string
+  sub: string
+  checked: boolean
+  onCheckedChange: (checked: boolean) => void
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-4 py-3.5">
+      <span className="flex-1">
+        <span className="text-foreground block text-sm font-medium">{title}</span>
+        <span className="text-muted-foreground block text-xs leading-relaxed">{sub}</span>
+      </span>
+      <span className="pt-0.5">
+        <Switch checked={checked} onCheckedChange={onCheckedChange} />
+      </span>
+    </label>
+  )
+}
+
+const UPDATE_CHANNELS: readonly { value: UpdateChannel; label: string; hint: string }[] = [
+  { value: 'stable', label: 'Stable', hint: 'Only production releases.' },
+  { value: 'beta', label: 'Beta', hint: 'Include prerelease builds when they are published.' },
+]
+
+function ChannelRow({
+  value,
+  onChange,
+}: {
+  value: UpdateChannel
+  onChange: (channel: UpdateChannel) => void
+}) {
+  const activeHint = UPDATE_CHANNELS.find((option) => option.value === value)?.hint
+  return (
+    <div className="flex items-start gap-4 py-3.5">
+      <span className="flex-1">
+        <span className="text-foreground block text-sm font-medium">Update channel</span>
+        <span className="text-muted-foreground block text-xs leading-relaxed">{activeHint}</span>
+      </span>
+      <div className="border-border bg-background flex shrink-0 items-center gap-1 rounded-md border p-0.5">
+        {UPDATE_CHANNELS.map((option) => {
+          const selected = option.value === value
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onChange(option.value)}
+              className={
+                selected
+                  ? 'bg-primary text-primary-foreground rounded px-2.5 py-1 text-xs font-medium transition-colors'
+                  : 'text-muted-foreground hover:text-foreground rounded px-2.5 py-1 text-xs font-medium transition-colors'
+              }
+            >
+              {option.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function formatCheckedAt(checkedAt: string | null): string {
+  if (!checkedAt) return 'Never'
+  const date = new Date(checkedAt)
+  if (Number.isNaN(date.getTime())) return checkedAt
+  return date.toLocaleString()
 }
 
 /** Pull a human message off an unknown thrown value, falling back to `fallback`. */

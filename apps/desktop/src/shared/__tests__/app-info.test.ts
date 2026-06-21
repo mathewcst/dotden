@@ -21,6 +21,7 @@ function result(over: Partial<UpdateCheckResult>): UpdateCheckResult {
     currentVersion: '1.2.0',
     latestVersion: null,
     detail: null,
+    checkedAt: '2026-06-21T00:00:00.000Z',
     ...over,
   }
 }

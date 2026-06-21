@@ -17,7 +17,12 @@ import {
 } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { join } from 'node:path'
-import type { AppInfo, DownloadedUpdate, UpdateCheckResult } from '../shared/app-info.js'
+import type {
+  AppInfo,
+  DownloadedUpdate,
+  UpdateCheckResult,
+  UpdateSettings,
+} from '../shared/app-info.js'
 import type { AutomationLevel } from '../shared/apply.js'
 import type { CopyDiagnosticsResult, RedactedCommandRecord } from '../shared/diagnostics.js'
 import type { UnredactedModeState } from '../shared/diagnostics.js'
@@ -67,6 +72,7 @@ import {
   type PollCadence,
 } from './foundation/system/tray-poller.js'
 import { checkForUpdates as runUpdateCheck, type UpdateFeed } from './foundation/system/update-check.js'
+import { readUpdateSettings, writeUpdateSettings } from './foundation/system/update-settings.js'
 import { notificationEnabled } from './foundation/system/notification-policy.js'
 import { registerIpcBridge } from './ipc/ipc-bridge.js'
 
@@ -445,24 +451,31 @@ async function controlWindow(
   return window.isMaximized()
 }
 
-/**
- * Run the About tab's update check (issue 2-16). Today it uses the {@link noFeed} placeholder, so
- * it honestly resolves to `'unavailable'` with a reason — mirroring the inert
- * `autoUpdater.checkForUpdatesAndNotify()` below (no published feed exists in the scaffold). Issue
- * 3-20 swaps `noFeed` for a real electron-updater-backed feed; the IPC + UI contract is unchanged,
- * so that is a one-line wiring change here, not a rewrite. NO download/install path is wired in
- * this slice — only the honest "are there updates?" answer (never a fake "you're current").
- */
+/** The real GitHub Releases update feed, adapted behind the pure update-check seam. */
 const updateFeed: UpdateFeed = {
   async latest() {
+    await applyUpdateSettings()
     const result = await autoUpdater.checkForUpdates()
     if (result === null) return { unavailable: 'Updater is disabled for this build.' }
     return { latestVersion: result.updateInfo.version }
   },
 }
 
-function checkForUpdates(): Promise<UpdateCheckResult> {
-  return runUpdateCheck(app.getVersion(), updateFeed)
+function getUpdateSettings(): Promise<UpdateSettings> {
+  return readUpdateSettings(app.getPath('userData'))
+}
+
+async function setUpdateSettings(settings: UpdateSettings): Promise<UpdateSettings> {
+  const persisted = await writeUpdateSettings(app.getPath('userData'), settings)
+  await applyUpdateSettings(persisted)
+  return persisted
+}
+
+async function checkForUpdates(): Promise<UpdateCheckResult> {
+  const checkedAt = new Date().toISOString()
+  const result = await runUpdateCheck(app.getVersion(), updateFeed, checkedAt)
+  await setUpdateSettings({ ...(await getUpdateSettings()), lastCheckedAt: checkedAt })
+  return result
 }
 
 async function quitAndInstallUpdate(): Promise<void> {
@@ -470,6 +483,12 @@ async function quitAndInstallUpdate(): Promise<void> {
 }
 
 let updaterArmed = false
+
+async function applyUpdateSettings(settings?: UpdateSettings): Promise<void> {
+  const effective = settings ?? (await getUpdateSettings())
+  autoUpdater.allowPrerelease = effective.channel === 'beta'
+  autoUpdater.channel = effective.channel === 'beta' ? 'beta' : null
+}
 
 /** Configure the GitHub Releases feed and push update lifecycle events to the renderer. */
 function armAutoUpdater(): void {
@@ -485,9 +504,14 @@ function armAutoUpdater(): void {
   })
 
   autoUpdater.on('update-available', () => {
-    autoUpdater.downloadUpdate().catch(() => {
-      // The explicit About check still reports failures; background download should not crash boot.
-    })
+    void getUpdateSettings()
+      .then((settings) => {
+        if (!settings.autoUpdateEnabled) return undefined
+        return autoUpdater.downloadUpdate()
+      })
+      .catch(() => {
+        // The explicit About check still reports failures; background download should not crash boot.
+      })
   })
   autoUpdater.on('update-downloaded', (event) => {
     const update: DownloadedUpdate = {
@@ -498,9 +522,14 @@ function armAutoUpdater(): void {
     mainWindow?.webContents.send('app:update-downloaded', update)
   })
 
-  void checkForUpdates().catch(() => {
-    // Best-effort background check; the About tab check surfaces the error path on demand.
-  })
+  void getUpdateSettings()
+    .then(async (settings) => {
+      await applyUpdateSettings(settings)
+      if (settings.autoUpdateEnabled) await checkForUpdates()
+    })
+    .catch(() => {
+      // Best-effort background check; the About tab check surfaces the error path on demand.
+    })
 }
 
 /** Reveal the persisted, redacted Command log in the OS file manager (PRD4 issue 4-03). */
@@ -891,6 +920,8 @@ if (!app.requestSingleInstanceLock()) {
       setUnredactedMode,
       getAppInfo,
       checkForUpdates,
+      getUpdateSettings,
+      setUpdateSettings,
       quitAndInstallUpdate,
       controlWindow,
       openDiagnosticsLogLocation,

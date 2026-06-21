@@ -29,6 +29,7 @@ import type { SecretFinding } from '../../shared/secrets.js'
 import type { ConvertSecretRequest } from '../../shared/den.js'
 import type { AppearanceOverride, AppearanceSettings } from '../../shared/appearance-settings.js'
 import type { AppInfo, UpdateCheckResult } from '../../shared/app-info.js'
+import type { UpdateSettings } from '../../shared/app-info.js'
 import { TraceContextCodec, type TraceEnvelope } from '../../shared/remote.js'
 import type {
   CopyDiagnosticsResult,
@@ -128,13 +129,12 @@ export interface IpcBridgeDeps {
    * canonical `app.getVersion()`; the bridge just forwards it for the About tab's version line.
    */
   readonly getAppInfo: () => Promise<AppInfo>
-  /**
-   * Run the About tab's update check (issue 2-16). index.ts wires the current version + the
-   * placeholder feed (the real electron-updater feed is issue 3-20), so the bridge only routes the
-   * request and returns the honest {@link UpdateCheckResult} — `unavailable` until a feed exists,
-   * never a fake "you're current". NO download/install path is wired here (those are PRD 3).
-   */
+  /** Run the About tab's feed-backed update check. */
   readonly checkForUpdates: () => Promise<UpdateCheckResult>
+  /** Read environment-local updater settings. */
+  readonly getUpdateSettings?: () => Promise<UpdateSettings>
+  /** Persist environment-local updater settings. */
+  readonly setUpdateSettings?: (settings: UpdateSettings) => Promise<UpdateSettings>
   /** Restart and install a downloaded update after explicit user confirmation. */
   readonly quitAndInstallUpdate?: () => Promise<void>
   /**
@@ -741,6 +741,17 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   registrar.handle('app:check-updates', async (_event, payload: TracedPayload) => {
     traceId(payload)
     return deps.checkForUpdates()
+  })
+  registrar.handle('app:get-update-settings', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    if (!deps.getUpdateSettings) throw new Error('Update settings are not configured.')
+    return deps.getUpdateSettings()
+  })
+  registrar.handle('app:set-update-settings', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    if (!deps.setUpdateSettings) throw new Error('Update settings are not configured.')
+    const { settings } = payload as TracedPayload & { settings: UpdateSettings }
+    return deps.setUpdateSettings(settings)
   })
   registrar.handle('app:quit-and-install-update', async (_event, payload: TracedPayload) => {
     traceId(payload)

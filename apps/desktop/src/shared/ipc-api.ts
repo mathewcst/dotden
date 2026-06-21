@@ -57,7 +57,12 @@ import type { AutomationLevel } from './apply.js'
 import type { DiagnosticsSettings, SyncSettings } from './settings.js'
 import type { PrivacySettings } from './settings.js'
 import type { AppearanceOverride, AppearanceSettings } from './appearance-settings.js'
-import type { AppInfo, DownloadedUpdate, UpdateCheckResult } from './app-info.js'
+import type {
+  AppInfo,
+  DownloadedUpdate,
+  UpdateCheckResult,
+  UpdateSettings,
+} from './app-info.js'
 import type {
   CopyDiagnosticsResult,
   RedactedCommandRecord,
@@ -684,25 +689,22 @@ export interface DotdenApi {
     setSettings(settings: PrivacySettings): Promise<PrivacySettings>
   }
   /**
-   * App info + update check (issue 2-16, stories 52–53), forwarded to `app:*` IPC channels —
-   * the data seam behind the Settings → About tab.
-   *
-   * `getInfo` reports the running build's version (the canonical `app.getVersion()`); the tab
-   * shows it so the user always knows what they are on. `checkForUpdates` runs the update-check
-   * affordance: until issue 3-20 wires the real electron-updater feed it honestly resolves to
-   * `'unavailable'` (with a reason) rather than a fake "you're current" (never fail silently). No
-   * packaging/auto-update mechanics live here — only the version read + the check affordance (the
-   * chezmoi credit the tab also shows is static copy, {@link CHEZMOI_CREDIT}, needing no IPC).
+   * App info + update controls, forwarded to `app:*` IPC channels — the data seam behind the
+   * Settings → About tab and the downloaded-update restart prompt.
    */
   readonly app: {
     /** Read the running app's version + platform for the About tab's "you're on …" line. */
     getInfo(): Promise<AppInfo>
     /**
      * Run an update check. Resolves to an honest {@link UpdateCheckResult}: `unavailable` (with a
-     * reason) until issue 3-20 publishes a real feed, or `up-to-date`/`update-available` once it
-     * does. Never throws for "no feed" — a missing feed is a surfaced state, not an error.
+     * reason) when the feed cannot answer, or `up-to-date`/`update-available` when it can. Never
+     * throws for "no feed" — a missing feed is a surfaced state, not an error.
      */
     checkForUpdates(): Promise<UpdateCheckResult>
+    /** Read environment-local updater preferences for the About tab. */
+    getUpdateSettings(): Promise<UpdateSettings>
+    /** Persist environment-local updater preferences. */
+    setUpdateSettings(settings: UpdateSettings): Promise<UpdateSettings>
     /**
      * Subscribe to a downloaded update waiting for explicit restart/install confirmation.
      *

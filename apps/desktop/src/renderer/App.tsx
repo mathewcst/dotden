@@ -1,5 +1,6 @@
 import { LaunchProvider } from '@/features/launch/components/LaunchProvider'
 import { LaunchRouter } from '@/features/launch/components/LaunchRouter'
+import { UpdateDownloadedPrompt } from '@/features/update/components/UpdateDownloadedPrompt'
 import { ToastViewport } from '@/ui/toast'
 
 /**
@@ -11,6 +12,7 @@ export function App() {
   return (
     <LaunchProvider>
       <LaunchRouter />
+      <UpdateDownloadedPrompt />
       <ToastViewport />
     </LaunchProvider>
   )

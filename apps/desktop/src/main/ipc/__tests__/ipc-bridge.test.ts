@@ -74,6 +74,7 @@ describe('IpcBridge', () => {
         currentVersion: '1.2.0',
         latestVersion: null,
         detail: 'No update feed is configured for this build yet.',
+        checkedAt: '2026-06-21T00:00:00.000Z',
       }),
       openDiagnosticsLogLocation,
       diagnosticsRecordsFor,
@@ -205,6 +206,7 @@ describe('IpcBridge', () => {
         currentVersion: '1.2.0',
         latestVersion: null,
         detail: 'No update feed is configured for this build yet.',
+        checkedAt: '2026-06-21T00:00:00.000Z',
       }),
     })
 
@@ -339,6 +341,7 @@ describe('IpcBridge', () => {
         currentVersion: '1.2.0',
         latestVersion: null,
         detail: 'No update feed is configured for this build yet.',
+        checkedAt: '2026-06-21T00:00:00.000Z',
       }),
     })
 
@@ -406,6 +409,7 @@ describe('IpcBridge', () => {
         currentVersion: '1.2.0',
         latestVersion: null,
         detail: 'No update feed is configured for this build yet.',
+        checkedAt: '2026-06-21T00:00:00.000Z',
       }),
     })
 
@@ -492,6 +496,7 @@ describe('IpcBridge', () => {
         currentVersion: '1.2.0',
         latestVersion: null,
         detail: 'No update feed is configured for this build yet.',
+        checkedAt: '2026-06-21T00:00:00.000Z',
       }),
     })
 
@@ -567,6 +572,7 @@ describe('IpcBridge', () => {
         currentVersion: '1.2.0',
         latestVersion: null,
         detail: 'No update feed is configured for this build yet.',
+        checkedAt: '2026-06-21T00:00:00.000Z',
       }),
     })
 
@@ -677,6 +683,7 @@ describe('IpcBridge', () => {
         currentVersion: '1.2.0',
         latestVersion: null,
         detail: 'No update feed is configured for this build yet.',
+        checkedAt: '2026-06-21T00:00:00.000Z',
       }),
     })
 
@@ -758,6 +765,7 @@ describe('IpcBridge', () => {
         currentVersion: '1.2.0',
         latestVersion: null,
         detail: 'No update feed is configured for this build yet.',
+        checkedAt: '2026-06-21T00:00:00.000Z',
       }),
     })
 
@@ -802,6 +810,7 @@ describe('IpcBridge', () => {
         currentVersion: '1.2.0',
         latestVersion: null,
         detail: 'No update feed is configured for this build yet.',
+        checkedAt: '2026-06-21T00:00:00.000Z',
       }),
     })
 
@@ -845,6 +854,7 @@ describe('IpcBridge', () => {
         currentVersion: '1.2.0',
         latestVersion: null,
         detail: 'No update feed is configured for this build yet.',
+        checkedAt: '2026-06-21T00:00:00.000Z',
       }),
     })
 
@@ -913,6 +923,7 @@ describe('IpcBridge', () => {
         currentVersion: '1.2.0',
         latestVersion: null,
         detail: 'No update feed is configured for this build yet.',
+        checkedAt: '2026-06-21T00:00:00.000Z',
       }),
     })
 
@@ -989,6 +1000,7 @@ describe('IpcBridge', () => {
         currentVersion: '1.2.0',
         latestVersion: null,
         detail: 'No update feed is configured for this build yet.',
+        checkedAt: '2026-06-21T00:00:00.000Z',
       }),
     })
 
@@ -1043,6 +1055,7 @@ describe('IpcBridge', () => {
         currentVersion: '1.2.0',
         latestVersion: null,
         detail: 'No update feed is configured for this build yet.',
+        checkedAt: '2026-06-21T00:00:00.000Z',
       }),
     })
 
@@ -1098,6 +1111,7 @@ describe('IpcBridge', () => {
         currentVersion: '1.2.0',
         latestVersion: null,
         detail: 'No update feed is configured for this build yet.',
+        checkedAt: '2026-06-21T00:00:00.000Z',
       }),
     })
 
@@ -1135,7 +1149,14 @@ describe('IpcBridge', () => {
       currentVersion: '1.2.0',
       latestVersion: null,
       detail: 'No update feed is configured for this build yet.',
+      checkedAt: '2026-06-21T00:00:00.000Z',
     }))
+    const getUpdateSettings = vi.fn(async () => ({
+      autoUpdateEnabled: true,
+      channel: 'stable' as const,
+      lastCheckedAt: '2026-06-21T00:00:00.000Z',
+    }))
+    const setUpdateSettings = vi.fn(async (settings) => settings)
     const quitAndInstallUpdate = vi.fn(async () => undefined)
     const { registrar, handlers } = fakeRegistrar()
     registerIpcBridge(registrar, {
@@ -1163,6 +1184,8 @@ describe('IpcBridge', () => {
       launchState: async () => ({ status: 'ready' as const }),
       getAppInfo,
       checkForUpdates,
+      getUpdateSettings,
+      setUpdateSettings,
       quitAndInstallUpdate,
     })
 
@@ -1177,7 +1200,22 @@ describe('IpcBridge', () => {
     ).resolves.toMatchObject({ status: 'unavailable', detail: expect.any(String) })
     expect(checkForUpdates).toHaveBeenCalledTimes(1)
     await expect(
-      handlers.get('app:quit-and-install-update')?.({}, { _trace: { traceId: 'i3' } } as never),
+      handlers.get('app:get-update-settings')?.({}, { _trace: { traceId: 'i3' } } as never),
+    ).resolves.toMatchObject({ autoUpdateEnabled: true, channel: 'stable' })
+    const nextUpdateSettings = {
+      autoUpdateEnabled: false,
+      channel: 'beta' as const,
+      lastCheckedAt: '2026-06-21T00:00:00.000Z',
+    }
+    await expect(
+      handlers.get('app:set-update-settings')?.({}, {
+        settings: nextUpdateSettings,
+        _trace: { traceId: 'i4' },
+      } as never),
+    ).resolves.toEqual(nextUpdateSettings)
+    expect(setUpdateSettings).toHaveBeenCalledWith(nextUpdateSettings)
+    await expect(
+      handlers.get('app:quit-and-install-update')?.({}, { _trace: { traceId: 'i5' } } as never),
     ).resolves.toBeUndefined()
     expect(quitAndInstallUpdate).toHaveBeenCalledTimes(1)
 
@@ -1186,6 +1224,12 @@ describe('IpcBridge', () => {
       'without a _trace envelope',
     )
     await expect(handlers.get('app:check-updates')?.({}, {} as never)).rejects.toThrow(
+      'without a _trace envelope',
+    )
+    await expect(handlers.get('app:get-update-settings')?.({}, {} as never)).rejects.toThrow(
+      'without a _trace envelope',
+    )
+    await expect(handlers.get('app:set-update-settings')?.({}, {} as never)).rejects.toThrow(
       'without a _trace envelope',
     )
     await expect(handlers.get('app:quit-and-install-update')?.({}, {} as never)).rejects.toThrow(
