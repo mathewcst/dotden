@@ -90,14 +90,9 @@ export class RemoteConnectError extends Error {
  * The class never writes credentials, never talks to a Provider API, and never
  * overrides the user's credential environment.
  *
- * Safety valve, honestly scoped: the per-operation **timeout** is the wired v1
- * guarantee against a hung credential prompt — it always fires because every call
- * passes `timeoutMs` down to {@link runCommand}. The optional `signal` is a
- * test/future seam only: no IPC path constructs an AbortSignal today, and an
- * AbortSignal cannot cross Electron's structured-clone IPC boundary, so a real
- * per-operation "Cancel" button is a later slice. The parameter is kept so the
- * runner contract and unit tests can drive cancellation directly; it is not yet
- * plumbed through preload/IPC.
+ * Safety valve: every operation passes both a timeout and optional AbortSignal to
+ * {@link runCommand}. The renderer cannot send an AbortSignal through structured-clone IPC, so
+ * `ipc-bridge.ts` owns the trace-id keyed AbortController registry and passes the signal here.
  */
 export class RemoteClient {
   private readonly run: typeof runCommand

@@ -94,4 +94,25 @@ describe('OBConnectUrl liveness', () => {
     expect(screen.getByText(/stderr: fatal: repository not found/i)).toBeTruthy()
     expect(onConnected).not.toHaveBeenCalled()
   })
+
+  it('cancels the active remote trace when the user cancels preflight', async () => {
+    const cancel = vi.fn(async (traceId: string) => traceId.length > 0)
+    installDotdenTestApi({
+      remote: {
+        preflight: vi.fn(() => new Promise<never>(() => {})),
+        cancel,
+      },
+    })
+
+    render(<OBConnectUrl onConnected={vi.fn()} />)
+    fireEvent.change(screen.getByRole('textbox', { name: /repo url/i }), {
+      target: { value: 'https://github.com/acme/private.git' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /connect/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /cancel/i }))
+
+    await waitFor(() => expect(cancel).toHaveBeenCalledWith(expect.any(String)))
+    const [traceId] = cancel.mock.calls[0] as [string]
+    expect(traceId).not.toHaveLength(0)
+  })
 })

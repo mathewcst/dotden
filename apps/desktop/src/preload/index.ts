@@ -119,18 +119,26 @@ const api: DotdenApi = {
   },
   remote: {
     // → IPC channel 'remote:preflight'
-    preflight(url) {
+    preflight(url, traceId) {
+      const _trace = traceId ? { traceId } : trace()
       return ipcRenderer.invoke('remote:preflight', {
         url,
-        _trace: trace(),
+        _trace,
       }) as ReturnType<DotdenApi['remote']['preflight']>
     },
     // → IPC channel 'remote:connect'
-    connect(url) {
+    connect(url, traceId) {
+      const _trace = traceId ? { traceId } : trace()
       return ipcRenderer.invoke('remote:connect', {
         url,
-        _trace: trace(),
+        _trace,
       }) as ReturnType<DotdenApi['remote']['connect']>
+    },
+    cancel(traceId) {
+      return ipcRenderer.invoke('remote:cancel', {
+        targetTraceId: traceId,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['remote']['cancel']>
     },
     // → IPC channel 'remote:latest-sha'
     latestSha(url, branch = 'main') {

@@ -187,6 +187,22 @@ export interface IpcBridgeDeps {
  * @param deps Lazy accessors for the RemoteClient and DenService.
  */
 export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps): void {
+  const remoteControllers = new Map<string, AbortController>()
+
+  async function withRemoteCancellation<T>(
+    payload: TracedPayload,
+    run: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    const id = traceId(payload)
+    const controller = new AbortController()
+    remoteControllers.set(id, controller)
+    try {
+      return await run(controller.signal)
+    } finally {
+      if (remoteControllers.get(id) === controller) remoteControllers.delete(id)
+    }
+  }
+
   // ── Frameless window chrome channels: TitleBar buttons over the preload bridge ──
   registrar.handle('window:minimize', async (event, payload: TracedPayload) => {
     traceId(payload)
@@ -262,15 +278,32 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
   // ── Remote channels (issue 1-03), kept here so ALL IPC carries _trace uniformly ──
   registrar.handle('remote:preflight', async (_event, payload: TracedPayload) => {
     const { url } = payload as TracedPayload & { url: string }
-    return (await deps.remoteClient()).preflightRemote(url, {
-      _trace: { traceId: traceId(payload) },
+    return withRemoteCancellation(payload, async (signal) => {
+      const id = traceId(payload)
+      return (await deps.remoteClient()).preflightRemote(url, {
+        _trace: { traceId: id },
+        signal,
+      })
     })
   })
   registrar.handle('remote:connect', async (_event, payload: TracedPayload) => {
     const { url } = payload as TracedPayload & { url: string }
-    return (await deps.remoteClient()).connectExistingRemote(url, {
-      _trace: { traceId: traceId(payload) },
+    return withRemoteCancellation(payload, async (signal) => {
+      const id = traceId(payload)
+      return (await deps.remoteClient()).connectExistingRemote(url, {
+        _trace: { traceId: id },
+        signal,
+      })
     })
+  })
+  registrar.handle('remote:cancel', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    const { targetTraceId } = payload as TracedPayload & { targetTraceId: string }
+    const controller = remoteControllers.get(targetTraceId)
+    if (!controller) return false
+    controller.abort()
+    remoteControllers.delete(targetTraceId)
+    return true
   })
   registrar.handle('remote:latest-sha', async (_event, payload: TracedPayload) => {
     const { url, branch } = payload as TracedPayload & { url: string; branch?: string }

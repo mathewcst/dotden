@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { GitBranch, Loader2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/ui/button'
 import type { ConnectResult, RemoteDiagnostics } from '@shared/remote'
@@ -45,14 +45,18 @@ export function OBConnectUrl({
   // Sanitized diagnostics from a failed preflight (host/scheme/exitCode/stderr/help).
   const [diagnostics, setDiagnostics] = useState<RemoteDiagnostics | null>(null)
   const [showDetails, setShowDetails] = useState(false)
+  const activeTraceId = useRef<string | null>(null)
 
   const host = hostFromRemote(url)
 
   async function connect() {
+    const traceId = newTraceId()
+    activeTraceId.current = traceId
     setState('checking')
     setDiagnostics(null)
     try {
-      const result = await window.dotden.remote.preflight(url)
+      const result = await window.dotden.remote.preflight(url, traceId)
+      if (activeTraceId.current !== traceId) return
       if (!result.reachable) {
         setState('credential-error')
         setDiagnostics(
@@ -67,7 +71,8 @@ export function OBConnectUrl({
       }
       // Reachable → clone + initialize the Den, then hand off to Discover.
       setState('reachable')
-      const connected = await window.dotden.remote.connect(url)
+      const connected = await window.dotden.remote.connect(url, traceId)
+      if (activeTraceId.current !== traceId) return
       const nextState = stateAfterConnectResult(connected)
       if (nextState === 'refused') {
         setState(nextState)
@@ -75,6 +80,7 @@ export function OBConnectUrl({
       }
       onConnected(connected)
     } catch (error) {
+      if (activeTraceId.current !== traceId) return
       // A rejected invoke (e.g. chezmoi init failed, bundled tools missing) must leave a
       // recoverable state — surface it, never strand the UI mid-check (never fail silently).
       setState('credential-error')
@@ -181,7 +187,10 @@ export function OBConnectUrl({
           <Button
             variant="secondary"
             onClick={() => {
+              const traceId = activeTraceId.current
+              activeTraceId.current = null
               setState('idle')
+              if (traceId) void window.dotden.remote.cancel(traceId)
               onCancel?.()
             }}
           >
@@ -202,6 +211,10 @@ function diagnosticsFromCaught(caught: unknown, host: string): RemoteDiagnostics
     stderr: '',
     help: caught instanceof Error ? caught.message : 'Connecting your Remote failed. Retry.',
   }
+}
+
+function newTraceId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `remote-${Date.now()}-${Math.random()}`
 }
 
 function isRemoteDiagnostics(value: unknown): value is RemoteDiagnostics {

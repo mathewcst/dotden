@@ -57,6 +57,7 @@ export function installDotdenTestApi(overrides: DeepPartial<DotdenApi> = {}): Do
         sourceDir: '/tmp/source',
         repositoryKind: 'dotden' as const,
       })),
+      cancel: vi.fn(async () => true),
       latestSha: vi.fn(async () => null),
     },
     den: {

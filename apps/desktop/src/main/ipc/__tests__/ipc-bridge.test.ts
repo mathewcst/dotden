@@ -776,7 +776,69 @@ describe('IpcBridge', () => {
 
     expect(remote.preflightRemote).toHaveBeenCalledWith('git@h:o/r.git', {
       _trace: { traceId: 'r1' },
+      signal: expect.any(AbortSignal),
     })
+  })
+
+  it('cancels an in-flight remote operation by trace id', async () => {
+    const captured: { signal?: AbortSignal } = {}
+    const remote = {
+      preflightRemote: vi.fn(
+        async (_url: string, request: { readonly signal?: AbortSignal }) =>
+          new Promise(() => {
+            captured.signal = request.signal
+          }),
+      ),
+      connectExistingRemote: vi.fn(),
+      latestRemoteSha: vi.fn(async () => null),
+    }
+    const { registrar, handlers } = fakeRegistrar()
+    registerIpcBridge(registrar, {
+      remoteClient: async () => remote as never,
+      denService: async () => ({}) as never,
+      discoveryScanner: async () => ({}) as never,
+      environmentRegistry: async () => ({}) as never,
+      getAutomationLevel: async () => 'manual' as const,
+      setAutomationLevel: async () => undefined,
+      claimEnvironment: async () => undefined,
+      getUnsubscribeDisposition: async () => 'keep' as const,
+      setUnsubscribeDisposition: async () => undefined,
+      getSyncSettings: async () => ({
+        pollerEnabled: true,
+        cadence: 'fast' as const,
+        startOnLogin: false,
+      }),
+      setSyncSettings: async (settings) => settings,
+      getPrivacySettings: async () => ({
+        analyticsEnabled: false,
+        crashReportsEnabled: false,
+        diagnosticLogsEnabled: false,
+      }),
+      setPrivacySettings: async (settings) => settings,
+      launchState: async () => ({ status: 'ready' as const }),
+      getAppInfo: async () => ({ version: '1.2.0', platform: 'linux' }),
+      checkForUpdates: async () => ({
+        status: 'unavailable' as const,
+        currentVersion: '1.2.0',
+        latestVersion: null,
+        detail: 'No update feed is configured for this build yet.',
+        checkedAt: '2026-06-21T00:00:00.000Z',
+      }),
+    })
+
+    void handlers.get('remote:preflight')?.({}, {
+      url: 'git@h:o/r.git',
+      _trace: { traceId: 'cancel-me' },
+    } as never)
+    await vi.waitFor(() => expect(captured.signal).toBeDefined())
+
+    await expect(
+      handlers.get('remote:cancel')?.({}, {
+        targetTraceId: 'cancel-me',
+        _trace: { traceId: 'cancel-call' },
+      } as never),
+    ).resolves.toBe(true)
+    expect(captured.signal?.aborted).toBe(true)
   })
 
   it('rejects a call that reached the bridge without a _trace envelope', async () => {

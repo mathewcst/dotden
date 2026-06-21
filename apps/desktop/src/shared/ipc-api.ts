@@ -135,9 +135,11 @@ export interface DotdenApi {
   /** Remote-connection operations, each forwarded to a `remote:*` IPC channel. */
   readonly remote: {
     /** Preflight a Remote URL against the user's existing git credentials. */
-    preflight(url: string): Promise<PreflightResult>
+    preflight(url: string, traceId?: string): Promise<PreflightResult>
     /** Connect a reachable Remote and initialize the local Den. */
-    connect(url: string): Promise<ConnectResult>
+    connect(url: string, traceId?: string): Promise<ConnectResult>
+    /** Abort an in-flight preflight/connect operation by its trace id. */
+    cancel(traceId: string): Promise<boolean>
     /** Read the latest advertised SHA for a branch, or null when absent. */
     latestSha(url: string, branch?: string): Promise<string | null>
   }
