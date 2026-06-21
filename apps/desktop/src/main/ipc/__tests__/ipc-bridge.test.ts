@@ -40,6 +40,7 @@ describe('IpcBridge', () => {
         timestamp: 1,
       },
     ])
+    const copyDiagnostics = vi.fn(async () => ({ recordCount: 1 }))
     const { registrar, handlers } = fakeRegistrar()
     registerIpcBridge(registrar, {
       remoteClient: async () => ({}) as never,
@@ -73,6 +74,7 @@ describe('IpcBridge', () => {
       }),
       openDiagnosticsLogLocation,
       diagnosticsRecordsFor,
+      copyDiagnostics,
     })
 
     await handlers.get('diagnostics:open-log-location')?.({}, {
@@ -91,6 +93,13 @@ describe('IpcBridge', () => {
     })
     expect(records[0]).not.toHaveProperty('stdout')
     expect(records[0]).not.toHaveProperty('stderr')
+    await expect(
+      handlers.get('diagnostics:copy')?.({}, {
+        traceId: 'trace-a',
+        _trace: { traceId: 'diag-3' },
+      } as never),
+    ).resolves.toEqual({ recordCount: 1 })
+    expect(copyDiagnostics).toHaveBeenCalledWith('trace-a')
     await expect(handlers.get('diagnostics:open-log-location')?.({}, {} as never)).rejects.toThrow(
       'without a _trace envelope',
     )

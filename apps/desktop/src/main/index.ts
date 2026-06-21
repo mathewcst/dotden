@@ -8,6 +8,7 @@
 import {
   app,
   BrowserWindow,
+  clipboard,
   ipcMain,
   nativeImage,
   Notification,
@@ -19,12 +20,13 @@ import { autoUpdater } from 'electron-updater'
 import { join } from 'node:path'
 import type { AppInfo, UpdateCheckResult } from '../shared/app-info.js'
 import type { AutomationLevel } from '../shared/apply.js'
-import type { RedactedCommandRecord } from '../shared/diagnostics.js'
+import type { CopyDiagnosticsResult, RedactedCommandRecord } from '../shared/diagnostics.js'
 import {
   readAutomationLevel,
   writeAutomationLevel,
 } from './foundation/apply/automation-settings.js'
 import { PersistentCommandLog } from './diagnostics/command-log-store.js'
+import { buildDiagnosticsBundle } from './foundation/diagnostics/export-bundle.js'
 import { DenService } from './foundation/den-service/den-service.js'
 import { DiscoveryScanner } from './foundation/environments/discovery-scanner.js'
 import {
@@ -449,6 +451,22 @@ async function diagnosticsRecordsFor(traceId?: string): Promise<readonly Redacte
   }))
 }
 
+/** Copy a re-redacted diagnostics support bundle to the OS clipboard (PRD4 issue 4-06). */
+async function copyDiagnostics(traceId?: string): Promise<CopyDiagnosticsResult> {
+  const log = await getDiagnosticsLog()
+  const records = traceId ? log.recordsFor(traceId) : log.records()
+  const bundle = buildDiagnosticsBundle({
+    appVersion: app.getVersion(),
+    platform: process.platform,
+    records,
+    redaction: {
+      homeDir: app.getPath('home'),
+    },
+  })
+  clipboard.writeText(bundle)
+  return { recordCount: records.length }
+}
+
 /**
  * Apply the OS "open dotden at login" preference (issue 2-08). Electron's
  * `setLoginItemSettings` registers/unregisters the login item on macOS + Windows; it is a
@@ -744,6 +762,7 @@ if (!app.requestSingleInstanceLock()) {
       controlWindow,
       openDiagnosticsLogLocation,
       diagnosticsRecordsFor,
+      copyDiagnostics,
     })
     createWindow()
 

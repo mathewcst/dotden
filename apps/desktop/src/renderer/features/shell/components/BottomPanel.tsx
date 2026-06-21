@@ -2,14 +2,27 @@ import { CommandRecord } from '@/features/diagnostics/components/CommandRecord'
 import { useDenSession } from '@/features/shell/components/DenSessionProvider'
 import { IconButton } from '@/ui/icon-button'
 import { ChevronDown, Copy, Filter, PanelBottomClose, Plus, X } from 'lucide-react'
+import { useState } from 'react'
 
 /** VSCode-style global bottom panel. Diagnostics is the first tab. */
 export function BottomPanel() {
   const records = useDenSession((s) => s.diagnosticsRecords)
   const mode = useDenSession((s) => s.diagnosticsPanelMode)
+  const traceId = useDenSession((s) => s.diagnosticsPanelTraceId)
   const close = useDenSession((s) => s.closeDiagnosticsPanel)
   const clear = useDenSession((s) => s.clearDiagnosticsView)
   const tabLabel = mode === 'details' ? 'Details' : 'Console'
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
+
+  async function copyDiagnostics() {
+    setCopyState('idle')
+    try {
+      await window.dotden.diagnostics.copyDiagnostics(traceId ?? undefined)
+      setCopyState('copied')
+    } catch {
+      setCopyState('error')
+    }
+  }
 
   return (
     <section className="border-border bg-card grid min-h-0 grid-rows-[36px_minmax(0,1fr)] border-t">
@@ -34,7 +47,21 @@ export function BottomPanel() {
 
         <div className="flex-1" />
         <div className="flex items-center gap-1 px-2">
-          <IconButton aria-label="Copy diagnostics" disabled>
+          <span
+            className={
+              copyState === 'error'
+                ? 'text-dd-red-400 px-1 text-xs'
+                : 'text-dd-green-400 px-1 text-xs'
+            }
+            aria-live="polite"
+          >
+            {copyState === 'copied'
+              ? 'Copied diagnostics'
+              : copyState === 'error'
+                ? 'Copy failed'
+                : ''}
+          </span>
+          <IconButton aria-label="Copy diagnostics" onClick={() => void copyDiagnostics()}>
             <Copy />
           </IconButton>
           <IconButton aria-label="Filter diagnostics records" disabled>

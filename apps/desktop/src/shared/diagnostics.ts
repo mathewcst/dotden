@@ -23,3 +23,9 @@ export interface RedactedCommandRecord {
   /** Capture time in ms since epoch. */
   readonly timestamp: number
 }
+
+/** Result returned after main writes a redacted diagnostics bundle to the clipboard. */
+export interface CopyDiagnosticsResult {
+  /** Number of Command records included in the copied bundle. */
+  readonly recordCount: number
+}

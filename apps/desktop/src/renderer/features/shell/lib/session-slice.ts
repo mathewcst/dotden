@@ -86,6 +86,8 @@ export interface SessionSlice {
   diagnosticsPanelOpen: boolean
   /** The Diagnostics panel presentation: standing Console or trace-scoped failure Details. */
   diagnosticsPanelMode: 'console' | 'details'
+  /** Trace currently loaded in Details mode, or null for the standing Console. */
+  diagnosticsPanelTraceId: string | null
   /** Completed, already-redacted Command records shown in the bottom panel. */
   diagnosticsRecords: readonly RedactedCommandRecord[]
   /** Failure count from the persisted Command log, independent of the current panel view. */
@@ -153,6 +155,7 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
     confirm: null,
     diagnosticsPanelOpen: false,
     diagnosticsPanelMode: 'console',
+    diagnosticsPanelTraceId: null,
     diagnosticsRecords: [],
     diagnosticsErrorCount: 0,
     diagnosticsConsoleEnabled: false,
@@ -334,6 +337,7 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
         set({
           diagnosticsPanelOpen: true,
           diagnosticsPanelMode: traceId ? 'details' : 'console',
+          diagnosticsPanelTraceId: traceId ?? null,
           diagnosticsRecords: records,
           diagnosticsErrorCount: traceId
             ? get().diagnosticsErrorCount
@@ -343,6 +347,7 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
         set({
           diagnosticsPanelOpen: true,
           diagnosticsPanelMode: traceId ? 'details' : 'console',
+          diagnosticsPanelTraceId: traceId ?? null,
           error: operationError(caught, 'Could not load Diagnostics.'),
         })
       }

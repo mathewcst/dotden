@@ -58,7 +58,7 @@ import type { SyncSettings } from './settings.js'
 import type { PrivacySettings } from './settings.js'
 import type { AppearanceOverride, AppearanceSettings } from './appearance-settings.js'
 import type { AppInfo, UpdateCheckResult } from './app-info.js'
-import type { RedactedCommandRecord } from './diagnostics.js'
+import type { CopyDiagnosticsResult, RedactedCommandRecord } from './diagnostics.js'
 
 /**
  * Node's `process.platform` value set, declared locally so this shared contract
@@ -111,6 +111,8 @@ export interface DotdenApi {
      * omitting it returns the recent bounded ring for the panel shell.
      */
     recordsFor(traceId?: string): Promise<readonly RedactedCommandRecord[]>
+    /** Copy a redacted diagnostics bundle to the OS clipboard. */
+    copyDiagnostics(traceId?: string): Promise<CopyDiagnosticsResult>
   }
   /** Remote-connection operations, each forwarded to a `remote:*` IPC channel. */
   readonly remote: {

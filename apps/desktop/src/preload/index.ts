@@ -83,6 +83,13 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['diagnostics']['recordsFor']>
     },
+    // → IPC channel 'diagnostics:copy' (copy a redacted support bundle to the clipboard)
+    copyDiagnostics(traceId) {
+      return ipcRenderer.invoke('diagnostics:copy', {
+        traceId,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['diagnostics']['copyDiagnostics']>
+    },
   },
   remote: {
     // → IPC channel 'remote:preflight'

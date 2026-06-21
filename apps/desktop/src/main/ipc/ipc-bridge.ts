@@ -29,7 +29,7 @@ import type { SecretFinding } from '../../shared/secrets.js'
 import type { ConvertSecretRequest } from '../../shared/den.js'
 import type { AppearanceOverride, AppearanceSettings } from '../../shared/appearance-settings.js'
 import type { AppInfo, UpdateCheckResult } from '../../shared/app-info.js'
-import type { RedactedCommandRecord } from '../../shared/diagnostics.js'
+import type { CopyDiagnosticsResult, RedactedCommandRecord } from '../../shared/diagnostics.js'
 
 /**
  * The minimal trace envelope every IPC payload carries.
@@ -154,6 +154,8 @@ export interface IpcBridgeDeps {
   readonly openDiagnosticsLogLocation?: () => Promise<void>
   /** Read already-redacted diagnostics records for the panel shell. */
   readonly diagnosticsRecordsFor?: (traceId?: string) => Promise<readonly RedactedCommandRecord[]>
+  /** Copy a redacted diagnostics bundle to the clipboard. */
+  readonly copyDiagnostics?: (traceId?: string) => Promise<CopyDiagnosticsResult>
 }
 
 /**
@@ -212,6 +214,14 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     }
     const { traceId: requestedTraceId } = payload as TracedPayload & { traceId?: string }
     return deps.diagnosticsRecordsFor(requestedTraceId)
+  })
+  registrar.handle('diagnostics:copy', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    if (!deps.copyDiagnostics) {
+      throw new Error('Diagnostics copy IPC is not wired')
+    }
+    const { traceId: requestedTraceId } = payload as TracedPayload & { traceId?: string }
+    return deps.copyDiagnostics(requestedTraceId)
   })
 
   // ── Remote channels (issue 1-03), kept here so ALL IPC carries _trace uniformly ──

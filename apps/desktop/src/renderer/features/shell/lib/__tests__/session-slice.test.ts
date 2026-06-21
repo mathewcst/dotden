@@ -72,6 +72,7 @@ describe('session slice — the reset guarantee (key={role} remount proven at th
     expect(s.confirm).toBeNull()
     expect(s.diagnosticsPanelOpen).toBe(false)
     expect(s.diagnosticsPanelMode).toBe('console')
+    expect(s.diagnosticsPanelTraceId).toBeNull()
     expect(s.diagnosticsRecords).toEqual([])
     // apply-slice session state is part of the same fresh store.
     expect(s.incoming).toEqual([])
@@ -156,6 +157,7 @@ describe('session slice — Diagnostics panel', () => {
     expect(api.diagnostics.recordsFor).toHaveBeenCalledWith('trace-a')
     expect(store.getState().diagnosticsPanelOpen).toBe(true)
     expect(store.getState().diagnosticsPanelMode).toBe('details')
+    expect(store.getState().diagnosticsPanelTraceId).toBe('trace-a')
     expect(store.getState().diagnosticsRecords).toEqual(records)
     expect(store.getState().diagnosticsErrorCount).toBe(0)
   })
@@ -181,6 +183,7 @@ describe('session slice — Diagnostics panel', () => {
     await store.getState().openDiagnosticsPanel()
 
     expect(store.getState().diagnosticsPanelMode).toBe('console')
+    expect(store.getState().diagnosticsPanelTraceId).toBeNull()
     expect(store.getState().diagnosticsErrorCount).toBe(1)
   })
 
