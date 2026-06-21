@@ -5,12 +5,10 @@
       "@/*": ["./src/renderer/*"],
       "@shared/*": ["./src/shared/*"]
     },
-    // The shared DotdenApi contract links to the foundation result types
-    // (PreflightResult/ConnectResult), so the renderer typecheck transitively
-    // loads the pure-node foundation source. It is Electron-free (ADR 0023), so
-    // adding `node` lets those files type-check WITHOUT pulling Electron into the
-    // web build; `vite/client` is preserved for the renderer's own ambient types.
-    "types": ["vite/client", "node"]
+    // Renderer ambient types only. The `src/shared` IPC contract is now fully
+    // self-contained and node-free (ADR 0031): the renderer no longer transitively
+    // loads `main/**` foundation source, so `@types/node` is no longer needed here.
+    "types": ["vite/client"]
   },
   "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx"]
 }

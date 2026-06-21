@@ -17,7 +17,10 @@ src/main/foundation/chezmoi/
   git-transport.ts
   __tests__/
     faithful-wrapper.test.ts      # one __tests__/ per source dir (ADR 0029)
-src/main/foundation/__tests__/    # root holds the den-service/den-store suites…
+src/main/foundation/den-service/  # the service seam is its own folder (ADR 0031)
+  den-service.ts  types.ts        #   impl + its main-only internal types
+  __tests__/                      #   den-service suites live with their subject
+src/main/foundation/__tests__/    # root holds the den-store suite…
   temp-git-repo.fixture.ts        # …and shared fixtures (test-only → live here too)
 ```
 
@@ -52,7 +55,8 @@ This is a **guide, not a lint gate** — judgment over mechanical caps.
 
   ```
   src/main/foundation/
-    den-service.ts  den-store.ts   # the two seams live at the root (façade + .dotden/ data model)
+    den-service/   den-service.ts · types.ts (+ __tests__)   # façade seam, its own folder (ADR 0031)
+    den-store.ts                  # .dotden/ data-model seam (ADR 0024)
     platform/      process · path-safety · os-scope · tools · operation-tracer  (cross-cutting infra)
     chezmoi/       chezmoi-adapter · chezmoi-status · git-transport   (binary adapters)
     environments/  sync/  apply/  commit/  file-history/  secrets/  settings/  system/
@@ -60,8 +64,9 @@ This is a **guide, not a lint gate** — judgment over mechanical caps.
 
   - **Capability folders are glossary words**, name-matching renderer features 1:1 where they exist
     (`secrets/`, `sync/`, `apply/`, `settings/`, `commit/`, `file-history/`, `environments/`).
-  - **The two seams stay at the root**, deliberately in no capability: `den-service` (the façade
-    `IpcBridge` calls) and `den-store` (the `.dotden/` synced-metadata data model, ADR 0024) — the
+  - **The two seams sit at the root level**, deliberately in no capability: `den-service/` (the façade
+    `IpcBridge` calls — large enough to earn its own folder, holding its impl + main-only internal
+    `types.ts`) and `den-store` (the `.dotden/` synced-metadata data model, ADR 0024) — the
     main-process analog of the renderer's root `App.tsx`.
   - **`platform/` is the one non-capability folder** — infra primitives everything builds on but that
     name no Den concept. New code picks its folder by capability; cross-cutting infra → `platform/`.
@@ -75,6 +80,26 @@ This is a **guide, not a lint gate** — judgment over mechanical caps.
   every clickable titlebar element must opt out with `app-region: no-drag`.
 - Dependency direction is one-way: `index.ts` / `ipc` → `foundation`, never back.
 - See **ADR 0023**.
+
+## The IPC contract: `src/shared`
+
+`src/shared` is the **contract both processes speak** — every type that crosses the IPC seam
+(the `DotdenApi` interface in `ipc-api.ts` and every DTO it references). It is the _type_
+boundary that matches the _runtime_ boundary (ADR 0004). See **ADR 0031**.
+
+- **The renderer never imports `main/**`.** Wire types are _declared_ in `src/shared`(capability-grouped:`scope`, `apply`, `remote`, `secrets`, `environments`, `workspace`,
+`den`, …) and `foundation/` imports them _back_ when it needs them — types are **moved, not
+  re-exported** (a barrel would leave the renderer transitively depending on main).
+- **Contract = data shape; behavior stays main-side.** The `Os`/`Scope` _types_ live in
+  `shared/scope.ts`; their _operations_ (`intersectScope`, …) stay in `foundation/platform/os-scope.ts`.
+  A `main`-only type that never crosses IPC (e.g. `DenServiceOptions`) stays in `main` beside its owner.
+- **`src/shared` is pure** — no `node:`, no `electron`, no `main/**` imports. That is what lets the
+  renderer typecheck without `@types/node` (`tsconfig.web.json` carries only `vite/client`).
+- **`@shared/*`** addresses the contract from both processes (no deep `../../../shared` chains).
+  Same caveat as `@/`: node-env vitest has no alias, so a **value** import reachable from a node-env
+  test stays **relative**; **type-only** imports and renderer **component** value-imports may use `@shared`.
+- The standing invariant (grep-checkable): 0 renderer/preload imports from `main/**`, 0 `src/shared`
+  imports from `main/**`, 0 `src/shared` imports of `node:`/`electron`.
 
 ## Renderer layering: features by domain capability
 
@@ -125,9 +150,9 @@ src/renderer/
   visible fallback. Keep the fallbacks anyway (honest safety net; never a blank screen). When you
   add a new `lazy()` site, add its specifier to `COLD_CHUNKS`.
 - **`@/` for renderer-internal imports** (`@/features/…`, `@/shared/…`, `@/ui/…`); reach for
-  `@`, not deep `../../` chains. Two deliberate exceptions: (1) imports into `src/shared/**`
-  and `src/main/**` use relative paths — the `@` alias only maps `src/renderer/*`, so there
-  is no alias to use; (2) the **store slices** (`*/lib/*-slice.ts` + `shell/lib/den-session-store.ts`)
+  `@`, not deep `../../` chains. Two deliberate exceptions: (1) the **IPC contract** is reached via
+  **`@shared/*`** (ADR 0031), not `@/` — `@` only maps `src/renderer/*`; the renderer never imports
+  `src/main/**` at all; (2) the **store slices** (`*/lib/*-slice.ts` + `shell/lib/den-session-store.ts`)
   import each other **relatively**, because the node-env slice tests value-import them and vitest
   runs with **no `@/` alias** (no vitest config, by design — it keeps the slices testable in plain
   Node). `@/` resolves under `tsc` but throws at test runtime, so the cluster stays relative.

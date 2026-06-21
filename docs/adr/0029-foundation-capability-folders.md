@@ -1,6 +1,6 @@
 # 0029 — `foundation/` organizes by domain capability, mirroring the renderer
 
-**Status:** accepted · 2026-06-20
+**Status:** accepted · 2026-06-20 · _amended 2026-06-20: `den-service` became its own folder (ADR 0031)_
 
 ADR 0023 fixed the main-process _boundary_: `foundation/` is the Electron-free layer wrapping the bundled `chezmoi`/`git` binaries, and `index.ts`/`ipc/` is the Electron-aware layer above it. It did not give `foundation/` an _internal_ structure. By v1 the layer had grown to ~37 modules sitting flat in one directory — while the renderer right across the IPC seam had just been organized into domain-capability feature folders (ADR 0027). The asymmetry was the smell: two halves of the same app, one navigable by capability and one a flat bucket.
 
@@ -10,9 +10,9 @@ This ADR extends ADR 0023 (the boundary is unchanged) by giving `foundation/` th
 
 ```
 src/main/foundation/
-  den-service.ts          # service seam — the facade IpcBridge calls
+  den-service/            # service seam — the facade IpcBridge calls (its own folder, ADR 0031)
   den-store.ts            # .dotden/ data-model seam (ADR 0024)
-  __tests__/              # den-service/den-store suites + shared fixtures
+  __tests__/              # den-store suite + shared fixtures
   platform/      process · path-safety · os-scope · tools · operation-tracer
   chezmoi/       chezmoi-adapter · chezmoi-status · git-transport
   environments/  environment-identity · environment-registry · discovery-scanner
@@ -28,7 +28,7 @@ src/main/foundation/
 ```
 
 - **Folders are glossary capabilities, not layers or file-types.** `commit/`, `apply/`, `sync/`, `secrets/`, `settings/`, `file-history/`, `environments/` name-match renderer features 1:1 (ADR 0027); a reviewer reads the same word on both sides of the seam.
-- **Two seams live at the root, deliberately in no capability.** `den-service` (the facade the `IpcBridge` calls, aggregating ~25 modules) and `den-store` (the `.dotden/` synced-metadata data model, ADR 0024) are cross-cutting spine, not one capability — the main-process analog of the renderer's root `App.tsx`. Their suites and the shared `temp-git-repo.fixture` stay in the root `__tests__/`.
+- **Two seams live at the root level, deliberately in no capability.** `den-service` (the facade the `IpcBridge` calls, aggregating ~25 modules) and `den-store` (the `.dotden/` synced-metadata data model, ADR 0024) are cross-cutting spine, not one capability — the main-process analog of the renderer's root `App.tsx`. `den-service` later grew into its own folder (`den-service/` — impl + main-only `types.ts` + its suites; ADR 0031); `den-store` stays a root file, and the shared `temp-git-repo.fixture` stays in the root `__tests__/`.
 - **`platform/` is the one non-capability folder** — the cross-cutting infra primitives (`process`, `path-safety`, `os-scope`, `tools`, the observability `operation-tracer`) that everything builds on but that name no Den concept. `chezmoi/` sits just above it: the binary adapters.
 - **Tests follow their code** (ADR 0019): every subfolder carries its own `__tests__/`. The `ipc-bridge` suite moved out of `foundation/` to `ipc/__tests__/`, beside its subject.
 - **Dependency direction is preserved and now legible:** `index.ts`/`ipc` → root seams → capability folders → `chezmoi/` → `platform/`. No capability folder imports _up_; the only cross-capability edges point into the two root seams or down into `secrets/`/`platform/`.
