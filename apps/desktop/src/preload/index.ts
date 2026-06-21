@@ -603,6 +603,13 @@ const api: DotdenApi = {
       ipcRenderer.on('tray-poller:incoming', handler)
       return () => ipcRenderer.removeListener('tray-poller:incoming', handler)
     },
+    onAutomationAction(listener) {
+      const handler = (_event: Electron.IpcRendererEvent, action: unknown) => {
+        if (action === 'refresh' || action === 'review' || action === 'resolve') listener(action)
+      }
+      ipcRenderer.on('tray-poller:automation-action', handler)
+      return () => ipcRenderer.removeListener('tray-poller:automation-action', handler)
+    },
   },
   net: {
     // ← main→renderer push: after a `powerMonitor` wake flushes queued pushes (issue 1-16),

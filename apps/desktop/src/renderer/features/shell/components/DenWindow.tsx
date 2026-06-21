@@ -227,6 +227,19 @@ export function DenWindow({
     return unsubscribe
   }, [role, refreshIncoming])
 
+  // Background automation result (v1-A3): when Auto-apply/YOLO ran after a tray-detected move,
+  // refresh the tree/Remote axis and open the human surface if anything still needs review.
+  useEffect(() => {
+    if (role !== 'a') return
+    const unsubscribe = window.dotden.trayPoller.onAutomationAction((action) => {
+      void refreshIncoming()
+      void reloadTree()
+      if (action === 'review') setReviewing(true)
+      if (action === 'resolve') setResolving(true)
+    })
+    return unsubscribe
+  }, [role, refreshIncoming, reloadTree, setResolving, setReviewing])
+
   // How many changes are incoming for THIS environment (issue 1-09): drives the top-level banner.
   const incomingCount = remoteAxis.size
   const banner = error ? (

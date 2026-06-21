@@ -366,6 +366,9 @@ export interface YoloSyncResult {
   readonly autoApplied: AutoApplyResult
 }
 
+/** Renderer action requested after the background poller ran automation for an incoming move. */
+export type TrayPollerAutomationAction = 'refresh' | 'review' | 'resolve'
+
 /**
  * One environment a destructive verb would touch — the blast-radius surface the
  * **Delete everywhere** confirm must enumerate before the user proceeds (issue 1-08).

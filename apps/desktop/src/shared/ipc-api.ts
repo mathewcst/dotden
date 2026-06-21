@@ -38,6 +38,7 @@ import type {
   RestoreResult,
   SubscriptionState,
   SyncPushResult,
+  TrayPollerAutomationAction,
   YoloSyncResult,
 } from './den.js'
 import type { LaunchState } from './environments.js'
@@ -735,6 +736,12 @@ export interface DotdenApi {
      * @returns An unsubscribe function the renderer calls on unmount.
      */
     onIncoming(listener: () => void): () => void
+    /**
+     * Subscribe to the background automation result after an incoming move. `refresh` means an
+     * open window should re-read tree/incoming state; `review` opens Review & Apply for held
+     * items; `resolve` opens the conflict resolver for a hands-off merge conflict.
+     */
+    onAutomationAction(listener: (action: TrayPollerAutomationAction) => void): () => void
   }
   /**
    * Connectivity signals for the offline queue (issue 1-16). The main process owns the

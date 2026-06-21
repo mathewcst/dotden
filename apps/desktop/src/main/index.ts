@@ -71,6 +71,7 @@ import {
   TrayPoller,
   type PollCadence,
 } from './foundation/system/tray-poller.js'
+import { dispatchIncomingAutomation } from './foundation/sync/automation-dispatch.js'
 import { checkForUpdates as runUpdateCheck, type UpdateFeed } from './foundation/system/update-check.js'
 import { readUpdateSettings, writeUpdateSettings } from './foundation/system/update-settings.js'
 import { notificationEnabled } from './foundation/system/notification-policy.js'
@@ -640,16 +641,8 @@ async function notifyIfEnabled(
   showNotification(title, body)
 }
 
-/**
- * Fire the detect-only side effects when the TrayPoller sees the Remote move (issue 1-12):
- * a gated OS {@link Notification} (so the user learns even with the window closed) AND a
- * `tray-poller:incoming` push to an open window (so it can refresh its Incoming banner).
- *
- * Detect-only: this NEVER applies anything (ADR 0006/0008). It surfaces awareness; the
- * user's reviewed Apply still lands the change. Notifications are best-effort — a platform
- * without notification support simply skips the toast and still pushes to the window.
- */
-function notifyIncoming(): void {
+/** Manual/held-item incoming prompt, respecting the user's `notifyOn.incoming` switch. */
+function notifyIncomingReview(): void {
   void notifyIfEnabled(
     'incoming',
     'dotden — incoming changes',
@@ -657,6 +650,32 @@ function notifyIncoming(): void {
   )
   // Nudge an open window to re-check the Remote so its in-app banner stays in step.
   mainWindow?.webContents.send('tray-poller:incoming')
+}
+
+function pushTrayAutomationAction(action: 'refresh' | 'review' | 'resolve'): void {
+  mainWindow?.webContents.send('tray-poller:automation-action', action)
+}
+
+/**
+ * Fire the side effects when the TrayPoller sees the Remote move (issue 1-12 + v1-A3).
+ *
+ * TrayPoller itself remains detect-only. This production adapter reads the current automation
+ * rung and either surfaces incoming for review or runs the already-safe DenService Auto-apply/YOLO
+ * paths, then tells an open renderer which surface to refresh/open.
+ */
+function notifyIncoming(): void {
+  void dispatchIncomingAutomation(pollTrace().traceId, {
+    readLevel: getAutomationLevel,
+    den: getDenService,
+    notifyIncoming: notifyIncomingReview,
+    notifyConflict,
+    notifyApplied,
+    pushAction: pushTrayAutomationAction,
+  }).catch((error) => {
+    console.error('[dotden] Failed to dispatch incoming automation:', error)
+    notifyIncomingReview()
+    pushTrayAutomationAction('refresh')
+  })
 }
 
 /** Notify that a Conflict appeared, respecting the user's `notifyOn.conflict` switch. */

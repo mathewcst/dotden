@@ -166,6 +166,7 @@ export function installDotdenTestApi(overrides: DeepPartial<DotdenApi> = {}): Do
     },
     trayPoller: {
       onIncoming: vi.fn(() => () => undefined),
+      onAutomationAction: vi.fn(() => () => undefined),
     },
     net: {
       onReconnected: vi.fn(() => () => undefined),
