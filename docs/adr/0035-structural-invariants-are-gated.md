@@ -18,37 +18,48 @@ problem, let's use it."_
 **Gate the structural invariants in CI.**
 
 1. **Layer boundaries → `eslint-plugin-boundaries`** (purpose-built, flat-config). The rule is
-   `boundaries/element-types` set to `default: "disallow"` with the ADR 0033 graph. Element
-   types are matched **first-match-wins**, so the most specific patterns lead (`app/providers/**`
-   before `app/**`; `components/{ui,den}/**` before the catch-all `shared`). `capture: ["feature"]`
-   plus `${from.feature}` in the allow rule gives cross-feature encapsulation (a feature can't
-   reach another feature's internals). Each layer also allows **itself** (intra-layer wiring:
-   `app/App.tsx` imports sibling `app/` modules, `store.ts` imports its own slices, a shadcn
-   primitive imports another). **`ui` is importable only by `den/` and `app/providers/`** — the
+   `boundaries/dependencies` set to `default: "disallow"` with the ADR 0033 graph
+   (`boundaries/element-types` is now a deprecated alias — we use the modern rule). Elements are
+   matched **first-match-wins**, so the most specific patterns lead (`app/providers` before `app`;
+   `components/{den,ui}` before the catch-all `shared`), each in `mode: "folder"` so the matched
+   _folder_ is the element **instance**. Because `checkInternals` defaults off, a same-instance
+   import is internal and unchecked — which gives cross-feature encapsulation for free:
+   `capture: ["feature"]` makes each feature folder a DISTINCT instance, so `features/a →
+features/b` is cross-instance (checked, and with no feature→feature allow rule, disallowed)
+   while a feature's own subtree stays internal. `feature` is thus the one element with **no
+   self-allow**; every other element self-allows for intra-layer wiring (`app/App.tsx` imports
+   sibling `app/` modules, a shadcn primitive imports another). Aliased imports (`@/*`,
+   `@shared/*`) resolve via `eslint-import-resolver-typescript`, else an unresolved import is
+   silently skipped. **`ui` is importable only by `den/` and `app/providers/`** — the
    latter being the narrow root-provider exception (ADR 0036): default plumbing like
    `TooltipProvider` / sonner `<Toaster/>` mounts vanilla `ui/`, with no `den/` wrapper.
 
    ```js
-   // @dotden/eslint-config — files: ['apps/desktop/src/renderer/**'] override
-   settings: { "boundaries/elements": [
-     // First match wins — most specific patterns first.
-     { type: "providers",   pattern: "src/renderer/app/providers/**" },
-     { type: "app",         pattern: "src/renderer/app/**" },
-     { type: "feature",     pattern: "src/renderer/features/*/**", capture: ["feature"] },
-     { type: "den-session", pattern: "src/renderer/den-session/**" },
-     { type: "den",         pattern: "src/renderer/components/den/**" },
-     { type: "ui",          pattern: "src/renderer/components/ui/**" },
-     { type: "shared",      pattern: "src/renderer/{components,lib,hooks}/**" },
-   ]},
-   rules: { "boundaries/element-types": ["error", { default: "disallow", rules: [
-     // Root providers: the ONLY app-side path to ui/ (the plumbing exception, ADR 0036).
-     { from: "providers",   allow: ["providers","ui","den","den-session","shared"] },
-     { from: "app",         allow: ["app","providers","feature","den-session","den","shared"] },
-     { from: "feature",     allow: [["feature",{ feature: "${from.feature}" }],"den-session","den","shared"] },
-     { from: "den-session", allow: ["den-session","shared"] },
-     { from: "den",         allow: ["den","ui","shared"] },
-     { from: "ui",          allow: ["ui","shared"] },
-     { from: "shared",      allow: ["shared"] },
+   // @dotden/eslint-config/renderer-boundaries.js — files: ['src/renderer/**/*.{ts,tsx}']
+   // Canonical config; cwd is apps/desktop (where check:lint runs `eslint .`).
+   settings: {
+     "import/resolver": { typescript: { project: "tsconfig.web.json" } }, // resolve @/ , @shared/
+     "boundaries/elements": [
+       // First match wins; mode:'folder' → the matched folder IS the element instance.
+       { type: "providers",   mode: "folder", pattern: "src/renderer/app/providers" },
+       { type: "app",         mode: "folder", pattern: "src/renderer/app" },
+       { type: "feature",     mode: "folder", pattern: "src/renderer/features/*", capture: ["feature"] },
+       { type: "den-session", mode: "folder", pattern: "src/renderer/den-session" },
+       { type: "den",         mode: "folder", pattern: "src/renderer/components/den" },
+       { type: "ui",          mode: "folder", pattern: "src/renderer/components/ui" },
+       { type: "shared",      mode: "folder", pattern: "src/renderer/{components,lib,hooks}" },
+     ],
+   },
+   rules: { "boundaries/dependencies": ["error", { default: "disallow", rules: [
+     // v6 object selectors. Root providers: the ONLY app-side path to ui/ (plumbing, ADR 0036).
+     { from: { type: "providers" },   allow: { to: { type: ["providers","ui","den","den-session","shared"] } } },
+     { from: { type: "app" },         allow: { to: { type: ["app","providers","feature","den-session","den","shared"] } } },
+     // No `feature` here: cross-feature disallowed; intra-feature is internal (unchecked).
+     { from: { type: "feature" },     allow: { to: { type: ["den-session","den","shared"] } } },
+     { from: { type: "den-session" }, allow: { to: { type: ["den-session","shared"] } } },
+     { from: { type: "den" },         allow: { to: { type: ["den","ui","shared"] } } },
+     { from: { type: "ui" },          allow: { to: { type: ["ui","shared"] } } },
+     { from: { type: "shared" },      allow: { to: { type: ["shared"] } } },
    ]}]}
    ```
 
@@ -74,9 +85,9 @@ split is **structure-vs-style**, not gate-vs-guide globally.
 
 ## Consequences
 
-- **As shipped (A5 · 2026-06-21).** The **layer-graph gate (Decision 1) is live and green** —
-  `eslint-plugin-boundaries@6` (a rewrite over the v5-era syntax the Decision snippet above
-  sketches; the verbatim snippet is reconciled to the v6 `boundaries/dependencies` form in A6).
+- **As shipped (A5 · 2026-06-21; snippet reconciled A6 · 2026-06-21).** The **layer-graph gate
+  (Decision 1) is live and green** — `eslint-plugin-boundaries@6`, a rewrite over the v5-era
+  syntax (the Decision snippet above now shows the shipped v6 `boundaries/dependencies` form).
   Implementation: `packages/eslint-config/renderer-boundaries.js`. Two v6 facts shape it: element
   `mode: 'folder'` makes each feature folder one _instance_, so intra-feature imports are internal
   and unchecked while cross-feature imports are checked and disallowed (cross-feature encapsulation
