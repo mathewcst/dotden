@@ -125,6 +125,14 @@ export interface SessionSlice {
   createWorkspace(label: string): Promise<void>
   /** Create a nested Group inside a Workspace (pure organization, never changes access/path). */
   createGroup(workspaceId: string, label: string, parentId: string | null): Promise<void>
+  /** Rename a Workspace label without changing access semantics. */
+  renameWorkspace(workspaceId: string, label: string): void
+  /** Rename a Group label without moving Files. */
+  renameGroup(workspaceId: string, groupId: string, label: string): void
+  /** Delete an empty Workspace; backend refuses non-empty/last Workspace. */
+  deleteWorkspace(workspaceId: string): void
+  /** Delete an empty Group; backend refuses child Groups or filed Files. */
+  deleteGroup(workspaceId: string, groupId: string): void
   /** File the selected File under a Group (or back to its Workspace root). Organization only. */
   moveSelectedToGroup(groupId: string | null): void
   /** Move the selected File into a Workspace. Changes access and resets its Group. */
@@ -296,6 +304,43 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
         await api.den.createGroup(workspaceId, label, parentId)
         await get().reloadTree()
       }),
+
+    renameWorkspace: (workspaceId, label) => {
+      void get().run('organize', async () => {
+        await api.den.renameWorkspace(workspaceId, label)
+        await get().reloadTree()
+      })
+    },
+
+    renameGroup: (workspaceId, groupId, label) => {
+      void get().run('organize', async () => {
+        await api.den.renameGroup(workspaceId, groupId, label)
+        await get().reloadTree()
+      })
+    },
+
+    deleteWorkspace: (workspaceId) => {
+      void get().run('organize', async () => {
+        await api.den.deleteWorkspace(workspaceId)
+        set((s) => ({
+          selectedWorkspace: s.selectedWorkspace === workspaceId ? null : s.selectedWorkspace,
+        }))
+        await get().reloadTree()
+      })
+    },
+
+    deleteGroup: (workspaceId, groupId) => {
+      void get().run('organize', async () => {
+        await api.den.deleteGroup(workspaceId, groupId)
+        set((s) => ({
+          selectedGroup:
+            s.selectedGroup?.workspaceId === workspaceId && s.selectedGroup.groupId === groupId
+              ? null
+              : s.selectedGroup,
+        }))
+        await get().reloadTree()
+      })
+    },
 
     moveSelectedToGroup: (groupId) => {
       const selected = get().selected

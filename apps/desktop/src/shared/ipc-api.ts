@@ -481,6 +481,20 @@ export interface DotdenApi {
      * Group under another Group in the same Workspace, or is `null` for a top-level one.
      */
     createGroup(workspaceId: string, label: string, parentId: string | null): Promise<Group>
+    /** Rename a Workspace label without changing its id, subscriptions, Groups, or Files. */
+    renameWorkspace(workspaceId: string, label: string): Promise<void>
+    /** Rename a Group label without changing its id, parent, Scope, or filed Files. */
+    renameGroup(workspaceId: string, groupId: string, label: string): Promise<void>
+    /**
+     * Delete an empty Workspace. Non-empty Workspaces are refused so Files are never
+     * silently re-homed across access boundaries.
+     */
+    deleteWorkspace(workspaceId: string): Promise<void>
+    /**
+     * Delete an empty Group. Groups with child Groups or filed Files are refused so
+     * organization never disappears silently.
+     */
+    deleteGroup(workspaceId: string, groupId: string): Promise<void>
     /**
      * **File a managed File under a Group** (or back to the Workspace root, `null`)
      * — the organize-only move (issue 1-14). Changes ONLY the placement's Group; the

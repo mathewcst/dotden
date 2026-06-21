@@ -2160,6 +2160,60 @@ export class DenService {
     }
   }
 
+  async renameWorkspace(workspaceId: string, label: string, traceId: string): Promise<void> {
+    const span = this.tracer?.startOperation('organize', traceId)
+    try {
+      await this.store.renameWorkspace(workspaceId, label)
+      await this.commitMetadata(`Rename Workspace ${label.trim()}`)
+      span?.end('ok')
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  async renameGroup(
+    workspaceId: string,
+    groupId: string,
+    label: string,
+    traceId: string,
+  ): Promise<void> {
+    const span = this.tracer?.startOperation('organize', traceId)
+    try {
+      await this.store.renameGroup(workspaceId, groupId, label)
+      await this.commitMetadata(`Rename Group ${label.trim()}`)
+      span?.end('ok')
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  async deleteWorkspace(workspaceId: string, traceId: string): Promise<void> {
+    const span = this.tracer?.startOperation('organize', traceId)
+    try {
+      await this.store.deleteWorkspace(workspaceId)
+      await this.regenerateOsScopeIgnore()
+      await this.commitMetadata(`Delete Workspace ${workspaceId}`)
+      span?.end('ok')
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
+  async deleteGroup(workspaceId: string, groupId: string, traceId: string): Promise<void> {
+    const span = this.tracer?.startOperation('organize', traceId)
+    try {
+      await this.store.deleteGroup(workspaceId, groupId)
+      await this.commitMetadata(`Delete Group ${groupId}`)
+      span?.end('ok')
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
   /**
    * **File a managed File under a Group** (or back to the Workspace root) — the
    * organize-only move (issue 1-14). This edits ONLY the placement's `groupId`; the

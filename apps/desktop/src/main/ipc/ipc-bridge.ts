@@ -560,6 +560,32 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     }
     return (await deps.denService()).createGroup(workspaceId, label, parentId, traceId(payload))
   })
+  registrar.handle('den:rename-workspace', async (_event, payload: TracedPayload) => {
+    const { workspaceId, label } = payload as TracedPayload & {
+      workspaceId: string
+      label: string
+    }
+    return (await deps.denService()).renameWorkspace(workspaceId, label, traceId(payload))
+  })
+  registrar.handle('den:rename-group', async (_event, payload: TracedPayload) => {
+    const { workspaceId, groupId, label } = payload as TracedPayload & {
+      workspaceId: string
+      groupId: string
+      label: string
+    }
+    return (await deps.denService()).renameGroup(workspaceId, groupId, label, traceId(payload))
+  })
+  registrar.handle('den:delete-workspace', async (_event, payload: TracedPayload) => {
+    const { workspaceId } = payload as TracedPayload & { workspaceId: string }
+    return (await deps.denService()).deleteWorkspace(workspaceId, traceId(payload))
+  })
+  registrar.handle('den:delete-group', async (_event, payload: TracedPayload) => {
+    const { workspaceId, groupId } = payload as TracedPayload & {
+      workspaceId: string
+      groupId: string
+    }
+    return (await deps.denService()).deleteGroup(workspaceId, groupId, traceId(payload))
+  })
   registrar.handle('den:move-to-group', async (_event, payload: TracedPayload) => {
     const { targetPath, groupId } = payload as TracedPayload & {
       targetPath: string

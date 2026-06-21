@@ -49,6 +49,10 @@ function makeApi(over: Record<string, unknown> = {}): DotdenApi {
       apply: vi.fn(async () => ({ results: [] })),
       createWorkspace: vi.fn(async () => ({ id: 'w2', label: 'Work', groups: [] })),
       createGroup: vi.fn(async () => ({ id: 'g1', label: 'Shell', parentId: null, scope: null })),
+      renameWorkspace: vi.fn(async () => undefined),
+      renameGroup: vi.fn(async () => undefined),
+      deleteWorkspace: vi.fn(async () => undefined),
+      deleteGroup: vi.fn(async () => undefined),
       moveFileToGroup: vi.fn(async () => undefined),
       setFileWorkspace: vi.fn(async () => undefined),
       setFileScope: vi.fn(async () => null),
@@ -469,6 +473,36 @@ describe('session slice — inspector organize/scope actions', () => {
     await vi.waitFor(() =>
       expect(api.den.setGroupScope).toHaveBeenCalledWith('personal', 'shell', ['darwin']),
     )
+    expect(api.den.tree).toHaveBeenCalled()
+  })
+
+  it('renames Workspaces and Groups through organize actions', async () => {
+    const api = makeApi()
+    const store = createDenSessionStore('a', api)
+
+    store.getState().renameWorkspace('personal', 'Home')
+    store.getState().renameGroup('personal', 'shell', 'Terminals')
+
+    await vi.waitFor(() => expect(api.den.renameWorkspace).toHaveBeenCalledWith('personal', 'Home'))
+    await vi.waitFor(() =>
+      expect(api.den.renameGroup).toHaveBeenCalledWith('personal', 'shell', 'Terminals'),
+    )
+    expect(api.den.tree).toHaveBeenCalled()
+  })
+
+  it('deletes empty Workspaces and Groups through organize actions', async () => {
+    const api = makeApi()
+    const store = createDenSessionStore('a', api)
+    store.setState({
+      selectedWorkspace: 'scratch',
+      selectedGroup: { workspaceId: 'personal', groupId: 'empty' },
+    })
+
+    store.getState().deleteWorkspace('scratch')
+    store.getState().deleteGroup('personal', 'empty')
+
+    await vi.waitFor(() => expect(api.den.deleteWorkspace).toHaveBeenCalledWith('scratch'))
+    await vi.waitFor(() => expect(api.den.deleteGroup).toHaveBeenCalledWith('personal', 'empty'))
     expect(api.den.tree).toHaveBeenCalled()
   })
 })

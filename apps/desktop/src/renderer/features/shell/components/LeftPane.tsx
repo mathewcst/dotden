@@ -32,6 +32,10 @@ export function LeftPane({ model }: { model: ComponentProps<typeof FileTree>['mo
   const onRowVerb = useDenSession((s) => s.onRowVerb)
   const createWorkspace = useDenSession((s) => s.createWorkspace)
   const createGroup = useDenSession((s) => s.createGroup)
+  const renameWorkspace = useDenSession((s) => s.renameWorkspace)
+  const renameGroup = useDenSession((s) => s.renameGroup)
+  const deleteWorkspace = useDenSession((s) => s.deleteWorkspace)
+  const deleteGroup = useDenSession((s) => s.deleteGroup)
 
   // The paths the tree renders: real managed Files on A, incoming Files on B.
   const paths = useMemo(
@@ -77,6 +81,10 @@ export function LeftPane({ model }: { model: ComponentProps<typeof FileTree>['mo
               busy={busy === 'organize'}
               onCreateWorkspace={createWorkspace}
               onCreateGroup={createGroup}
+              onRenameWorkspace={renameWorkspace}
+              onRenameGroup={renameGroup}
+              onDeleteWorkspace={deleteWorkspace}
+              onDeleteGroup={deleteGroup}
               onSelectWorkspace={selectWorkspace}
               onSelectGroup={selectGroup}
               selectedWorkspace={selectedWorkspace}

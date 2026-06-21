@@ -1,5 +1,15 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { ChevronDown, ChevronRight, Folder, FolderPlus, Plus } from 'lucide-react'
+import { Menu } from '@base-ui/react/menu'
+import {
+  ChevronDown,
+  ChevronRight,
+  Folder,
+  FolderPlus,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 import type { Group, Workspace } from '@shared/workspace'
 import type { FileTreeEntry } from '@shared/den'
 import { cn } from '@/shared/lib/utils'
@@ -37,6 +47,14 @@ export interface WorkspaceSidebarProps {
   readonly onCreateWorkspace: (label: string) => void
   /** Create a nested Group inside a Workspace (organization only). */
   readonly onCreateGroup: (workspaceId: string, label: string, parentId: string | null) => void
+  /** Rename a Workspace label. */
+  readonly onRenameWorkspace: (workspaceId: string, label: string) => void
+  /** Rename a Group label. */
+  readonly onRenameGroup: (workspaceId: string, groupId: string, label: string) => void
+  /** Delete an empty Workspace. */
+  readonly onDeleteWorkspace: (workspaceId: string) => void
+  /** Delete an empty Group. */
+  readonly onDeleteGroup: (workspaceId: string, groupId: string) => void
   /** Select a Workspace as the active inspector target while preserving expand/collapse. */
   readonly onSelectWorkspace: (workspaceId: string) => void
   /** Select a Group as the active inspector target while preserving expand/collapse. */
@@ -84,6 +102,10 @@ export function WorkspaceSidebar({
   renderFiles,
   onCreateWorkspace,
   onCreateGroup,
+  onRenameWorkspace,
+  onRenameGroup,
+  onDeleteWorkspace,
+  onDeleteGroup,
   onSelectWorkspace,
   onSelectGroup,
   selectedWorkspace,
@@ -141,6 +163,10 @@ export function WorkspaceSidebar({
             hasRootFiles={(fileStatsByWorkspace.get(workspace.id)?.root ?? 0) > 0}
             renderFiles={renderFiles}
             onCreateGroup={onCreateGroup}
+            onRenameWorkspace={onRenameWorkspace}
+            onRenameGroup={onRenameGroup}
+            onDeleteWorkspace={onDeleteWorkspace}
+            onDeleteGroup={onDeleteGroup}
             onSelectWorkspace={onSelectWorkspace}
             onSelectGroup={onSelectGroup}
             selectedWorkspace={selectedWorkspace}
@@ -157,6 +183,8 @@ export function WorkspaceSidebar({
           hasRootFiles={(fileStatsByWorkspace.get(defaultWorkspace.id)?.root ?? 0) > 0}
           renderFiles={renderFiles}
           onCreateGroup={onCreateGroup}
+          onRenameGroup={onRenameGroup}
+          onDeleteGroup={onDeleteGroup}
           onSelectGroup={onSelectGroup}
           selectedGroup={selectedGroup}
           busy={busy}
@@ -174,6 +202,10 @@ function WorkspaceSection({
   hasRootFiles,
   renderFiles,
   onCreateGroup,
+  onRenameWorkspace,
+  onRenameGroup,
+  onDeleteWorkspace,
+  onDeleteGroup,
   onSelectWorkspace,
   onSelectGroup,
   selectedWorkspace,
@@ -185,6 +217,10 @@ function WorkspaceSection({
   hasRootFiles: boolean
   renderFiles: WorkspaceSidebarProps['renderFiles']
   onCreateGroup: WorkspaceSidebarProps['onCreateGroup']
+  onRenameWorkspace: WorkspaceSidebarProps['onRenameWorkspace']
+  onRenameGroup: WorkspaceSidebarProps['onRenameGroup']
+  onDeleteWorkspace: WorkspaceSidebarProps['onDeleteWorkspace']
+  onDeleteGroup: WorkspaceSidebarProps['onDeleteGroup']
   onSelectWorkspace: WorkspaceSidebarProps['onSelectWorkspace']
   onSelectGroup: WorkspaceSidebarProps['onSelectGroup']
   selectedWorkspace: WorkspaceSidebarProps['selectedWorkspace']
@@ -196,33 +232,45 @@ function WorkspaceSection({
   const [open, setOpen] = useState(true)
   return (
     <section className="px-2 pt-1">
-      <button
-        type="button"
+      <div
         className={cn(
-          'hover:bg-sidebar-accent flex w-full items-center gap-1.5 rounded-sm px-1.5 py-1.5 text-left',
+          'hover:bg-sidebar-accent flex w-full items-center gap-1.5 rounded-sm px-1.5 py-1.5',
           selectedWorkspace === workspace.id && 'bg-sidebar-accent text-foreground',
         )}
-        onClick={() => {
-          onSelectWorkspace(workspace.id)
-          setOpen((v) => !v)
-        }}
       >
-        <ChevronDown
-          className={cn(
-            'text-muted-foreground size-3.5 transition-transform',
-            !open && '-rotate-90',
-          )}
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+          onClick={() => {
+            onSelectWorkspace(workspace.id)
+            setOpen((v) => !v)
+          }}
+        >
+          <ChevronDown
+            className={cn(
+              'text-muted-foreground size-3.5 transition-transform',
+              !open && '-rotate-90',
+            )}
+          />
+          <span className="text-foreground truncate text-[13px] font-medium">{workspace.label}</span>
+          <span className="flex-1" />
+          <span className="text-muted-foreground text-[11px]">{fileCount}</span>
+        </button>
+        <WorkspaceActionsMenu
+          label={workspace.label}
+          disabled={busy}
+          onRename={(label) => onRenameWorkspace(workspace.id, label)}
+          onDelete={() => onDeleteWorkspace(workspace.id)}
         />
-        <span className="text-foreground truncate text-[13px] font-medium">{workspace.label}</span>
-        <span className="flex-1" />
-        <span className="text-muted-foreground text-[11px]">{fileCount}</span>
-      </button>
+      </div>
       {open ? (
         <WorkspaceBody
           workspace={workspace}
           hasRootFiles={hasRootFiles}
           renderFiles={renderFiles}
           onCreateGroup={onCreateGroup}
+          onRenameGroup={onRenameGroup}
+          onDeleteGroup={onDeleteGroup}
           onSelectGroup={onSelectGroup}
           selectedGroup={selectedGroup}
           busy={busy}
@@ -239,6 +287,8 @@ function WorkspaceBody({
   hasRootFiles,
   renderFiles,
   onCreateGroup,
+  onRenameGroup,
+  onDeleteGroup,
   onSelectGroup,
   selectedGroup,
   busy,
@@ -248,6 +298,8 @@ function WorkspaceBody({
   hasRootFiles: boolean
   renderFiles: WorkspaceSidebarProps['renderFiles']
   onCreateGroup: WorkspaceSidebarProps['onCreateGroup']
+  onRenameGroup: WorkspaceSidebarProps['onRenameGroup']
+  onDeleteGroup: WorkspaceSidebarProps['onDeleteGroup']
   onSelectGroup: WorkspaceSidebarProps['onSelectGroup']
   selectedGroup: WorkspaceSidebarProps['selectedGroup']
   busy: boolean
@@ -269,6 +321,8 @@ function WorkspaceBody({
           depth={0}
           renderFiles={renderFiles}
           onCreateGroup={onCreateGroup}
+          onRenameGroup={onRenameGroup}
+          onDeleteGroup={onDeleteGroup}
           onSelectGroup={onSelectGroup}
           selectedGroup={selectedGroup}
           busy={busy}
@@ -318,6 +372,8 @@ function GroupBranch({
   depth,
   renderFiles,
   onCreateGroup,
+  onRenameGroup,
+  onDeleteGroup,
   onSelectGroup,
   selectedGroup,
   busy,
@@ -327,6 +383,8 @@ function GroupBranch({
   depth: number
   renderFiles: WorkspaceSidebarProps['renderFiles']
   onCreateGroup: WorkspaceSidebarProps['onCreateGroup']
+  onRenameGroup: WorkspaceSidebarProps['onRenameGroup']
+  onDeleteGroup: WorkspaceSidebarProps['onDeleteGroup']
   onSelectGroup: WorkspaceSidebarProps['onSelectGroup']
   selectedGroup: WorkspaceSidebarProps['selectedGroup']
   busy: boolean
@@ -334,25 +392,38 @@ function GroupBranch({
   const [open, setOpen] = useState(true)
   return (
     <div style={{ paddingLeft: depth * 10 }}>
-      <button
-        type="button"
+      <div
         className={cn(
-          'text-foreground hover:bg-sidebar-accent flex w-full items-center gap-1.5 rounded-sm px-1.5 py-1.5 text-left text-[13px]',
+          'text-foreground hover:bg-sidebar-accent flex w-full items-center gap-1.5 rounded-sm px-1.5 py-1.5 text-[13px]',
           selectedGroup?.workspaceId === workspaceId &&
             selectedGroup.groupId === node.group.id &&
             'bg-sidebar-accent',
         )}
-        onClick={() => {
-          onSelectGroup(workspaceId, node.group.id)
-          setOpen((v) => !v)
-        }}
       >
-        <ChevronRight
-          className={cn('text-muted-foreground size-3.5 transition-transform', open && 'rotate-90')}
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+          onClick={() => {
+            onSelectGroup(workspaceId, node.group.id)
+            setOpen((v) => !v)
+          }}
+        >
+          <ChevronRight
+            className={cn(
+              'text-muted-foreground size-3.5 transition-transform',
+              open && 'rotate-90',
+            )}
+          />
+          <Folder className="text-muted-foreground size-3.5" aria-hidden />
+          <span className="truncate">{node.group.label}</span>
+        </button>
+        <WorkspaceActionsMenu
+          label={node.group.label}
+          disabled={busy}
+          onRename={(label) => onRenameGroup(workspaceId, node.group.id, label)}
+          onDelete={() => onDeleteGroup(workspaceId, node.group.id)}
         />
-        <Folder className="text-muted-foreground size-3.5" aria-hidden />
-        <span className="truncate">{node.group.label}</span>
-      </button>
+      </div>
       {open ? (
         <div className="pl-3">
           {/* This Group's Files. */}
@@ -366,6 +437,8 @@ function GroupBranch({
               depth={depth + 1}
               renderFiles={renderFiles}
               onCreateGroup={onCreateGroup}
+              onRenameGroup={onRenameGroup}
+              onDeleteGroup={onDeleteGroup}
               onSelectGroup={onSelectGroup}
               selectedGroup={selectedGroup}
               busy={busy}
@@ -388,6 +461,57 @@ function GroupBranch({
         </div>
       ) : null}
     </div>
+  )
+}
+
+function WorkspaceActionsMenu({
+  label,
+  disabled,
+  onRename,
+  onDelete,
+}: {
+  label: string
+  disabled: boolean
+  onRename: (label: string) => void
+  onDelete: () => void
+}) {
+  return (
+    <Menu.Root>
+      <Menu.Trigger
+        className="text-muted-foreground hover:text-foreground hover:bg-sidebar-accent rounded p-0.5 disabled:opacity-50"
+        disabled={disabled}
+        aria-label={`Actions for ${label}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <MoreHorizontal className="size-3.5" />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner side="bottom" align="end" sideOffset={4} className="z-50">
+          <Menu.Popup className="border-border bg-popover text-popover-foreground min-w-40 rounded-md border p-1 shadow-lg">
+            <Menu.Item
+              className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm outline-none select-none"
+              onClick={() => {
+                const next = window.prompt('Rename', label)
+                if (next?.trim()) onRename(next)
+              }}
+            >
+              <Pencil className="size-3.5" /> Rename…
+            </Menu.Item>
+            <Menu.Separator className="bg-border my-1 h-px" />
+            <Menu.Item
+              className="text-dd-red-400 hover:bg-dd-red-950 flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm outline-none select-none"
+              onClick={() => {
+                if (window.confirm(`Delete "${label}"? Only empty items can be deleted.`)) {
+                  onDelete()
+                }
+              }}
+            >
+              <Trash2 className="size-3.5" /> Delete…
+            </Menu.Item>
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
   )
 }
 

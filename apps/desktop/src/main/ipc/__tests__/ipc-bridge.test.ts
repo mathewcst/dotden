@@ -537,6 +537,10 @@ describe('IpcBridge', () => {
         parentId: null,
         scope: null,
       })),
+      renameWorkspace: vi.fn(async () => undefined),
+      renameGroup: vi.fn(async () => undefined),
+      deleteWorkspace: vi.fn(async () => undefined),
+      deleteGroup: vi.fn(async () => undefined),
       moveFileToGroup: vi.fn(async () => undefined),
       setFileWorkspace: vi.fn(async () => undefined),
       setFileScope: vi.fn(async () => ['win32'] as const),
@@ -586,6 +590,26 @@ describe('IpcBridge', () => {
       parentId: null,
       _trace: { traceId: 'o2' },
     } as never)
+    await handlers.get('den:rename-workspace')?.({}, {
+      workspaceId: 'personal',
+      label: 'Home',
+      _trace: { traceId: 'o2a' },
+    } as never)
+    await handlers.get('den:rename-group')?.({}, {
+      workspaceId: 'personal',
+      groupId: 'grp-1',
+      label: 'Terminals',
+      _trace: { traceId: 'o2b' },
+    } as never)
+    await handlers.get('den:delete-group')?.({}, {
+      workspaceId: 'personal',
+      groupId: 'grp-1',
+      _trace: { traceId: 'o2c' },
+    } as never)
+    await handlers.get('den:delete-workspace')?.({}, {
+      workspaceId: 'ws-1',
+      _trace: { traceId: 'o2d' },
+    } as never)
     await handlers.get('den:move-to-group')?.({}, {
       targetPath: '.zshrc',
       groupId: 'grp-1',
@@ -611,6 +635,10 @@ describe('IpcBridge', () => {
     // Each organize verb MUTATES `.dotden/`, so the bridge forwards its trace id.
     expect(den.createWorkspace).toHaveBeenCalledWith('Work', 'o1')
     expect(den.createGroup).toHaveBeenCalledWith('personal', 'Shell', null, 'o2')
+    expect(den.renameWorkspace).toHaveBeenCalledWith('personal', 'Home', 'o2a')
+    expect(den.renameGroup).toHaveBeenCalledWith('personal', 'grp-1', 'Terminals', 'o2b')
+    expect(den.deleteGroup).toHaveBeenCalledWith('personal', 'grp-1', 'o2c')
+    expect(den.deleteWorkspace).toHaveBeenCalledWith('ws-1', 'o2d')
     expect(den.moveFileToGroup).toHaveBeenCalledWith('.zshrc', 'grp-1', 'o3')
     expect(den.setFileWorkspace).toHaveBeenCalledWith('.zshrc', 'ws-1', 'o4')
     // The OS Scope verbs (issue 1-15) forward the trace id too and pass the requested Scope.

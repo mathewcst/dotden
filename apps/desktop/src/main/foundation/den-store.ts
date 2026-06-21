@@ -215,6 +215,108 @@ export class DenStore {
     return group
   }
 
+  /** Rename a Workspace without changing its id, subscriptions, Groups, or File placements. */
+  async renameWorkspace(workspaceId: string, label: string): Promise<void> {
+    const trimmed = label.trim()
+    if (!trimmed) throw new Error('Workspace name cannot be empty.')
+    const doc = await this.readWorkspaces()
+    if (!doc.workspaces.some((workspace) => workspace.id === workspaceId)) {
+      throw new Error(`Cannot rename Workspace "${workspaceId}": it does not exist.`)
+    }
+    await this.writeWorkspaces({
+      ...doc,
+      workspaces: doc.workspaces.map((workspace) =>
+        workspace.id === workspaceId ? { ...workspace, label: trimmed } : workspace,
+      ),
+    })
+  }
+
+  /** Rename a Group without changing its id, parent, Scope, or File placements. */
+  async renameGroup(workspaceId: string, groupId: string, label: string): Promise<void> {
+    const trimmed = label.trim()
+    if (!trimmed) throw new Error('Group name cannot be empty.')
+    const doc = await this.readWorkspaces()
+    const workspace = doc.workspaces.find((w) => w.id === workspaceId)
+    if (!workspace?.groups.some((group) => group.id === groupId)) {
+      throw new Error(
+        `Cannot rename Group "${groupId}": it is not a Group of Workspace "${workspaceId}".`,
+      )
+    }
+    await this.writeWorkspaces({
+      ...doc,
+      workspaces: doc.workspaces.map((workspace) =>
+        workspace.id === workspaceId
+          ? {
+              ...workspace,
+              groups: workspace.groups.map((group) =>
+                group.id === groupId ? { ...group, label: trimmed } : group,
+              ),
+            }
+          : workspace,
+      ),
+    })
+  }
+
+  /**
+   * Delete an empty Workspace only. Non-empty Workspaces are refused so no File is silently
+   * re-homed across access boundaries.
+   */
+  async deleteWorkspace(workspaceId: string): Promise<void> {
+    const doc = await this.readWorkspaces()
+    const workspace = doc.workspaces.find((w) => w.id === workspaceId)
+    if (!workspace) throw new Error(`Cannot delete Workspace "${workspaceId}": it does not exist.`)
+    if (doc.workspaces.length <= 1) {
+      throw new Error('Cannot delete the last Workspace in your Den.')
+    }
+    if (workspace.groups.length > 0) {
+      throw new Error(`Cannot delete Workspace "${workspace.label}": it still has Groups.`)
+    }
+    if (doc.placements.some((placement) => placement.workspaceId === workspaceId)) {
+      throw new Error(`Cannot delete Workspace "${workspace.label}": it still has Files.`)
+    }
+    await this.writeWorkspaces({
+      ...doc,
+      workspaces: doc.workspaces.filter((w) => w.id !== workspaceId),
+    })
+
+    const envs = await this.readEnvironments()
+    await this.writeEnvironments({
+      environments: envs.environments.map((env) => ({
+        ...env,
+        subscribedWorkspaces: env.subscribedWorkspaces.filter((id) => id !== workspaceId),
+      })),
+    })
+  }
+
+  /**
+   * Delete an empty Group only. Child Groups and filed Files are refused so organization never
+   * disappears silently.
+   */
+  async deleteGroup(workspaceId: string, groupId: string): Promise<void> {
+    const doc = await this.readWorkspaces()
+    const workspace = doc.workspaces.find((w) => w.id === workspaceId)
+    const group = workspace?.groups.find((g) => g.id === groupId)
+    if (!workspace || !group) {
+      throw new Error(
+        `Cannot delete Group "${groupId}": it is not a Group of Workspace "${workspaceId}".`,
+      )
+    }
+    if (workspace.groups.some((candidate) => candidate.parentId === groupId)) {
+      throw new Error(`Cannot delete Group "${group.label}": it still has child Groups.`)
+    }
+    if (doc.placements.some((placement) => placement.groupId === groupId)) {
+      throw new Error(`Cannot delete Group "${group.label}": it still has Files.`)
+    }
+    await this.writeWorkspaces({
+      ...doc,
+      workspaces: doc.workspaces.map((workspace) =>
+        workspace.id === workspaceId
+          ? { ...workspace, groups: workspace.groups.filter((candidate) => candidate.id !== groupId) }
+          : workspace,
+      ),
+    })
+  }
+
   /**
    * File a managed File under a Group (or back to the Workspace root) — the
    * **organize-only** move (issue 1-14).

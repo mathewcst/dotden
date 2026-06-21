@@ -227,6 +227,73 @@ describe('DenStore — Workspaces + nested Groups (1-14)', () => {
     expect(placement.targetPath).toBe('.zshrc')
   })
 
+  it('renames Workspace and Group labels without changing ids or placements', async () => {
+    const store = new DenStore(source)
+    await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
+    await store.placeFile('.zshrc')
+    const shell = await store.createGroup(DEFAULT_WORKSPACE_ID, 'Shell')
+    await store.moveFileToGroup('.zshrc', shell.id)
+    const before = await store.readWorkspaces()
+
+    await store.renameWorkspace(DEFAULT_WORKSPACE_ID, 'Home')
+    await store.renameGroup(DEFAULT_WORKSPACE_ID, shell.id, 'Terminals')
+
+    const after = await store.readWorkspaces()
+    expect(after.workspaces[0]).toMatchObject({ id: DEFAULT_WORKSPACE_ID, label: 'Home' })
+    expect(after.workspaces[0]?.groups[0]).toMatchObject({ id: shell.id, label: 'Terminals' })
+    expect(after.placements).toEqual(before.placements)
+  })
+
+  it('deletes an empty Workspace and removes it from environment subscriptions', async () => {
+    const store = new DenStore(source)
+    await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
+    const empty = await store.createWorkspace('Scratch')
+    await store.setSubscriptions(
+      { id: 'env-1', label: 'laptop', os: 'linux' },
+      [DEFAULT_WORKSPACE_ID, empty.id],
+    )
+
+    await store.deleteWorkspace(empty.id)
+
+    const doc = await store.readWorkspaces()
+    expect(doc.workspaces.map((workspace) => workspace.id)).toEqual([DEFAULT_WORKSPACE_ID])
+    const registry = await store.readEnvironments()
+    expect(registry.environments[0]?.subscribedWorkspaces).toEqual([DEFAULT_WORKSPACE_ID])
+  })
+
+  it('refuses to delete non-empty Workspaces or the last Workspace', async () => {
+    const store = new DenStore(source)
+    await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
+    await store.placeFile('.zshrc')
+    const empty = await store.createWorkspace('Scratch')
+    await store.createGroup(empty.id, 'Nested')
+
+    await expect(store.deleteWorkspace(DEFAULT_WORKSPACE_ID)).rejects.toThrow(/still has Files/)
+    await expect(store.deleteWorkspace(empty.id)).rejects.toThrow(/still has Groups/)
+    await store.deleteGroup(empty.id, (await store.readWorkspaces()).workspaces[1]!.groups[0]!.id)
+    await store.deleteWorkspace(empty.id)
+    await expect(store.deleteWorkspace(DEFAULT_WORKSPACE_ID)).rejects.toThrow(/last Workspace/)
+  })
+
+  it('deletes an empty Group and refuses child Groups or filed Files', async () => {
+    const store = new DenStore(source)
+    await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })
+    await store.placeFile('.zshrc')
+    const shell = await store.createGroup(DEFAULT_WORKSPACE_ID, 'Shell')
+    const zsh = await store.createGroup(DEFAULT_WORKSPACE_ID, 'zsh', shell.id)
+
+    await expect(store.deleteGroup(DEFAULT_WORKSPACE_ID, shell.id)).rejects.toThrow(/child Groups/)
+    await store.deleteGroup(DEFAULT_WORKSPACE_ID, zsh.id)
+    await store.moveFileToGroup('.zshrc', shell.id)
+    await expect(store.deleteGroup(DEFAULT_WORKSPACE_ID, shell.id)).rejects.toThrow(/still has Files/)
+    await store.moveFileToGroup('.zshrc', null)
+    await store.deleteGroup(DEFAULT_WORKSPACE_ID, shell.id)
+
+    const doc = await store.readWorkspaces()
+    expect(doc.workspaces[0]?.groups).toEqual([])
+    expect(doc.placements[0]?.targetPath).toBe('.zshrc')
+  })
+
   it('re-Tracking a File keeps it in its Group (organization is sticky within a Workspace)', async () => {
     const store = new DenStore(source)
     await store.seedDefault({ id: 'env-1', label: 'laptop', os: 'linux' })

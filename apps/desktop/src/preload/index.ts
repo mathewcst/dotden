@@ -396,6 +396,34 @@ const api: DotdenApi = {
         parentId,
       }) as ReturnType<DotdenApi['den']['createGroup']>
     },
+    // → IPC channel 'den:rename-workspace' (rename access boundary label only)
+    renameWorkspace(workspaceId, label) {
+      return invokeWithTrace('den:rename-workspace', {
+        workspaceId,
+        label,
+      }) as ReturnType<DotdenApi['den']['renameWorkspace']>
+    },
+    // → IPC channel 'den:rename-group' (rename organization label only)
+    renameGroup(workspaceId, groupId, label) {
+      return invokeWithTrace('den:rename-group', {
+        workspaceId,
+        groupId,
+        label,
+      }) as ReturnType<DotdenApi['den']['renameGroup']>
+    },
+    // → IPC channel 'den:delete-workspace' (empty Workspace only)
+    deleteWorkspace(workspaceId) {
+      return invokeWithTrace('den:delete-workspace', {
+        workspaceId,
+      }) as ReturnType<DotdenApi['den']['deleteWorkspace']>
+    },
+    // → IPC channel 'den:delete-group' (empty Group only)
+    deleteGroup(workspaceId, groupId) {
+      return invokeWithTrace('den:delete-group', {
+        workspaceId,
+        groupId,
+      }) as ReturnType<DotdenApi['den']['deleteGroup']>
+    },
     // → IPC channel 'den:move-to-group' (organize-only: never changes access or path)
     moveFileToGroup(targetPath, groupId) {
       return invokeWithTrace('den:move-to-group', {
