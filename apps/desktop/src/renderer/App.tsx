@@ -2,6 +2,7 @@ import { LaunchProvider } from '@/features/launch/components/LaunchProvider'
 import { LaunchRouter } from '@/features/launch/components/LaunchRouter'
 import { UpdateDownloadedPrompt } from '@/features/update/components/UpdateDownloadedPrompt'
 import { ToastViewport } from '@/ui/toast'
+import { TooltipProvider } from './components/ui/tooltip'
 
 /**
  * App — the thin application root (ADR 0027). It mounts the app-scoped {@link LaunchProvider}
@@ -10,10 +11,12 @@ import { ToastViewport } from '@/ui/toast'
  */
 export function App() {
   return (
-    <LaunchProvider>
-      <LaunchRouter />
-      <UpdateDownloadedPrompt />
-      <ToastViewport />
-    </LaunchProvider>
+    <TooltipProvider delay={100}>
+      <LaunchProvider>
+        <LaunchRouter />
+        <UpdateDownloadedPrompt />
+        <ToastViewport />
+      </LaunchProvider>
+    </TooltipProvider>
   )
 }

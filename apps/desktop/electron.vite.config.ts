@@ -1,7 +1,7 @@
-import { defineConfig, loadEnv } from 'electron-vite'
-import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 import tailwindcss from '@tailwindcss/vite'
+import react, { reactCompilerPreset } from '@vitejs/plugin-react'
+import { defineConfig, loadEnv } from 'electron-vite'
 import { resolve } from 'node:path'
 
 export default defineConfig(async ({ mode }) => {

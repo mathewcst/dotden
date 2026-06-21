@@ -85,7 +85,11 @@ export function CenterPane() {
   }
 
   return (
-    <main className="flex min-w-0 flex-col overflow-hidden">
+    // `h-full min-h-0` is load-bearing: this pane is a react-resizable-panels Panel child (a flex
+    // item that does NOT stretch its child's height the way the old CSS-grid track did). Without it
+    // <main> shrinks to content height, and any `flex-1`/`min-h-0` descendant — notably FileHistory's
+    // vertical split — resolves against a 0px height and collapses to just its resize handle.
+    <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
       <div className="border-border flex items-center gap-3 border-b px-4 py-2">
         <span className="font-mono text-sm">{selected ? `~/${selected}` : 'Select a File'}</span>
         {headerStatus ? <StatusTag status={headerStatus} /> : null}
@@ -226,7 +230,12 @@ export function CenterPane() {
               if (event.key === 'Enter') doTrack()
             }}
           />
-          <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void browseTrack()}>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={busy !== null}
+            onClick={() => void browseTrack()}
+          >
             <FolderOpen className="size-4" />
             Browse
           </Button>

@@ -28,8 +28,8 @@ import { cn } from '@/shared/lib/utils'
  *   to tidy their Den.
  *
  * This renders one labelled section per Workspace + its nested Group tree and the
- * affordances to create each; the actual File rows (with their `@pierre/trees` git-status
- * decorations) are rendered by the parent via {@link WorkspaceSidebarProps.renderFiles},
+ * affordances to create each; the actual File rows (with their git-status decorations) are
+ * rendered by the parent via {@link WorkspaceSidebarProps.renderFiles},
  * scoped to the Workspace/Group whose Files belong there. The `WORKSPACES` header itself is
  * owned by the parent (see {@link WorkspacesHeader}) so it can stay pinned above the scroll
  * region. The whole tree is read from / written to the synced `.dotden/` over IPC by the
@@ -42,7 +42,7 @@ export interface WorkspaceSidebarProps {
   readonly files: readonly FileTreeEntry[]
   /**
    * Render the File rows that belong to one Workspace+Group bucket. Returning the
-   * `@pierre/trees` tree (or a subset of it) keeps the git-status axis with the rows.
+   * The renderer keeps the git-status axis with the rows.
    * `groupId` is `null` for Files sitting directly under the Workspace root.
    */
   readonly renderFiles: (workspaceId: string, groupId: string | null) => ReactNode

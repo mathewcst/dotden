@@ -12,7 +12,7 @@ afterEach(cleanup)
  * `data-item-type` (the old grouped FileRow) left the menu empty.
  */
 describe('RowContextMenu', () => {
-  it('shows the verbs when right-clicking a row carrying the @pierre/trees attributes', async () => {
+  it('shows the verbs when right-clicking a row carrying tree row attributes', async () => {
     const onVerb = vi.fn()
     render(
       <RowContextMenu onVerb={onVerb}>

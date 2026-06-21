@@ -10,7 +10,7 @@ import { ArrowDownUp, ChevronDown, Folder, Search, Settings2 } from 'lucide-reac
  * either side of the search keep it optically centered regardless of the side clusters.
  *
  * The search opens the tree's built-in search session, so `onSearch` + `searchDisabled` are handed
- * down from the shell (which owns the `@pierre/trees` model); everything else reads the store.
+ * down from the shell (which owns the Headless Tree model); everything else reads the store.
  */
 export function TitleBar({
   onSearch,

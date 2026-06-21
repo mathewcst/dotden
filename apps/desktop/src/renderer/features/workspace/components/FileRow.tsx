@@ -4,7 +4,7 @@ import type { FileTreeEntry } from '@shared/den'
 
 /**
  * The local-axis git-status letter shown on a grouped File row, color-bound to dd/*
- * tokens (ADR 0017). Mirrors `@pierre/trees`' M/A/D/R/U decorations so the grouped
+ * tokens (ADR 0017). Mirrors the tree's M/A/D/R/U decorations so the grouped
  * Workspace/Group view (issue 1-14) shows the same honest local status as the flat tree.
  */
 const STATUS_TONE: Record<NonNullable<FileTreeEntry['status']>, string> = {
@@ -30,12 +30,11 @@ const STATUS_LETTER: Record<NonNullable<FileTreeEntry['status']>, string> = {
  * FileRow — one File row inside a Workspace/Group bucket of the organization sidebar
  * (issue 1-14).
  *
- * When Files are organized into Groups, the flat `@pierre/trees` tree can no longer
- * render them grouped, so the grouped view draws its own rows. Each row still shows the
+ * When Files are organized into Groups, each row still shows the
  * File's real local-axis status letter (from the same `den:tree` snapshot) and dims when
  * the File is muted (out of OS Scope), so the grouped view is as honest as the flat one.
  * Rows carry `data-item-path` so the existing right-click {@link RowContextMenu} resolves
- * the File the same way it does over the `@pierre/trees` rows.
+ * the File the same way it does over the Headless Tree rows.
  */
 export function FileRow({
   file,
@@ -50,7 +49,7 @@ export function FileRow({
   return (
     <button
       type="button"
-      // Mirror the `@pierre/trees` row attributes so the same RowContextMenu selector
+      // Mirror the tree row attributes so the same RowContextMenu selector
       // (`[data-item-path][data-item-type="file"]`) resolves these grouped rows too — without
       // `data-item-type` the right-click menu came up empty in the organized view (issue 1-08).
       data-item-path={file.targetPath}

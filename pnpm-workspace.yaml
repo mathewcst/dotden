@@ -38,6 +38,10 @@ catalogs:
     '@base-ui/react': ^1.5.0
     '@fontsource-variable/geist': ^5.2.9
     '@fontsource-variable/geist-mono': ^5.2.8
+    # Pinned/reviewed for ADR 0032. Headless Tree is the shadcn ecosystem's tree base and
+    # replaces @pierre/trees for both Workspace and incoming File trees.
+    '@headless-tree/core': 1.7.0
+    '@headless-tree/react': 1.7.0
     '@rolldown/plugin-babel': ^0.2.3
     '@tailwindcss/vite': ^4.3.1
     '@testing-library/react': ^16.3.2
@@ -59,6 +63,9 @@ catalogs:
     electron-vite: 6.0.0-beta.1
     happy-dom: ^20.10.6
     lucide-react: ^1.20.0
+    # Pinned to the latest v3 because shadcn's generated Resizable component still targets the
+    # PanelGroup/PanelResizeHandle API; v4 renamed those exports to Group/Separator.
+    react-resizable-panels: 3.0.6
     tailwind-merge: ^3.6.0
     tailwindcss: ^4.3.1
     vite: ^8.0.16
@@ -100,6 +107,3 @@ allowBuilds:
   '@swc/core': true
   electron-winstaller: true
   sharp: true
-
-patchedDependencies:
-  '@pierre/trees@1.0.0-beta.4': patches/@pierre__trees@1.0.0-beta.4.patch

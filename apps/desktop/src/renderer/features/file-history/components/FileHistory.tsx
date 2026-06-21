@@ -1,21 +1,13 @@
 import { CommitRow } from '@/features/commit/components/CommitRow'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import { Button } from '@/ui/button'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/ui/resizable'
 import { toast } from '@/ui/toast'
 import { FILE_HISTORY_PATCH_DIFF_OPTIONS } from '@/features/file-history/lib/dotden-shiki-theme'
 import { PatchDiff } from '@pierre/diffs/react'
-import { GripHorizontal, History, Loader2, RotateCcw, ShieldCheck } from 'lucide-react'
+import { History, Loader2, RotateCcw, ShieldCheck } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FileVersion } from '@shared/history'
-
-/**
- * The fraction of the History tab's height the version LIST occupies (the rest is the
- * preview panel). Bounded so neither region can be dragged shut — a long list or a long
- * File preview never crowds the other out (the issue's independent-scroll requirement).
- */
-const MIN_LIST_FRACTION = 0.2
-const MAX_LIST_FRACTION = 0.8
-const DEFAULT_LIST_FRACTION = 0.5
 
 /**
  * FileHistory — the Diff pane in **History-tab mode** (issue 2-01), a master-detail layout
@@ -55,13 +47,10 @@ export function FileHistory({ targetPath }: { targetPath: string }) {
   const [loadingList, setLoadingList] = useState(true)
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // The list/preview split as a fraction of the tab height; dragged via the resize handle.
-  const [listFraction, setListFraction] = useState(DEFAULT_LIST_FRACTION)
   // Restore-forward (issue 2-02): whether the Default-tone confirm is open, and whether a
   // restore is in flight (so the button shows progress + can't be double-fired).
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [restoring, setRestoring] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
 
   // A monotonic token guards the preview against out-of-order responses when the user clicks
   // through versions faster than `git show` resolves (last selection wins) — the same guard
@@ -165,30 +154,10 @@ export function FileHistory({ targetPath }: { targetPath: string }) {
     [targetPath, applyVersions],
   )
 
-  // Drag the resize handle: translate the pointer's Y into a bounded list fraction so the
-  // user can re-split list vs preview. Bound so neither region can be dragged shut.
-  const onHandlePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    const container = containerRef.current
-    if (!container) return
-    const onMove = (move: PointerEvent) => {
-      const rect = container.getBoundingClientRect()
-      if (rect.height === 0) return
-      const fraction = (move.clientY - rect.top) / rect.height
-      setListFraction(Math.min(MAX_LIST_FRACTION, Math.max(MIN_LIST_FRACTION, fraction)))
-    }
-    const onUp = () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-  }, [])
-
   const selectedVersion = versions.find((v) => v.sha === selectedSha) ?? null
 
   return (
-    <div ref={containerRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {error ? (
         <div
           className="bg-dd-red-950 text-dd-red-400 m-3 rounded-md px-3 py-2 text-xs"
@@ -198,137 +167,145 @@ export function FileHistory({ targetPath }: { targetPath: string }) {
         </div>
       ) : null}
 
-      {/* VERSION LIST — scrollable column of CommitRows on the base background. */}
-      <div
-        className="min-h-0 overflow-auto"
-        style={{ flexBasis: `${listFraction * 100}%`, flexGrow: 0, flexShrink: 0 }}
+      <ResizablePanelGroup
+        direction="vertical"
+        autoSaveId="dotden-file-history-split"
+        className="min-h-0 flex-1"
       >
-        <div className="text-muted-foreground flex items-center gap-1.5 px-3 pt-3 pb-1 text-xs font-semibold tracking-wide">
-          <History className="size-3.5" /> VERSION HISTORY
-        </div>
-        {loadingList ? (
-          <p className="text-muted-foreground flex items-center gap-2 px-3 py-3 text-xs">
-            <Loader2 className="size-3.5 animate-spin" /> Reading this File’s history…
-          </p>
-        ) : versions.length === 0 ? (
-          <p className="text-muted-foreground px-3 py-3 text-xs">
-            No versions yet. Once you Commit a change to this File, every version you record shows
-            up here — and nothing is ever deleted from history.
-          </p>
-        ) : (
-          <ul className="pb-2">
-            {versions.map((version) => (
-              <li key={version.sha}>
-                <CommitRow
-                  version={version}
-                  selected={version.sha === selectedSha}
-                  onSelect={selectVersion}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+        {/* VERSION LIST — scrollable column of CommitRows on the base background. */}
+        <ResizablePanel
+          defaultSize={50}
+          minSize={20}
+          maxSize={80}
+          className="min-h-0 overflow-auto"
+        >
+          <div className="text-muted-foreground flex items-center gap-1.5 px-3 pt-3 pb-1 text-xs font-semibold tracking-wide">
+            <History className="size-3.5" /> VERSION HISTORY
+          </div>
+          {loadingList ? (
+            <p className="text-muted-foreground flex items-center gap-2 px-3 py-3 text-xs">
+              <Loader2 className="size-3.5 animate-spin" /> Reading this File’s history…
+            </p>
+          ) : versions.length === 0 ? (
+            <p className="text-muted-foreground px-3 py-3 text-xs">
+              No versions yet. Once you Commit a change to this File, every version you record shows
+              up here — and nothing is ever deleted from history.
+            </p>
+          ) : (
+            <ul className="pb-2">
+              {versions.map((version) => (
+                <li key={version.sha}>
+                  <CommitRow
+                    version={version}
+                    selected={version.sha === selectedSha}
+                    onSelect={selectVersion}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </ResizablePanel>
 
-      {/* RESIZE HANDLE — a thin divider with a centered grip pill; drag to re-split. */}
-      <div
-        role="separator"
-        aria-orientation="horizontal"
-        aria-label="Resize history list"
-        onPointerDown={onHandlePointerDown}
-        className="border-border bg-background hover:bg-secondary flex h-2.5 shrink-0 cursor-row-resize items-center justify-center border-y transition-colors"
-      >
-        <GripHorizontal className="text-muted-foreground size-3.5" aria-hidden />
-      </div>
+        {/* RESIZE HANDLE — shared with shell panes; drag to re-split list vs preview. */}
+        <ResizableHandle
+          withHandle
+          aria-label="Resize history list"
+          className="bg-background hover:bg-secondary h-2.5 border-y transition-colors"
+        />
 
-      {/* PREVIEW PANEL — a raised card surface that swaps to the selected version, read-only. */}
-      <div className="bg-card flex min-h-0 flex-1 flex-col overflow-hidden">
-        {selectedVersion ? (
-          <>
-            <div className="border-border flex items-center gap-2 border-b px-4 py-2 text-xs">
-              <span className="text-dd-amber-400 font-mono">{selectedVersion.shortSha}</span>
-              <span className="text-muted-foreground" aria-hidden>
-                ·
-              </span>
-              <span className="text-foreground truncate font-medium">
-                {selectedVersion.message}
-              </span>
-              {/* Honest, unambiguous: this preview is read-only (no resolve/edit affordances). */}
-              <span className="border-border text-muted-foreground ml-auto shrink-0 rounded border px-1.5 py-0.5">
-                read-only
-              </span>
-            </div>
-            <div className="min-h-0 flex-1 overflow-auto p-4 text-sm">
-              {loadingPreview ? (
-                <p className="text-muted-foreground flex items-center gap-2">
-                  <Loader2 className="size-4 animate-spin" /> Loading this version…
-                </p>
-              ) : preview.trim().length > 0 ? (
-                // The SAME read-only PatchDiff role used everywhere — no resolve/edit controls.
-                <PatchDiff
-                  patch={preview}
-                  options={FILE_HISTORY_PATCH_DIFF_OPTIONS}
-                  className="dotden-file-history-diff"
-                  disableWorkerPool
-                />
-              ) : (
-                <p className="text-muted-foreground">
-                  This version didn’t change this File — nothing to preview here.
-                </p>
-              )}
-            </div>
-            {/* Footer — reassurance line + the SINGLE Restore action (issue 2-02). The button
-                lives only here (never per-row), so the version it restores is unambiguous. */}
-            <div className="border-border flex items-center gap-3 border-t px-4 py-2">
-              <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
-                <ShieldCheck className="text-dd-green-400 size-3.5 shrink-0" aria-hidden />
-                Kept in history — nothing is deleted. Every version you Commit stays here.
-              </span>
-              {/* Filled ember Primary — obviously a button at rest (affordance pass). */}
-              <Button
-                variant="default"
-                size="sm"
-                className="ml-auto shrink-0"
-                disabled={restoring}
-                onClick={() => setConfirmOpen(true)}
-              >
-                {restoring ? (
-                  <Loader2 className="size-3.5 animate-spin" aria-hidden />
+        {/* PREVIEW PANEL — a raised card surface that swaps to the selected version, read-only. */}
+        <ResizablePanel
+          defaultSize={50}
+          minSize={20}
+          className="bg-card flex min-h-0 flex-col overflow-hidden"
+        >
+          {selectedVersion ? (
+            <>
+              <div className="border-border flex items-center gap-2 border-b px-4 py-2 text-xs">
+                <span className="text-dd-amber-400 font-mono">{selectedVersion.shortSha}</span>
+                <span className="text-muted-foreground" aria-hidden>
+                  ·
+                </span>
+                <span className="text-foreground truncate font-medium">
+                  {selectedVersion.message}
+                </span>
+                {/* Honest, unambiguous: this preview is read-only (no resolve/edit affordances). */}
+                <span className="border-border text-muted-foreground ml-auto shrink-0 rounded border px-1.5 py-0.5">
+                  read-only
+                </span>
+              </div>
+              <div className="min-h-0 flex-1 overflow-auto p-4 text-sm">
+                {loadingPreview ? (
+                  <p className="text-muted-foreground flex items-center gap-2">
+                    <Loader2 className="size-4 animate-spin" /> Loading this version…
+                  </p>
+                ) : preview.trim().length > 0 ? (
+                  // The SAME read-only PatchDiff role used everywhere — no resolve/edit controls.
+                  <PatchDiff
+                    patch={preview}
+                    options={FILE_HISTORY_PATCH_DIFF_OPTIONS}
+                    className="dotden-file-history-diff"
+                    disableWorkerPool
+                  />
                 ) : (
-                  <RotateCcw className="size-3.5" aria-hidden />
+                  <p className="text-muted-foreground">
+                    This version didn’t change this File — nothing to preview here.
+                  </p>
                 )}
-                Restore this version
-              </Button>
-            </div>
-            {/* Restore confirm — DEFAULT tone (non-danger), never the destructive red:
+              </div>
+              {/* Footer — reassurance line + the SINGLE Restore action (issue 2-02). The button
+                lives only here (never per-row), so the version it restores is unambiguous. */}
+              <div className="border-border flex items-center gap-3 border-t px-4 py-2">
+                <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
+                  <ShieldCheck className="text-dd-green-400 size-3.5 shrink-0" aria-hidden />
+                  Kept in history — nothing is deleted. Every version you Commit stays here.
+                </span>
+                {/* Filled ember Primary — obviously a button at rest (affordance pass). */}
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="ml-auto shrink-0"
+                  disabled={restoring}
+                  onClick={() => setConfirmOpen(true)}
+                >
+                  {restoring ? (
+                    <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                  ) : (
+                    <RotateCcw className="size-3.5" aria-hidden />
+                  )}
+                  Restore this version
+                </Button>
+              </div>
+              {/* Restore confirm — DEFAULT tone (non-danger), never the destructive red:
                 restore-forward saves a NEW commit and keeps the current version in history. */}
-            <ConfirmDialog
-              open={confirmOpen}
-              onOpenChange={setConfirmOpen}
-              tone="default"
-              badge={<RotateCcw className="size-5" />}
-              title="Restore this version?"
-              body={
-                <>
-                  Saved as a new commit; your current version stays in history. This rolls{' '}
-                  <span className="text-foreground font-mono">{selectedVersion.shortSha}</span>{' '}
-                  forward as the latest version of this File — nothing is deleted, and you can
-                  restore any other version the same way.
-                </>
-              }
-              confirmLabel="Restore"
-              confirmDisabled={restoring}
-              onConfirm={() => void confirmRestore(selectedVersion.sha)}
-            />
-          </>
-        ) : (
-          <p className="text-muted-foreground p-4 text-sm">
-            {loadingList
-              ? ''
-              : 'Select a version above to preview it. Nothing is deleted — every version is kept in history.'}
-          </p>
-        )}
-      </div>
+              <ConfirmDialog
+                open={confirmOpen}
+                onOpenChange={setConfirmOpen}
+                tone="default"
+                badge={<RotateCcw className="size-5" />}
+                title="Restore this version?"
+                body={
+                  <>
+                    Saved as a new commit; your current version stays in history. This rolls{' '}
+                    <span className="text-foreground font-mono">{selectedVersion.shortSha}</span>{' '}
+                    forward as the latest version of this File — nothing is deleted, and you can
+                    restore any other version the same way.
+                  </>
+                }
+                confirmLabel="Restore"
+                confirmDisabled={restoring}
+                onConfirm={() => void confirmRestore(selectedVersion.sha)}
+              />
+            </>
+          ) : (
+            <p className="text-muted-foreground p-4 text-sm">
+              {loadingList
+                ? ''
+                : 'Select a version above to preview it. Nothing is deleted — every version is kept in history.'}
+            </p>
+          )}
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   )
 }

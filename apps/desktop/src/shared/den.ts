@@ -184,8 +184,8 @@ export interface AppearanceState {
 /**
  * The Remote-axis marker for an incoming File — the SECOND status axis (issue 1-09).
  *
- * This is the ↓/⚠ glyph the tree's `renderRowDecoration` overlay lane paints beside
- * the local git-status letter (the 1-00 spike geometry): `incoming` (↓) is a clean
+ * This is the ↓/⚠ glyph the tree paints beside the local git-status letter:
+ * `incoming` (↓) is a clean
  * incoming change this slice can Apply; `conflict` (⚠) is a File changed both here and
  * on the Remote, which the incoming-clean path never applies — it is handed to the
  * ConflictModel owner (issue 1-11). The marker type carries `conflict` now so the
@@ -473,7 +473,7 @@ export interface ConflictReview {
  * its path, Workspace placement, local-axis git status, and whether it is muted.
  */
 export interface FileTreeEntry {
-  /** Destination-relative File path (e.g. `.zshrc`) — the `@pierre/trees` row id. */
+  /** Destination-relative File path (e.g. `.zshrc`) — the stable File row id. */
   readonly targetPath: string
   /** The Workspace this File belongs to, from the synced `.dotden/` placements. */
   readonly workspaceId: string
@@ -485,8 +485,8 @@ export interface FileTreeEntry {
   readonly groupId: string | null
   /**
    * The File's local-axis git status (M/A/D/R/U → modified/added/deleted/…), or `null`
-   * when chezmoi reports no change for it. The renderer maps these onto `setGitStatus`
-   * so each row shows the coloured status letter (the 1-00 spike recipe).
+   * when chezmoi reports no change for it. The renderer maps these onto the coloured
+   * status letter shown beside each File row.
    */
   readonly status: FileGitStatus['status'] | null
   /**
@@ -570,7 +570,7 @@ export type AutoApplyHoldReason =
   | 'needs-confirmation'
   | 'clean'
 
-/** One File's local status, the row shape `@pierre/trees` `setGitStatus` consumes. */
+/** One File's local status, parsed from chezmoi and rendered as M/A/D/R/U in the tree. */
 export interface FileGitStatus {
   /** Destination-relative File path (e.g. `.zshrc`), matching the tree's path id. */
   readonly path: string
@@ -579,10 +579,8 @@ export interface FileGitStatus {
 }
 
 /**
- * The `@pierre/trees` git-status union, redeclared locally so this main-process
- * module pulls in **no** renderer/`@pierre` dependency (ADR 0023 keeps the
- * foundation Electron- and UI-free). It is structurally identical to
- * `@pierre/trees`' `GitStatus`, so the renderer assigns it without a cast.
+ * The local-axis git-status vocabulary used by the renderer and main process without pulling
+ * UI dependencies into foundation code (ADR 0023 keeps the foundation Electron- and UI-free).
  */
 export type FileGitStatusCode =
   | 'added'

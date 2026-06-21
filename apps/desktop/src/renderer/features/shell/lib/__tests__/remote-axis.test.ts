@@ -2,7 +2,7 @@
  * Remote-axis decoration mapping — the SECOND status axis glyph (issue 1-09).
  *
  * The tree paints an independent Remote axis (↓ incoming / ⚠ conflict) beside the local
- * git-status letter via `renderRowDecoration` (geometry per the 1-00 spike). The mapping
+ * git-status letter. The mapping
  * from a File's Remote-axis marker to that overlay glyph is pure, so it is tested here
  * directly — no React, no DOM (this file runs in vitest's default node environment, like
  * the foundation tests).

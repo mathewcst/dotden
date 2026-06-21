@@ -35,7 +35,11 @@ export function DialogLayer() {
           onOpenChange={(next) => {
             if (!next) setConfirm(null)
           }}
-          tone={confirm.verb === 'untrack' ? 'default' : 'destructive'}
+          tone={
+            confirm.verb === 'untrack' || confirm.verb === 'move-workspace'
+              ? 'default'
+              : 'destructive'
+          }
           confirmLabel={
             confirm.verb === 'untrack'
               ? 'Untrack'
@@ -43,7 +47,9 @@ export function DialogLayer() {
                 ? 'Delete file'
                 : confirm.verb === 'discard'
                   ? 'Discard changes'
-                  : 'Delete everywhere'
+                  : confirm.verb === 'move-workspace'
+                    ? 'Move File'
+                    : 'Delete everywhere'
           }
           confirmDisabled={busy !== null}
           onConfirm={runConfirmedVerb}
@@ -54,7 +60,9 @@ export function DialogLayer() {
                 ? `Apply incoming deletion of ${confirm.path}?`
                 : confirm.verb === 'discard'
                   ? `Discard local changes to ${confirm.path}?`
-                  : `Delete ${confirm.path} everywhere?`
+                  : confirm.verb === 'move-workspace'
+                    ? `Move ${confirm.path} to another Workspace?`
+                    : `Delete ${confirm.path} everywhere?`
           }
           body={
             confirm.verb === 'untrack' ? (
@@ -75,6 +83,12 @@ export function DialogLayer() {
                 dotden will restore <span className="font-mono">{confirm.path}</span> from the Den
                 and <strong>throw away this environment&rsquo;s uncommitted local edit</strong>.
                 <span className="mt-2 block">Commit first if you want to keep these changes.</span>
+              </>
+            ) : confirm.verb === 'move-workspace' ? (
+              <>
+                Moving a File to another Workspace changes which environments can apply it. The
+                File&rsquo;s path stays the same, and dotden will reset it to the destination
+                Workspace root.
               </>
             ) : (
               <>

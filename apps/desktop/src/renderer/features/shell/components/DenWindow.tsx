@@ -9,13 +9,22 @@ import { TitleBar } from '@/features/shell/components/TitleBar'
 import { useDenSession } from '@/features/shell/components/DenSessionProvider'
 import { IncomingBanner } from '@/features/sync/components/IncomingBanner'
 import { OfflineBanner } from '@/features/sync/components/OfflineBanner'
-import { remoteAxisDecoration } from '@/features/shell/lib/remote-axis'
 import { syncStatus } from '@/features/shell/lib/sync-status'
 import { WindowTitleBar } from '@/shared/components/WindowControls'
-import { useReactiveFileTree } from '@/features/shell/lib/use-reactive-file-tree'
-import type { FileTreeRowDecorationRenderer, GitStatusEntry } from '@pierre/trees'
-import { lazy, Suspense, useCallback, useEffect, useMemo } from 'react'
-import type { FileTreeEntry } from '@shared/den'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/ui/resizable'
+import {
+  buildIncomingTreeModel,
+  buildWorkspaceTreeModel,
+  type DotdenTreeNode,
+} from '@/features/workspace/lib/tree-node-model'
+import {
+  hotkeysCoreFeature,
+  searchFeature,
+  selectionFeature,
+  syncDataLoaderFeature,
+} from '@headless-tree/core'
+import { useTree } from '@headless-tree/react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 
 const ConflictResolver = lazy(() =>
   import('@/features/apply/components/ConflictResolver').then((module) => ({
@@ -38,23 +47,9 @@ function FullWindowLoading({ label }: { label: string }) {
 }
 
 /**
- * Map dotden's local-axis status (the `chezmoi status` letters parsed in the main process) onto
- * `@pierre/trees`' `GitStatus` union, which drives the row's coloured M/A/D/R/U letter via
- * `setGitStatus` (the 1-00 spike recipe). A muted (out-of-OS-Scope) File renders as `ignored` so
- * `@pierre/trees` auto-dims the whole row.
- */
-function toGitStatus(file: FileTreeEntry): GitStatusEntry | null {
-  // Out-of-OS-Scope wins: an ignored row is dimmed regardless of any pending change, because it is
-  // not applied on this environment at all (issue 1-07 muted rendering).
-  if (file.muted) return { path: file.targetPath, status: 'ignored' }
-  if (file.status === null) return null
-  return { path: file.targetPath, status: file.status }
-}
-
-/**
  * DenWindow — the den window's composition root (ADR 0027, Phase 2; renamed from `Workspace.tsx`,
  * which lied: it is the den window, not a domain Workspace — ADR 0005). A thin three-pane frame
- * that owns the shared `@pierre/trees` model (shared by the title-bar search + the left tree), the
+ * that owns the shared Headless Tree model (shared by the title-bar search + the left tree), the
  * external-system effects (boot load, connectivity, the tray poller, the live git-status axis), the
  * two full-window review surfaces, and the dialog layer — and renders the feature panes. All the
  * flow logic now lives in the scoped den-session store; this just wires the store to the layout.
@@ -75,6 +70,7 @@ export function DenWindow({
   const role = useDenSession((s) => s.role)
   const files = useDenSession((s) => s.files)
   const incoming = useDenSession((s) => s.incoming)
+  const workspaces = useDenSession((s) => s.workspaces)
   const remoteAxis = useDenSession((s) => s.remoteAxis)
   const incomingFrom = useDenSession((s) => s.incomingFrom)
   const pushQueued = useDenSession((s) => s.pushQueued)
@@ -87,7 +83,6 @@ export function DenWindow({
   const diagnosticsConsoleEnabled = useDenSession((s) => s.diagnosticsConsoleEnabled)
   const error = useDenSession((s) => s.error)
 
-  const selectFile = useDenSession((s) => s.selectFile)
   const init = useDenSession((s) => s.init)
   const reloadTree = useDenSession((s) => s.reloadTree)
   const refreshIncoming = useDenSession((s) => s.refreshIncoming)
@@ -106,45 +101,84 @@ export function DenWindow({
     [role, files, incoming],
   )
 
-  // The local-axis git status for every File row (env A only; B rows are incoming-clean).
-  const gitStatus = useMemo<GitStatusEntry[]>(
-    () => (role === 'a' ? files.flatMap((f) => toGitStatus(f) ?? []) : []),
-    [role, files],
+  const treeModel = useMemo(
+    () =>
+      role === 'a'
+        ? buildWorkspaceTreeModel({ workspaces, files, remoteAxis })
+        : buildIncomingTreeModel(incoming),
+    [files, incoming, remoteAxis, role, workspaces],
+  )
+  const selectedTreeNodeId = useMemo(
+    () =>
+      selected
+        ? [...treeModel.nodes.values()].find(
+            (node) => node.kind === 'file' && node.targetPath === selected,
+          )?.id
+        : undefined,
+    [selected, treeModel],
   )
 
-  // Remote-axis decoration lane (the 1-00 spike's `renderRowDecoration`, issue 1-09): the overlay
-  // ↓ incoming / ⚠ conflict glyph painted LEFT of the local status letter, per File.
-  const renderRowDecoration = useCallback<FileTreeRowDecorationRenderer>(
-    ({ item }) => remoteAxisDecoration(remoteAxis.get(item.path)),
-    [remoteAxis],
+  // Containers (Workspaces, Groups, Folders) are expanded by default. We remember only what the
+  // user has explicitly COLLAPSED, never what is expanded — so a freshly loaded Workspace or a
+  // newly created Group opens on first appearance, while a folder the user closed stays closed
+  // across the next background model rebuild (the live git-status refresh).
+  const [collapsedItems, setCollapsedItems] = useState<ReadonlySet<string>>(() => new Set())
+
+  // `expandedItems` is a CONTROLLED Headless Tree substate: every container minus the user's
+  // collapses. Recomputing it on each `treeModel` change hands Headless Tree a fresh array, which
+  // is exactly what makes it re-walk the data loader in the SAME render — so files added/removed by
+  // a Commit, drag, or boot load show immediately instead of one render behind (the old
+  // `tree.setState` effect could not do this: core discards that updater).
+  const expandedItems = useMemo(
+    () => treeModel.expandedIds.filter((id) => !collapsedItems.has(id)),
+    [treeModel, collapsedItems],
   )
 
-  const handleSelectionChange = useCallback(
-    (selectedPaths: readonly string[]) => void selectFile(selectedPaths[0] ?? null),
-    [selectFile],
+  const handleSetExpanded = useCallback(
+    (next: string[] | ((prev: string[]) => string[])) => {
+      const nextList = typeof next === 'function' ? next(expandedItems) : next
+      const nextExpanded = new Set(nextList)
+      // Headless Tree gives us the full expanded set after a user expand/collapse; invert it into
+      // the collapsed set so the "open by default" rule above keeps holding.
+      const collapsed = new Set<string>()
+      for (const id of treeModel.expandedIds) if (!nextExpanded.has(id)) collapsed.add(id)
+      setCollapsedItems(collapsed)
+    },
+    [expandedItems, treeModel],
   )
 
-  const initialSelectedPaths = useMemo(() => (selected ? [selected] : []), [selected])
-  const fileTreeOptions = useMemo(
-    () => ({
-      paths,
-      initialExpansion: 'open' as const,
-      initialSelectedPaths,
-      gitStatus,
-      renderRowDecoration,
-      // Drive selection straight off the model so the center/inspector follow the tree.
-      onSelectionChange: handleSelectionChange,
-    }),
-    [paths, initialSelectedPaths, gitStatus, renderRowDecoration, handleSelectionChange],
-  )
-
-  // Build the tree model with search, the git-status axis, and the Remote decoration lane.
-  // Inline file rename / drag are intentionally not advertised until they have a persistent
-  // chezmoi-backed file move primitive. `useReactiveFileTree` keeps the model's File set AND
-  // git-status axis live as the store fills in — `useFileTree` itself seeds both only at
-  // construction, when the den-session store is still empty (so the tree would otherwise stay blank
-  // after the async boot load: the "no Files after onboarding" bug).
-  const { model } = useReactiveFileTree(fileTreeOptions)
+  // Build the Headless Tree model. The data source is a pure node model derived from the scoped
+  // den-session store; `expandedItems` is controlled (above) so model changes re-render the tree
+  // from new data. Selection stays uncontrolled (the row highlight is driven by the store's
+  // `selected` via DotdenTree's `selectedPath`); we only seed the initial keyboard selection.
+  const tree = useTree<DotdenTreeNode>({
+    rootItemId: treeModel.rootId,
+    state: { expandedItems },
+    setExpandedItems: handleSetExpanded,
+    initialState: {
+      selectedItems: selectedTreeNodeId ? [selectedTreeNodeId] : [],
+    },
+    dataLoader: {
+      getItem: (itemId) => {
+        const node = treeModel.nodes.get(itemId)
+        if (!node) throw new Error(`Missing tree node: ${itemId}`)
+        return node
+      },
+      getChildren: (itemId) => [...(treeModel.childrenById.get(itemId) ?? [])],
+    },
+    getItemName: (item) => item.getItemData().name,
+    isItemFolder: (item) => item.getItemData().kind !== 'file',
+    isSearchMatchingItem: (search, item) => {
+      const query = search.toLowerCase()
+      const node = item.getItemData()
+      return (
+        node.name.toLowerCase().includes(query) ||
+        node.targetPath?.toLowerCase().includes(query) === true
+      )
+    },
+    indent: 14,
+    features: [syncDataLoaderFeature, selectionFeature, hotkeysCoreFeature, searchFeature],
+  })
 
   // The title-bar advertises the native search chord; bind it at the shell layer that owns the
   // shared tree model so keyboard and mouse open the exact same search session.
@@ -153,11 +187,11 @@ export function DenWindow({
       if (event.key.toLowerCase() !== 'k' || (!event.metaKey && !event.ctrlKey)) return
       if (role !== 'a' || paths.length === 0) return
       event.preventDefault()
-      model.openSearch()
+      tree.openSearch()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [model, paths.length, role])
+  }, [tree, paths.length, role])
 
   // env A boot load (issue 1-04). `init` self-guards on role and is a stable store action, so this
   // runs once per mount; the provider's `key={role}` remount re-runs it for the other environment.
@@ -299,28 +333,52 @@ export function DenWindow({
   }
 
   return (
-    <div
-      className={
-        diagnosticsPanelOpen
-          ? 'bg-background text-foreground grid h-screen grid-rows-[auto_auto_minmax(0,1fr)_minmax(160px,30vh)_auto]'
-          : 'bg-background text-foreground grid h-screen grid-rows-[auto_auto_minmax(0,1fr)_auto]'
-      }
-    >
+    <div className="bg-background text-foreground grid h-screen grid-rows-[auto_auto_minmax(0,1fr)_auto]">
       <TitleBar
-        onSearch={() => model.openSearch()}
+        onSearch={() => tree.openSearch()}
         searchDisabled={role !== 'a' || paths.length === 0}
         onOpenSettings={onOpenSettings}
       />
 
       {banner}
 
-      <div className="grid min-h-0 grid-cols-[284px_1fr_320px] overflow-hidden">
-        <LeftPane model={model} />
-        <CenterPane />
-        <RightInspector />
-      </div>
+      <ResizablePanelGroup
+        direction="vertical"
+        autoSaveId="dotden-shell-vertical"
+        className="min-h-0 overflow-hidden"
+      >
+        <ResizablePanel id="shell-main" order={1} defaultSize={75} minSize={45}>
+          <ResizablePanelGroup direction="horizontal" autoSaveId="dotden-shell-horizontal">
+            <ResizablePanel id="shell-left" order={1} defaultSize={22} minSize={16} maxSize={35}>
+              <LeftPane tree={tree} />
+            </ResizablePanel>
+            <ResizableHandle withHandle />
+            <ResizablePanel id="shell-center" order={2} defaultSize={53} minSize={30}>
+              <CenterPane />
+            </ResizablePanel>
+            <ResizableHandle withHandle />
+            <ResizablePanel id="shell-right" order={3} defaultSize={25} minSize={18} maxSize={40}>
+              <RightInspector />
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        </ResizablePanel>
 
-      {diagnosticsPanelOpen ? <BottomPanel /> : null}
+        {diagnosticsPanelOpen ? (
+          <>
+            <ResizableHandle withHandle />
+            <ResizablePanel
+              id="shell-diagnostics"
+              order={2}
+              defaultSize={25}
+              minSize={15}
+              maxSize={45}
+            >
+              <BottomPanel />
+            </ResizablePanel>
+          </>
+        ) : null}
+      </ResizablePanelGroup>
+
       <StatusBar />
       <DialogLayer />
     </div>

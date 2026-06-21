@@ -103,6 +103,7 @@ export function installDotdenTestApi(overrides: DeepPartial<DotdenApi> = {}): Do
       createGroup: unimplemented,
       renameWorkspace: unimplemented,
       renameGroup: unimplemented,
+      setGroupParent: unimplemented,
       deleteWorkspace: unimplemented,
       deleteGroup: unimplemented,
       moveFileToGroup: unimplemented,

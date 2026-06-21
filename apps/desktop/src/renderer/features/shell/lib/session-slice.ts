@@ -22,6 +22,7 @@ import type { Workspace as WorkspaceModel } from '@shared/workspace'
 import type { Scope } from '@shared/scope'
 import type { AutomationLevel } from '@shared/apply'
 import type { RowVerb } from '../../workspace/components/RowContextMenu'
+import type { DotdenTreeNode } from '../../workspace/lib/tree-node-model'
 import type { DenSessionGet, DenSessionSet } from './den-session-store'
 import { operationError, type OperationError } from './operation-error'
 import { toast } from '../../../ui/toast-store'
@@ -54,9 +55,10 @@ export type Busy =
  * Apply removes the real file (invariant #4, ADR 0008).
  */
 export interface PendingConfirm {
-  readonly verb: 'untrack' | 'delete-everywhere' | 'apply-deletion' | 'discard'
+  readonly verb: 'untrack' | 'delete-everywhere' | 'apply-deletion' | 'discard' | 'move-workspace'
   readonly path: string
   readonly affected: readonly AffectedEnvironment[]
+  readonly workspaceId?: string
 }
 
 /** The `session` slice's state + actions (combined into {@link DenSession}). */
@@ -134,6 +136,8 @@ export interface SessionSlice {
   moveSelectedToGroup(groupId: string | null): void
   /** Move the selected File into a Workspace. Changes access and resets its Group. */
   moveSelectedToWorkspace(workspaceId: string): void
+  /** Apply an organize-only tree drop. Rejects folders/files and Workspace-crossing drags. */
+  organizeTreeDrop(dragged: DotdenTreeNode, target: DotdenTreeNode): void
   /** Scope the selected File to specific OSes (issue 1-15); the main process clamps + recompiles. */
   scopeSelectedFile(scope: Scope): void
   /** Scope the selected Group to specific OSes; Files and child Groups inherit it. */
@@ -338,10 +342,32 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
       const selected = get().selected
       const selectedFile = get().files.find((file) => file.targetPath === selected)
       if (!selected || selectedFile?.workspaceId === workspaceId) return
-      void get().run('organize', async () => {
-        await api.den.setFileWorkspace(selected, workspaceId)
-        await get().reloadTree()
-      })
+      set({ confirm: { verb: 'move-workspace', path: selected, affected: [], workspaceId } })
+    },
+
+    organizeTreeDrop: (dragged, target) => {
+      // Folders and Files are never drop targets: Folders are derived from target paths and Files
+      // are leaves. Workspaces are drag-sealed, so a Group/File can only land within its own
+      // Workspace; cross-Workspace File moves stay an explicit, confirmed menu/inspector action.
+      if (target.kind !== 'group') return
+      if (dragged.workspaceId === undefined || target.workspaceId === undefined) return
+      if (dragged.workspaceId !== target.workspaceId) return
+
+      if (dragged.kind === 'file' && dragged.targetPath) {
+        void get().run('organize', async () => {
+          await api.den.moveFileToGroup(dragged.targetPath!, target.groupId ?? null)
+          await get().reloadTree()
+        })
+        return
+      }
+
+      if (dragged.kind === 'group' && dragged.groupId && target.groupId) {
+        if (dragged.groupId === target.groupId) return
+        void get().run('organize', async () => {
+          await api.den.setGroupParent(dragged.workspaceId!, dragged.groupId!, target.groupId!)
+          await get().reloadTree()
+        })
+      }
     },
 
     scopeSelectedFile: (scope) => {
@@ -420,6 +446,15 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
         void get().run('discard', async () => {
           await api.den.discardLocalChange(path)
           toast.success('Discarded local changes.')
+          await get().reloadTree()
+          if (get().selected === path) await get().selectFile(path)
+        })
+        return
+      }
+      if (verb === 'move-workspace') {
+        void get().run('organize', async () => {
+          if (!confirm.workspaceId) return
+          await api.den.setFileWorkspace(path, confirm.workspaceId)
           await get().reloadTree()
           if (get().selected === path) await get().selectFile(path)
         })

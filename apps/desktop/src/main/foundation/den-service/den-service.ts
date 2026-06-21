@@ -2189,6 +2189,23 @@ export class DenService {
     }
   }
 
+  async setGroupParent(
+    workspaceId: string,
+    groupId: string,
+    parentId: string | null,
+    traceId: string,
+  ): Promise<void> {
+    const span = this.tracer?.startOperation('organize', traceId)
+    try {
+      await this.store.setGroupParent(workspaceId, groupId, parentId)
+      await this.commitMetadata(`Move Group ${groupId}`)
+      span?.end('ok')
+    } catch (error) {
+      span?.end('error')
+      throw error
+    }
+  }
+
   async deleteWorkspace(workspaceId: string, traceId: string): Promise<void> {
     const span = this.tracer?.startOperation('organize', traceId)
     try {

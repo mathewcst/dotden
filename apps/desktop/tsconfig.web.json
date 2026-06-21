@@ -2,13 +2,22 @@
   "extends": "@dotden/typescript-config/vite-app.json",
   "compilerOptions": {
     "paths": {
-      "@/*": ["./src/renderer/*"],
-      "@shared/*": ["./src/shared/*"]
+      "@/*": [
+        "./src/renderer/*"
+      ],
+      "@shared/*": [
+        "./src/shared/*"
+      ]
     },
     // Renderer ambient types only. The `src/shared` IPC contract is now fully
     // self-contained and node-free (ADR 0031): the renderer no longer transitively
     // loads `main/**` foundation source, so `@types/node` is no longer needed here.
-    "types": ["vite/client"]
+    "types": [
+      "vite/client"
+    ]
   },
-  "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx"]
+  "include": [
+    "src/renderer/**/*.ts",
+    "src/renderer/**/*.tsx"
+  ]
 }

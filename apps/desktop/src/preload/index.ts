@@ -24,10 +24,7 @@ function trace(): TraceEnvelope {
  * Electron preserves the message but the renderer still needs this id to open trace-filtered
  * Diagnostics after a failed Operation.
  */
-function invokeWithTrace<T>(
-  channel: string,
-  payload: Record<string, unknown> = {},
-): Promise<T> {
+function invokeWithTrace<T>(channel: string, payload: Record<string, unknown> = {}): Promise<T> {
   const _trace = trace()
   return ipcRenderer
     .invoke(channel, {
@@ -410,6 +407,14 @@ const api: DotdenApi = {
         groupId,
         label,
       }) as ReturnType<DotdenApi['den']['renameGroup']>
+    },
+    // → IPC channel 'den:set-group-parent' (organize-only: reparent within one Workspace)
+    setGroupParent(workspaceId, groupId, parentId) {
+      return invokeWithTrace('den:set-group-parent', {
+        workspaceId,
+        groupId,
+        parentId,
+      }) as ReturnType<DotdenApi['den']['setGroupParent']>
     },
     // → IPC channel 'den:delete-workspace' (empty Workspace only)
     deleteWorkspace(workspaceId) {

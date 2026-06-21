@@ -258,6 +258,58 @@ export class DenStore {
   }
 
   /**
+   * Reparent a Group within its Workspace. Group moves are pure organization: they never
+   * rewrite File placements, target paths, access boundaries, or Scope declarations.
+   */
+  async setGroupParent(
+    workspaceId: string,
+    groupId: string,
+    parentId: string | null,
+  ): Promise<void> {
+    const doc = await this.readWorkspaces()
+    const workspace = doc.workspaces.find((w) => w.id === workspaceId)
+    const group = workspace?.groups.find((candidate) => candidate.id === groupId)
+    if (!workspace || !group) {
+      throw new Error(
+        `Cannot move Group "${groupId}": it is not a Group of Workspace "${workspaceId}".`,
+      )
+    }
+    if (parentId === groupId) {
+      throw new Error(`Cannot move Group "${group.label}" under itself.`)
+    }
+    if (parentId !== null && !workspace.groups.some((candidate) => candidate.id === parentId)) {
+      throw new Error(
+        `Cannot move Group "${group.label}" under Group "${parentId}": it is not in the same Workspace.`,
+      )
+    }
+
+    const isDescendant = (candidateParentId: string | null): boolean => {
+      if (candidateParentId === null) return false
+      if (candidateParentId === groupId) return true
+      return isDescendant(
+        workspace.groups.find((candidate) => candidate.id === candidateParentId)?.parentId ?? null,
+      )
+    }
+    if (isDescendant(parentId)) {
+      throw new Error(`Cannot move Group "${group.label}" under one of its child Groups.`)
+    }
+
+    await this.writeWorkspaces({
+      ...doc,
+      workspaces: doc.workspaces.map((candidateWorkspace) =>
+        candidateWorkspace.id === workspaceId
+          ? {
+              ...candidateWorkspace,
+              groups: candidateWorkspace.groups.map((candidate) =>
+                candidate.id === groupId ? { ...candidate, parentId } : candidate,
+              ),
+            }
+          : candidateWorkspace,
+      ),
+    })
+  }
+
+  /**
    * Delete an empty Workspace only. Non-empty Workspaces are refused so no File is silently
    * re-homed across access boundaries.
    */
@@ -311,7 +363,10 @@ export class DenStore {
       ...doc,
       workspaces: doc.workspaces.map((workspace) =>
         workspace.id === workspaceId
-          ? { ...workspace, groups: workspace.groups.filter((candidate) => candidate.id !== groupId) }
+          ? {
+              ...workspace,
+              groups: workspace.groups.filter((candidate) => candidate.id !== groupId),
+            }
           : workspace,
       ),
     })

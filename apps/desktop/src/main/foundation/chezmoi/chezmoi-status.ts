@@ -3,9 +3,8 @@
  *
  * This is the pure, Electron-free (ADR 0023) translator that turns the bundled
  * `chezmoi status` output into the **local axis** the three-pane File tree renders
- * (issue 1-07, the 1-00 spike recipe). The renderer drives `@pierre/trees`'
- * `setGitStatus` with the {@link FileGitStatus} list this produces, so each File row
- * shows a coloured M/A/D/R/U letter automatically (the spike proved beta.4 draws it).
+ * (issue 1-07). The renderer shows the {@link FileGitStatus} list this produces as a
+ * coloured M/A/D/R/U letter beside each File row.
  *
  * ## chezmoi status format (the faithful mapping, ADR 0003)
  *
@@ -34,7 +33,7 @@
  *
  * Per-column codes are single characters: `A` added, `D` deleted, `M` modified, or a
  * space (no change in that column). The mapping of the **X** column onto the
- * `@pierre/trees` `GitStatus` union (issue 1-00) is `M → modified`, `A → added`,
+ * dotden File status vocabulary is `M → modified`, `A → added`,
  * `D → deleted`. `untracked`/`renamed`/`ignored` are NOT emitted here: chezmoi only
  * reports *managed* Files, renames surface as add+delete, and `ignored` (the muted,
  * out-of-OS-Scope rendering, issue 1-15) is layered on by the caller from

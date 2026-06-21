@@ -49,12 +49,11 @@ const VERBS: readonly VerbEntry[] = [
 /**
  * RowContextMenu — the right-click row action menu over the Workspace tree (issue 1-08).
  *
- * Wraps the `@pierre/trees` tree in a `@base-ui/react` ContextMenu so right-clicking a
- * row offers Commit, Apply, **Untrack**, and **Delete everywhere** — the user acts on a
- * File directly from the tree. Because the tree is a web component, the right-clicked
- * File is recovered from the DOM: every tree row carries `data-item-path="<targetPath>"`
- * plus `data-item-type="file" | "folder"` (the `@pierre/trees` row attributes), so the trigger's
- * `contextmenu` handler walks up from the event target to a real File row and remembers its path.
+ * Wraps the tree in a `@base-ui/react` ContextMenu so right-clicking a row offers Commit,
+ * Apply, **Untrack**, and **Delete everywhere** — the user acts on a File directly from the
+ * tree. The right-clicked File is recovered from DOM attributes: every dotden tree row carries
+ * `data-item-path="<targetPath>"` plus `data-item-type`, so the trigger's `contextmenu` handler
+ * walks up from the event target to a real File row and remembers its path.
  *
  * Delete everywhere is rendered visibly distinct from Untrack — separated and in red —
  * so the destructive intent is unmistakably separate from the safe Untrack beside it.

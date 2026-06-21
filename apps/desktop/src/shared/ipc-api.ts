@@ -58,12 +58,7 @@ import type { AutomationLevel } from './apply.js'
 import type { DiagnosticsSettings, SyncSettings } from './settings.js'
 import type { PrivacySettings } from './settings.js'
 import type { AppearanceOverride, AppearanceSettings } from './appearance-settings.js'
-import type {
-  AppInfo,
-  DownloadedUpdate,
-  UpdateCheckResult,
-  UpdateSettings,
-} from './app-info.js'
+import type { AppInfo, DownloadedUpdate, UpdateCheckResult, UpdateSettings } from './app-info.js'
 import type {
   CopyDiagnosticsResult,
   RedactedCommandRecord,
@@ -443,7 +438,7 @@ export interface DotdenApi {
      * on disk on every environment**. Maps to chezmoi `forget` + drop the synced
      * placement, committed LOCALLY (ADR 0006). Non-destructive: the renderer confirms
      * with the Default-tone dialog whose copy states the File stays on disk.
-    */
+     */
     untrack(targetPath: string): Promise<void>
     /**
      * **Discard local changes** for one File from the everyday view. This is the explicit
@@ -485,6 +480,8 @@ export interface DotdenApi {
     renameWorkspace(workspaceId: string, label: string): Promise<void>
     /** Rename a Group label without changing its id, parent, Scope, or filed Files. */
     renameGroup(workspaceId: string, groupId: string, label: string): Promise<void>
+    /** Reparent a Group inside the same Workspace. Organization-only; Files keep paths/access. */
+    setGroupParent(workspaceId: string, groupId: string, parentId: string | null): Promise<void>
     /**
      * Delete an empty Workspace. Non-empty Workspaces are refused so Files are never
      * silently re-homed across access boundaries.

@@ -1,11 +1,10 @@
 import type { RemoteAxisMarker } from '@shared/den'
 
 /**
- * The `@pierre/trees` `renderRowDecoration` return shape for one row's Remote axis.
+ * The display data for one row's Remote axis decoration.
  *
- * `renderRowDecoration` paints a non-interactive overlay lane that the 1-00 spike
- * proved lands directly LEFT of the local git-status letter (`↓ M`, `⚠ U`) with a gap
- * and no clipping. Returning `null` means "no Remote-axis glyph for this row".
+ * The tree paints this non-interactive marker beside the local git-status letter
+ * (`↓ M`, `⚠ U`). Returning `null` means "no Remote-axis glyph for this row".
  */
 export interface RemoteAxisDecoration {
   /** The glyph painted in the overlay lane: `↓` incoming or `⚠` conflict. */
@@ -16,10 +15,9 @@ export interface RemoteAxisDecoration {
 
 /**
  * Map a File's **Remote-axis marker** (the SECOND status axis) to the glyph the tree's
- * `renderRowDecoration` overlay paints beside the local git-status letter (issue 1-09,
- * geometry per the 1-00 spike).
+ * row paints beside the local git-status letter (issue 1-09).
  *
- * The local axis (M/A/D/R/U) is owned by `setGitStatus`; this is the independent Remote
+ * The local axis (M/A/D/R/U) is independent from this Remote
  * axis — what the Remote has for the File that this environment has not applied yet:
  * - `incoming` → `↓` (a clean incoming change, blue in the spec);
  * - `conflict` → `⚠` (changed both here and on the Remote — handed to the ConflictModel

@@ -51,6 +51,7 @@ function makeApi(over: Record<string, unknown> = {}): DotdenApi {
       createGroup: vi.fn(async () => ({ id: 'g1', label: 'Shell', parentId: null, scope: null })),
       renameWorkspace: vi.fn(async () => undefined),
       renameGroup: vi.fn(async () => undefined),
+      setGroupParent: vi.fn(async () => undefined),
       deleteWorkspace: vi.fn(async () => undefined),
       deleteGroup: vi.fn(async () => undefined),
       moveFileToGroup: vi.fn(async () => undefined),
@@ -398,7 +399,8 @@ describe('session slice — init() (env A boot load)', () => {
         subscriptionState: vi.fn(async () => ({
           workspaces: [],
           registered: false,
-          emptyDenWarning: "This environment isn't registered yet. Finish setup to choose Workspaces.",
+          emptyDenWarning:
+            "This environment isn't registered yet. Finish setup to choose Workspaces.",
         })),
       },
     })
@@ -432,7 +434,7 @@ describe('session slice — init() (env A boot load)', () => {
 })
 
 describe('session slice — inspector organize/scope actions', () => {
-  it('moves the selected File to another Workspace through setFileWorkspace', async () => {
+  it('opens a confirm before moving the selected File to another Workspace', async () => {
     const api = makeApi()
     const store = createDenSessionStore('a', api)
     store.setState({
@@ -445,6 +447,16 @@ describe('session slice — inspector organize/scope actions', () => {
     })
 
     store.getState().moveSelectedToWorkspace('work')
+
+    expect(store.getState().confirm).toEqual({
+      verb: 'move-workspace',
+      path: '.zshrc',
+      affected: [],
+      workspaceId: 'work',
+    })
+    expect(api.den.setFileWorkspace).not.toHaveBeenCalled()
+
+    store.getState().runConfirmedVerb()
 
     await vi.waitFor(() => expect(api.den.setFileWorkspace).toHaveBeenCalledWith('.zshrc', 'work'))
     expect(api.den.tree).toHaveBeenCalled()
@@ -504,6 +516,59 @@ describe('session slice — inspector organize/scope actions', () => {
     await vi.waitFor(() => expect(api.den.deleteWorkspace).toHaveBeenCalledWith('scratch'))
     await vi.waitFor(() => expect(api.den.deleteGroup).toHaveBeenCalledWith('personal', 'empty'))
     expect(api.den.tree).toHaveBeenCalled()
+  })
+
+  it('drop File → Group changes only the File groupId via moveFileToGroup', async () => {
+    const api = makeApi()
+    const store = createDenSessionStore('a', api)
+
+    store
+      .getState()
+      .organizeTreeDrop(
+        { id: 'file', kind: 'file', name: '.zshrc', workspaceId: 'personal', targetPath: '.zshrc' },
+        { id: 'group', kind: 'group', name: 'Shell', workspaceId: 'personal', groupId: 'shell' },
+      )
+
+    await vi.waitFor(() => expect(api.den.moveFileToGroup).toHaveBeenCalledWith('.zshrc', 'shell'))
+    expect(api.den.setFileWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('drop Group → Group reparents the Group inside the same Workspace', async () => {
+    const api = makeApi()
+    const store = createDenSessionStore('a', api)
+
+    store
+      .getState()
+      .organizeTreeDrop(
+        { id: 'group:a', kind: 'group', name: 'A', workspaceId: 'personal', groupId: 'a' },
+        { id: 'group:b', kind: 'group', name: 'B', workspaceId: 'personal', groupId: 'b' },
+      )
+
+    await vi.waitFor(() =>
+      expect(api.den.setGroupParent).toHaveBeenCalledWith('personal', 'a', 'b'),
+    )
+  })
+
+  it('rejects cross-Workspace drops and drops onto Folders', () => {
+    const api = makeApi()
+    const store = createDenSessionStore('a', api)
+
+    store
+      .getState()
+      .organizeTreeDrop(
+        { id: 'file', kind: 'file', name: '.zshrc', workspaceId: 'personal', targetPath: '.zshrc' },
+        { id: 'group', kind: 'group', name: 'Work', workspaceId: 'work', groupId: 'work-shell' },
+      )
+    store
+      .getState()
+      .organizeTreeDrop(
+        { id: 'group:a', kind: 'group', name: 'A', workspaceId: 'personal', groupId: 'a' },
+        { id: 'folder', kind: 'folder', name: '.config', targetPath: '.config' },
+      )
+
+    expect(api.den.moveFileToGroup).not.toHaveBeenCalled()
+    expect(api.den.setGroupParent).not.toHaveBeenCalled()
+    expect(api.den.setFileWorkspace).not.toHaveBeenCalled()
   })
 })
 

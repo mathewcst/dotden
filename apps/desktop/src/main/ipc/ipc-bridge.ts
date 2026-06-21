@@ -156,9 +156,7 @@ export interface IpcBridgeDeps {
   /** Read this environment's Diagnostics settings. */
   readonly getDiagnosticsSettings?: () => Promise<DiagnosticsSettings>
   /** Persist this environment's Diagnostics settings. */
-  readonly setDiagnosticsSettings?: (
-    settings: DiagnosticsSettings,
-  ) => Promise<DiagnosticsSettings>
+  readonly setDiagnosticsSettings?: (settings: DiagnosticsSettings) => Promise<DiagnosticsSettings>
   /** Read the session-scoped unredacted capture flag. */
   readonly getUnredactedMode?: () => Promise<UnredactedModeState>
   /** Set the session-scoped unredacted capture flag. */
@@ -574,6 +572,19 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
       label: string
     }
     return (await deps.denService()).renameGroup(workspaceId, groupId, label, traceId(payload))
+  })
+  registrar.handle('den:set-group-parent', async (_event, payload: TracedPayload) => {
+    const { workspaceId, groupId, parentId } = payload as TracedPayload & {
+      workspaceId: string
+      groupId: string
+      parentId: string | null
+    }
+    return (await deps.denService()).setGroupParent(
+      workspaceId,
+      groupId,
+      parentId,
+      traceId(payload),
+    )
   })
   registrar.handle('den:delete-workspace', async (_event, payload: TracedPayload) => {
     const { workspaceId } = payload as TracedPayload & { workspaceId: string }
