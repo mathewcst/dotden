@@ -26,7 +26,8 @@ import {
   ready,
   type IncomingChange,
 } from '../apply-planner.js'
-import type { EnvironmentEntry, WorkspacesDoc } from '../../den-store.js'
+import type { WorkspacesDoc } from '../../den-store.js'
+import type { EnvironmentEntry } from '../../../../shared/environments.js'
 
 /**
  * Mint a real {@link AppliesHere} witness for `targetPath` via the resolver — the only

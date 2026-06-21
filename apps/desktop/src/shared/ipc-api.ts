@@ -40,7 +40,7 @@ import type {
   SyncPushResult,
   YoloSyncResult,
 } from '../main/foundation/den-service.js'
-import type { LaunchState } from '../main/foundation/environments/launch-state.js'
+import type { LaunchState } from './environments.js'
 import type { UnsubscribeDisposition } from './settings.js'
 import type { SecretFinding } from './secrets.js'
 import type { SecretAllowlist } from './secrets.js'
@@ -50,14 +50,9 @@ import type { FileVersion } from './history.js'
 import type { ResolutionChoice } from './apply.js'
 import type { Group, Workspace } from '../main/foundation/den-store.js'
 import type { Scope } from './scope.js'
-import type {
-  ClaimSuggestion,
-  EnvironmentWithAttribution,
-} from '../main/foundation/environments/environment-registry.js'
-import type {
-  DiscoveryScanResult,
-  DiscoverySuggestion,
-} from '../main/foundation/environments/discovery-scanner.js'
+import type { ClaimSuggestion, EnvironmentWithAttribution } from './environments.js'
+import type { DiscoveryScanResult } from '../main/foundation/environments/discovery-scanner.js'
+import type { DiscoverySuggestion } from './environments.js'
 import type { AutomationLevel } from './apply.js'
 import type { SyncSettings } from './settings.js'
 import type { PrivacySettings } from './settings.js'

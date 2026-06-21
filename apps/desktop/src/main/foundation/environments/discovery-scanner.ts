@@ -21,6 +21,7 @@
  */
 import { stat } from 'node:fs/promises'
 import { isAbsolute, resolve } from 'node:path'
+import type { DiscoverySuggestion } from '../../../shared/environments.js'
 
 /**
  * One known tool in the discovery catalog.
@@ -41,26 +42,6 @@ export interface CatalogTool {
    * exists on disk becomes a {@link DiscoverySuggestion}.
    */
   readonly candidates: readonly string[]
-}
-
-/**
- * One suggested config File (or Folder) the scan found on disk.
- *
- * Carries enough for the Discover UI to render a `ListRow`: the path to show, the
- * tool it belongs to (for grouping), whether it is a Folder (so the copy can say
- * "Folder" vs "File", CONTEXT.md), and its size for the row's `Meta` slot.
- */
-export interface DiscoverySuggestion {
-  /** Destination-relative path of the found config (e.g. `.zshrc`), the Track target. */
-  readonly targetPath: string
-  /** Id of the catalog tool this path belongs to (groups the Discover list). */
-  readonly toolId: string
-  /** Human label of that tool, for the group header. */
-  readonly toolLabel: string
-  /** True when the path is a directory — a managed **Folder**, not a single **File**. */
-  readonly isFolder: boolean
-  /** Size in bytes (a File's own size, or 0 for a Folder); drives the row's size meta. */
-  readonly sizeBytes: number
 }
 
 /** Wiring for a {@link DiscoveryScanner}. */

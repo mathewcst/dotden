@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Check, Loader2, Monitor, Pencil } from 'lucide-react'
-import type { EnvironmentWithAttribution } from '../../../../main/foundation/environments/environment-registry'
+import type { EnvironmentWithAttribution } from '@shared/environments'
 
 /**
  * EnvironmentBadge — the sidebar footer surface for this environment's IDENTITY

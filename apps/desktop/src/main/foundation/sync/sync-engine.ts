@@ -30,7 +30,8 @@ import {
 import { ApplicabilityResolver, isAppliesHere } from '../environments/applicability-resolver.js'
 import type { AutomationPolicy } from '../apply/automation-policy.js'
 import { isResolvedConflict, type ResolvedConflict } from '../apply/conflict-model.js'
-import type { EnvironmentEntry, WorkspacesDoc } from '../den-store.js'
+import type { WorkspacesDoc } from '../den-store.js'
+import type { EnvironmentEntry } from '../../../shared/environments.js'
 import type { OperationTracer } from '../platform/operation-tracer.js'
 
 /**

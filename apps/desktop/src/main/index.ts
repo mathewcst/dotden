@@ -30,7 +30,8 @@ import {
   loadEnvironmentIdentity,
 } from './foundation/environments/environment-identity.js'
 import { EnvironmentRegistry } from './foundation/environments/environment-registry.js'
-import { computeLaunchState, type LaunchState } from './foundation/environments/launch-state.js'
+import { computeLaunchState } from './foundation/environments/launch-state.js'
+import type { LaunchState } from '../shared/environments.js'
 import { OperationTracer } from './foundation/platform/operation-tracer.js'
 import type { PrivacySettings } from '../shared/settings.js'
 import {

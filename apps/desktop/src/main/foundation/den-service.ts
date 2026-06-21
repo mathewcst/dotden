@@ -32,11 +32,11 @@ import {
 import {
   DEFAULT_WORKSPACE_ID,
   DenStore,
-  type EnvironmentEntry,
   type Group,
   type Workspace,
   type WorkspacesDoc,
 } from './den-store.js'
+import type { EnvironmentEntry } from '../../shared/environments.js'
 import type { OperationTracer } from './platform/operation-tracer.js'
 import { SyncEngine, type AutoApplyHoldReason, type IncomingFile } from './sync/sync-engine.js'
 import type { ApplyChangeKind } from './apply/apply-planner.js'

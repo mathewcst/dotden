@@ -31,6 +31,7 @@ import {
   type AppearanceSettings,
   normalizeAppearanceSettings,
 } from '../../shared/appearance-settings.js'
+import type { EnvironmentEntry } from '../../shared/environments.js'
 
 /**
  * The default Workspace id every Den is seeded with.
@@ -140,25 +141,6 @@ export interface WorkspacesDoc {
   readonly workspaces: readonly Workspace[]
   /** Where each managed File lives in the Workspace tree. */
   readonly placements: readonly FilePlacement[]
-}
-
-/**
- * One environment's registry entry (ADR 0024).
- *
- * Identity is the **stable random `id`**, never the hostname (hostnames collide
- * and change). `label` defaults from the hostname but is user-editable.
- * `subscribedWorkspaces` is the access boundary: this environment applies only
- * Files inside Workspaces it subscribes to (ADR 0005).
- */
-export interface EnvironmentEntry {
-  /** Stable random identity for this environment — the source of truth, not the hostname. */
-  readonly id: string
-  /** User-editable display label, defaulting from the hostname on first run. */
-  readonly label: string
-  /** Operating system this environment runs on (`process.platform` value). */
-  readonly os: string
-  /** Workspace ids this environment subscribes to; only these Files apply here (ADR 0005). */
-  readonly subscribedWorkspaces: readonly string[]
 }
 
 /** The synced environment registry (`environments.json`). */

@@ -28,15 +28,7 @@ import { access } from 'node:fs/promises'
 import { join } from 'node:path'
 import { readLocalIdentity } from './environment-identity.js'
 import { DenStore } from '../den-store.js'
-
-/** The three launch states the gate distinguishes (ADR 0026). */
-export type LaunchStatus = 'fresh' | 'incomplete' | 'ready'
-
-/** The launch-gate result the renderer maps to an initial route. */
-export interface LaunchState {
-  /** Which setup state THIS environment is in (drives the boot route). */
-  readonly status: LaunchStatus
-}
+import type { LaunchState } from '../../../shared/environments.js'
 
 /** Inputs the gate needs: the chezmoi source dir + the userData dir (the ADR 0024 split). */
 export interface LaunchStateInputs {
