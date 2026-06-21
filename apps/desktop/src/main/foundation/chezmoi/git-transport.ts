@@ -7,8 +7,8 @@
  * forwards to the bundled `git` binary; it does not invent behavior.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { CommandFailedError, runCommand } from './platform/process.js'
-import { resolveContainedPath } from './platform/path-safety.js'
+import { CommandFailedError, runCommand } from '../platform/process.js'
+import { resolveContainedPath } from '../platform/path-safety.js'
 
 /**
  * Field separator for {@link GitTransport.log}'s machine-parsable output.

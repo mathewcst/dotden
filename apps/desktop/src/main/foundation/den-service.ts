@@ -20,8 +20,8 @@
  */
 import { access, readFile, rm, writeFile } from 'node:fs/promises'
 import { relative, resolve } from 'node:path'
-import { ChezmoiAdapter, UncommittedLocalEditError } from './chezmoi-adapter.js'
-import { GitTransport } from './git-transport.js'
+import { ChezmoiAdapter, UncommittedLocalEditError } from './chezmoi/chezmoi-adapter.js'
+import { GitTransport } from './chezmoi/git-transport.js'
 import { resolveContainedPath } from './platform/path-safety.js'
 import {
   DEFAULT_COMMIT_TEMPLATE,
@@ -41,7 +41,11 @@ import type { OperationTracer } from './platform/operation-tracer.js'
 import { SyncEngine, type AutoApplyHoldReason, type IncomingFile } from './sync-engine.js'
 import type { ApplyChangeKind } from './apply-planner.js'
 import { ConflictModel, type ResolutionChoice } from './conflict-model.js'
-import { parseChezmoiStatus, parseIncomingDeletions, type FileGitStatus } from './chezmoi-status.js'
+import {
+  parseChezmoiStatus,
+  parseIncomingDeletions,
+  type FileGitStatus,
+} from './chezmoi/chezmoi-status.js'
 import {
   AutomationPolicy,
   DEFAULT_AUTOMATION_LEVEL,

@@ -93,7 +93,7 @@ export const DEFAULT_COMMIT_MESSAGE_TEMPLATE = '[$os-sync-$year-$month-$day]'
 
 /**
  * The cross-OS environment facts a template needs, sourced from **chezmoi template data**
- * (never a host shell) — see {@link import('../main/foundation/chezmoi-adapter.js').ChezmoiAdapter.templateData}.
+ * (never a host shell) — see {@link import('../main/foundation/chezmoi/chezmoi-adapter.js').ChezmoiAdapter.templateData}.
  *
  * These are the `.chezmoi.*` values chezmoi resolves identically on every OS, so `$os`/`$arch`/
  * `$hostname` are stable regardless of which environment authored the template.

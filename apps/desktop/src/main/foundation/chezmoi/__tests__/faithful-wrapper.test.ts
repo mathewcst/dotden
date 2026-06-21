@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ChezmoiAdapter, renderOsScopeIgnore, upsertEnvIdInToml } from '../chezmoi-adapter.js'
 import { cloneRepo } from '../git-transport.js'
-import { createTempDotdenRepo, type DotdenTestRepo } from './temp-git-repo.fixture.js'
+import { createTempDotdenRepo, type DotdenTestRepo } from '../../__tests__/temp-git-repo.fixture.js'
 
 let repo: DotdenTestRepo
 

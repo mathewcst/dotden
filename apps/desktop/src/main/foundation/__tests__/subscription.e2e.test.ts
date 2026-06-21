@@ -19,10 +19,10 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { cloneRepo, GitTransport } from '../git-transport.js'
+import { cloneRepo, GitTransport } from '../chezmoi/git-transport.js'
 import { DenService } from '../den-service.js'
 import { EnvironmentRegistry } from '../environment-registry.js'
-import { ChezmoiAdapter } from '../chezmoi-adapter.js'
+import { ChezmoiAdapter } from '../chezmoi/chezmoi-adapter.js'
 import { runCommand } from '../platform/process.js'
 
 let root: string

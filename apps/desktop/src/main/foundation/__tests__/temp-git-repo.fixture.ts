@@ -12,8 +12,8 @@
 import { chmod, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
-import { ChezmoiAdapter } from '../chezmoi-adapter.js'
-import { GitTransport } from '../git-transport.js'
+import { ChezmoiAdapter } from '../chezmoi/chezmoi-adapter.js'
+import { GitTransport } from '../chezmoi/git-transport.js'
 import { runCommand } from '../platform/process.js'
 
 /**

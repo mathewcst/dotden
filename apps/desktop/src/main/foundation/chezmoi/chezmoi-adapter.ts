@@ -19,12 +19,12 @@
 import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, relative, resolve } from 'node:path'
 import { parseChezmoiStatus } from './chezmoi-status.js'
-import { resolveContainedPath } from './platform/path-safety.js'
-import { scopedOutPaths, type Os, type Scope } from './platform/os-scope.js'
-import { renderSubscriptionIgnore } from './subscription-ignore.js'
-import { renderSecretReferenceTemplate, type SecretReferenceRequest } from './secret-reference.js'
-import { runCommand } from './platform/process.js'
-import type { CommitTemplateData } from '../../shared/commit-template.js'
+import { resolveContainedPath } from '../platform/path-safety.js'
+import { scopedOutPaths, type Os, type Scope } from '../platform/os-scope.js'
+import { renderSubscriptionIgnore } from '../subscription-ignore.js'
+import { renderSecretReferenceTemplate, type SecretReferenceRequest } from '../secret-reference.js'
+import { runCommand } from '../platform/process.js'
+import type { CommitTemplateData } from '../../../shared/commit-template.js'
 
 /**
  * Thrown by {@link ChezmoiAdapter.applyGuarded} when the File it is about to apply has
