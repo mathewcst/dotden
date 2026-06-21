@@ -18,9 +18,9 @@ import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { EnvironmentRegistry, type LocalIdentity } from '../environment-registry.js'
-import { GitTransport } from '../chezmoi/git-transport.js'
-import { DenStore } from '../den-store.js'
-import { runCommand } from '../platform/process.js'
+import { GitTransport } from '../../chezmoi/git-transport.js'
+import { DenStore } from '../../den-store.js'
+import { runCommand } from '../../platform/process.js'
 
 let root: string
 let source: string

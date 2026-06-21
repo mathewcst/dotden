@@ -26,9 +26,9 @@
  * It is Electron-free (ADR 0023): it is constructed from the foundation adapters and
  * a plain identity object, so it is fully unit-testable against real git in a tempdir.
  */
-import { GitTransport } from './chezmoi/git-transport.js'
-import { ChezmoiAdapter } from './chezmoi/chezmoi-adapter.js'
-import { DenStore, type EnvironmentEntry } from './den-store.js'
+import { GitTransport } from '../chezmoi/git-transport.js'
+import { ChezmoiAdapter } from '../chezmoi/chezmoi-adapter.js'
+import { DenStore, type EnvironmentEntry } from '../den-store.js'
 
 /** This environment's local identity — the stable id, default label, OS, and claim hint. */
 export interface LocalIdentity {

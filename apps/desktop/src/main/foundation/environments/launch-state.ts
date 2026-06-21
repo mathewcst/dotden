@@ -27,7 +27,7 @@
 import { access } from 'node:fs/promises'
 import { join } from 'node:path'
 import { readLocalIdentity } from './environment-identity.js'
-import { DenStore } from './den-store.js'
+import { DenStore } from '../den-store.js'
 
 /** The three launch states the gate distinguishes (ADR 0026). */
 export type LaunchStatus = 'fresh' | 'incomplete' | 'ready'

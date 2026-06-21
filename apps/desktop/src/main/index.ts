@@ -21,10 +21,13 @@ import type { AppInfo, UpdateCheckResult } from '../shared/app-info.js'
 import type { AutomationLevel } from './foundation/automation-policy.js'
 import { readAutomationLevel, writeAutomationLevel } from './foundation/automation-settings.js'
 import { DenService } from './foundation/den-service.js'
-import { DiscoveryScanner } from './foundation/discovery-scanner.js'
-import { claimLocalIdentity, loadEnvironmentIdentity } from './foundation/environment-identity.js'
-import { EnvironmentRegistry } from './foundation/environment-registry.js'
-import { computeLaunchState, type LaunchState } from './foundation/launch-state.js'
+import { DiscoveryScanner } from './foundation/environments/discovery-scanner.js'
+import {
+  claimLocalIdentity,
+  loadEnvironmentIdentity,
+} from './foundation/environments/environment-identity.js'
+import { EnvironmentRegistry } from './foundation/environments/environment-registry.js'
+import { computeLaunchState, type LaunchState } from './foundation/environments/launch-state.js'
 import { OperationTracer } from './foundation/platform/operation-tracer.js'
 import type { PrivacySettings } from './foundation/privacy-settings.js'
 import { readPrivacySettings, writePrivacySettings } from './foundation/privacy-settings.js'

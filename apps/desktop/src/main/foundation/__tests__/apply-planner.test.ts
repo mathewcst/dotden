@@ -17,7 +17,7 @@ import {
   ApplicabilityResolver,
   isAppliesHere,
   type AppliesHere,
-} from '../applicability-resolver.js'
+} from '../environments/applicability-resolver.js'
 import {
   blocked,
   deletions,

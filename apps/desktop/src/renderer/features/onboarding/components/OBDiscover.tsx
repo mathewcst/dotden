@@ -1,7 +1,7 @@
 import { Button } from '@/ui/button'
 import { Loader2, Plus, ScanSearch } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { DiscoverySuggestion } from '../../../../main/foundation/discovery-scanner'
+import type { DiscoverySuggestion } from '../../../../main/foundation/environments/discovery-scanner'
 import { ListRow } from './ListRow'
 import { warnedPathsFromFindings } from '../lib/secret-warn'
 

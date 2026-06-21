@@ -16,7 +16,7 @@
  * They complement (not replace) the ApplicabilityResolver unit tests.
  */
 import { describe, expect, it } from 'vitest'
-import { isAppliesHere } from '../applicability-resolver.js'
+import { isAppliesHere } from '../environments/applicability-resolver.js'
 import { AutomationPolicy } from '../automation-policy.js'
 import { ConflictModel, isResolvedConflict, type ResolvedConflict } from '../conflict-model.js'
 import type { EnvironmentEntry, WorkspacesDoc } from '../den-store.js'

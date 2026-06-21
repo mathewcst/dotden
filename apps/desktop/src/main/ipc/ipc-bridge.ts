@@ -16,9 +16,9 @@
  */
 import type { DenService } from '../foundation/den-service.js'
 import type { ResolutionChoice } from '../foundation/conflict-model.js'
-import type { DiscoveryScanner } from '../foundation/discovery-scanner.js'
-import type { EnvironmentRegistry } from '../foundation/environment-registry.js'
-import type { LaunchState } from '../foundation/launch-state.js'
+import type { DiscoveryScanner } from '../foundation/environments/discovery-scanner.js'
+import type { EnvironmentRegistry } from '../foundation/environments/environment-registry.js'
+import type { LaunchState } from '../foundation/environments/launch-state.js'
 import type { RemoteClient } from '../foundation/remote-client.js'
 import type { AutomationLevel } from '../foundation/automation-policy.js'
 import type { SyncSettings } from '../foundation/sync-settings.js'

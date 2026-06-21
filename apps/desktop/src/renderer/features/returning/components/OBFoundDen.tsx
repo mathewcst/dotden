@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { GitBranch, Loader2, MonitorSmartphone } from 'lucide-react'
 import { Button } from '@/ui/button'
-import type { ClaimSuggestion } from '../../../../main/foundation/environment-registry'
+import type { ClaimSuggestion } from '../../../../main/foundation/environments/environment-registry'
 
 /**
  * The new-or-returning *identity* choice surfaced after the Den is detected (issue 1-13).

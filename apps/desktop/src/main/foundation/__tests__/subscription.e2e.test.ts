@@ -21,7 +21,7 @@ import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { cloneRepo, GitTransport } from '../chezmoi/git-transport.js'
 import { DenService } from '../den-service.js'
-import { EnvironmentRegistry } from '../environment-registry.js'
+import { EnvironmentRegistry } from '../environments/environment-registry.js'
 import { ChezmoiAdapter } from '../chezmoi/chezmoi-adapter.js'
 import { runCommand } from '../platform/process.js'
 

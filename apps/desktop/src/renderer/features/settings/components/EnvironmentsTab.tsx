@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Check, Loader2, Monitor, MoreHorizontal, Pencil, Shuffle, Trash2, X } from 'lucide-react'
 import { Menu } from '@base-ui/react/menu'
-import type { EnvironmentWithAttribution } from '../../../../main/foundation/environment-registry'
+import type { EnvironmentWithAttribution } from '../../../../main/foundation/environments/environment-registry'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 
 /**

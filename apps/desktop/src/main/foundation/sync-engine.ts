@@ -27,7 +27,7 @@ import {
   type IncomingChange,
   type LocalEditState,
 } from './apply-planner.js'
-import { ApplicabilityResolver, isAppliesHere } from './applicability-resolver.js'
+import { ApplicabilityResolver, isAppliesHere } from './environments/applicability-resolver.js'
 import type { AutomationPolicy } from './automation-policy.js'
 import { isResolvedConflict, type ResolvedConflict } from './conflict-model.js'
 import type { EnvironmentEntry, WorkspacesDoc } from './den-store.js'

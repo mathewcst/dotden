@@ -15,14 +15,14 @@
  * "applied to a non-applicable File" *unrepresentable* (ADR 0008's "cannot express
  * the unsafe state"), not merely "remembered to check".
  */
-import type { EnvironmentEntry, WorkspacesDoc } from './den-store.js'
+import type { EnvironmentEntry, WorkspacesDoc } from '../den-store.js'
 import {
   effectiveScope,
   narrowScope,
   scopeAppliesOn,
   type Os,
   type Scope,
-} from './platform/os-scope.js'
+} from '../platform/os-scope.js'
 
 /**
  * Module-private brand symbol. It is a REAL runtime symbol (so the witness can

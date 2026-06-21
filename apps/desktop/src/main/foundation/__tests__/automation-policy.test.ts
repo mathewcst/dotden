@@ -20,7 +20,7 @@ import {
   type AutoApplyCandidate,
   type AutomationLevel,
 } from '../automation-policy.js'
-import { ApplicabilityResolver, isAppliesHere } from '../applicability-resolver.js'
+import { ApplicabilityResolver, isAppliesHere } from '../environments/applicability-resolver.js'
 import { planIncoming, type ApplyChangeKind } from '../apply-planner.js'
 import type { EnvironmentEntry, WorkspacesDoc } from '../den-store.js'
 

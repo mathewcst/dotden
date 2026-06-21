@@ -38,7 +38,7 @@
  * the deletion/subscription/uncommitted-edit guards still hold exactly as at every rung —
  * YOLO removes the *review prompts*, never the *safety owners*.
  */
-import type { AppliesHere } from './applicability-resolver.js'
+import type { AppliesHere } from './environments/applicability-resolver.js'
 import type { ApplyPlanItem } from './apply-planner.js'
 
 /**
