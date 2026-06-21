@@ -18,8 +18,11 @@ import {
 import { autoUpdater } from 'electron-updater'
 import { join } from 'node:path'
 import type { AppInfo, UpdateCheckResult } from '../shared/app-info.js'
-import type { AutomationLevel } from './foundation/automation-policy.js'
-import { readAutomationLevel, writeAutomationLevel } from './foundation/automation-settings.js'
+import type { AutomationLevel } from './foundation/apply/automation-policy.js'
+import {
+  readAutomationLevel,
+  writeAutomationLevel,
+} from './foundation/apply/automation-settings.js'
 import { DenService } from './foundation/den-service.js'
 import { DiscoveryScanner } from './foundation/environments/discovery-scanner.js'
 import {

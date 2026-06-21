@@ -17,7 +17,7 @@ import {
   ApplicabilityResolver,
   isAppliesHere,
   type AppliesHere,
-} from '../environments/applicability-resolver.js'
+} from '../../environments/applicability-resolver.js'
 import {
   blocked,
   deletions,
@@ -26,7 +26,7 @@ import {
   ready,
   type IncomingChange,
 } from '../apply-planner.js'
-import type { EnvironmentEntry, WorkspacesDoc } from '../den-store.js'
+import type { EnvironmentEntry, WorkspacesDoc } from '../../den-store.js'
 
 /**
  * Mint a real {@link AppliesHere} witness for `targetPath` via the resolver — the only

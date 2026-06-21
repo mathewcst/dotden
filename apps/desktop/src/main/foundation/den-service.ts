@@ -39,8 +39,8 @@ import {
 } from './den-store.js'
 import type { OperationTracer } from './platform/operation-tracer.js'
 import { SyncEngine, type AutoApplyHoldReason, type IncomingFile } from './sync/sync-engine.js'
-import type { ApplyChangeKind } from './apply-planner.js'
-import { ConflictModel, type ResolutionChoice } from './conflict-model.js'
+import type { ApplyChangeKind } from './apply/apply-planner.js'
+import { ConflictModel, type ResolutionChoice } from './apply/conflict-model.js'
 import {
   parseChezmoiStatus,
   parseIncomingDeletions,
@@ -50,7 +50,7 @@ import {
   AutomationPolicy,
   DEFAULT_AUTOMATION_LEVEL,
   type AutomationLevel,
-} from './automation-policy.js'
+} from './apply/automation-policy.js'
 import type { Os, Scope } from './platform/os-scope.js'
 import { PushQueue } from './sync/push-queue.js'
 import { isOfflineError } from './sync/offline.js'

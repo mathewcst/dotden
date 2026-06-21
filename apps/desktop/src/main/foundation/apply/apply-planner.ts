@@ -32,7 +32,7 @@
  * might forget. Invariant #1 (never auto-resolve a Conflict) is owned by `ConflictModel`;
  * conflicting Files simply never reach the planner.
  */
-import type { AppliesHere } from './environments/applicability-resolver.js'
+import type { AppliesHere } from '../environments/applicability-resolver.js'
 
 /**
  * The kind of change an Apply plan item represents.

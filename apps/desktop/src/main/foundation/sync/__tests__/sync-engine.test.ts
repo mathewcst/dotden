@@ -17,8 +17,12 @@
  */
 import { describe, expect, it } from 'vitest'
 import { isAppliesHere } from '../../environments/applicability-resolver.js'
-import { AutomationPolicy } from '../../automation-policy.js'
-import { ConflictModel, isResolvedConflict, type ResolvedConflict } from '../../conflict-model.js'
+import { AutomationPolicy } from '../../apply/automation-policy.js'
+import {
+  ConflictModel,
+  isResolvedConflict,
+  type ResolvedConflict,
+} from '../../apply/conflict-model.js'
 import type { EnvironmentEntry, WorkspacesDoc } from '../../den-store.js'
 import { SyncEngine, type IncomingFile } from '../sync-engine.js'
 

@@ -12,7 +12,7 @@ import {
 import { Button } from '@/ui/button'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import type { ConflictReviewItem } from '../../../../main/foundation/den-service'
-import type { ResolutionChoice } from '../../../../main/foundation/conflict-model'
+import type { ResolutionChoice } from '../../../../main/foundation/apply/conflict-model'
 
 /**
  * ConflictResolver — the **Conflict resolution** surface (issue 1-11), modeled on the
