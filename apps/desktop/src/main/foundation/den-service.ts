@@ -28,7 +28,7 @@ import {
   renderCommitMessage,
   type CommitMessageTemplate,
   type RenderedCommitMessage,
-} from './commit-message-renderer.js'
+} from './commit/commit-message-renderer.js'
 import {
   DEFAULT_WORKSPACE_ID,
   DenStore,
