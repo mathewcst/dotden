@@ -9,8 +9,8 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { registerIpcBridge, traceId, type IpcRegistrar } from '../../ipc/ipc-bridge.js'
-import type { SyncSettings } from '../sync-settings.js'
-import type { PrivacySettings } from '../privacy-settings.js'
+import type { SyncSettings } from '../settings/sync-settings.js'
+import type { PrivacySettings } from '../settings/privacy-settings.js'
 
 /** A fake registrar that captures channel→handler so tests can invoke them directly. */
 function fakeRegistrar() {

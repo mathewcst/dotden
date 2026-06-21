@@ -32,16 +32,19 @@ import {
 import { EnvironmentRegistry } from './foundation/environments/environment-registry.js'
 import { computeLaunchState, type LaunchState } from './foundation/environments/launch-state.js'
 import { OperationTracer } from './foundation/platform/operation-tracer.js'
-import type { PrivacySettings } from './foundation/privacy-settings.js'
-import { readPrivacySettings, writePrivacySettings } from './foundation/privacy-settings.js'
+import type { PrivacySettings } from './foundation/settings/privacy-settings.js'
+import {
+  readPrivacySettings,
+  writePrivacySettings,
+} from './foundation/settings/privacy-settings.js'
 import { RemoteClient } from './foundation/sync/remote-client.js'
-import type { UnsubscribeDisposition } from './foundation/subscription-settings.js'
+import type { UnsubscribeDisposition } from './foundation/settings/subscription-settings.js'
 import {
   readUnsubscribeDisposition,
   writeUnsubscribeDisposition,
-} from './foundation/subscription-settings.js'
-import type { PollCadenceProfile, SyncSettings } from './foundation/sync-settings.js'
-import { readSyncSettings, writeSyncSettings } from './foundation/sync-settings.js'
+} from './foundation/settings/subscription-settings.js'
+import type { PollCadenceProfile, SyncSettings } from './foundation/settings/sync-settings.js'
+import { readSyncSettings, writeSyncSettings } from './foundation/settings/sync-settings.js'
 import { resolveBundledTools } from './foundation/platform/tools.js'
 import { DEFAULT_POLL_CADENCE, TrayPoller, type PollCadence } from './foundation/tray-poller.js'
 import { noFeed, checkForUpdates as runUpdateCheck } from './foundation/update-check.js'

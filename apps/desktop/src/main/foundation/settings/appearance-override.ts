@@ -28,7 +28,7 @@ import {
   EMPTY_APPEARANCE_OVERRIDE,
   normalizeAppearanceOverride,
   type AppearanceOverride,
-} from '../../shared/appearance-settings.js'
+} from '../../../shared/appearance-settings.js'
 
 /** Relative filename of the local appearance-override file inside the userData dir. */
 const OVERRIDE_FILE = 'appearance-override.json'

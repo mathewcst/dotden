@@ -54,7 +54,7 @@ import {
 import type { Os, Scope } from './platform/os-scope.js'
 import { PushQueue } from './sync/push-queue.js'
 import { isOfflineError } from './sync/offline.js'
-import type { UnsubscribeDisposition } from './subscription-settings.js'
+import type { UnsubscribeDisposition } from './settings/subscription-settings.js'
 import { scanForSecrets, type SecretFinding } from './secrets/secret-scanner.js'
 import { partitionFindings, type SecretAllowlist } from './secrets/secret-allowlist.js'
 import { parseFileHistory, shortSha, type FileVersion } from './file-history/file-history.js'
@@ -81,7 +81,7 @@ import {
   type AppearanceOverride,
   type AppearanceSettings,
 } from '../../shared/appearance-settings.js'
-import { readAppearanceOverride, writeAppearanceOverride } from './appearance-override.js'
+import { readAppearanceOverride, writeAppearanceOverride } from './settings/appearance-override.js'
 
 /** Construction wiring for a {@link DenService}, bound to one environment's dirs. */
 export interface DenServiceOptions {

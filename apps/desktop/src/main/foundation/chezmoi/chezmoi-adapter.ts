@@ -21,7 +21,7 @@ import { basename, dirname, relative, resolve } from 'node:path'
 import { parseChezmoiStatus } from './chezmoi-status.js'
 import { resolveContainedPath } from '../platform/path-safety.js'
 import { scopedOutPaths, type Os, type Scope } from '../platform/os-scope.js'
-import { renderSubscriptionIgnore } from '../subscription-ignore.js'
+import { renderSubscriptionIgnore } from '../settings/subscription-ignore.js'
 import {
   renderSecretReferenceTemplate,
   type SecretReferenceRequest,

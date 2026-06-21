@@ -41,7 +41,7 @@ import type {
   YoloSyncResult,
 } from '../main/foundation/den-service.js'
 import type { LaunchState } from '../main/foundation/environments/launch-state.js'
-import type { UnsubscribeDisposition } from '../main/foundation/subscription-settings.js'
+import type { UnsubscribeDisposition } from '../main/foundation/settings/subscription-settings.js'
 import type { SecretFinding } from '../main/foundation/secrets/secret-scanner.js'
 import type { SecretAllowlist } from '../main/foundation/secrets/secret-allowlist.js'
 import type { DetectedPasswordManager } from '../main/foundation/secrets/pm-detect.js'
@@ -59,8 +59,8 @@ import type {
   DiscoverySuggestion,
 } from '../main/foundation/environments/discovery-scanner.js'
 import type { AutomationLevel } from '../main/foundation/apply/automation-policy.js'
-import type { SyncSettings } from '../main/foundation/sync-settings.js'
-import type { PrivacySettings } from '../main/foundation/privacy-settings.js'
+import type { SyncSettings } from '../main/foundation/settings/sync-settings.js'
+import type { PrivacySettings } from '../main/foundation/settings/privacy-settings.js'
 import type { AppearanceOverride, AppearanceSettings } from './appearance-settings.js'
 import type { AppInfo, UpdateCheckResult } from './app-info.js'
 
