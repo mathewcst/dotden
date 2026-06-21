@@ -80,6 +80,10 @@ that drifted (e.g. `RadioRow` radius 10 vs siblings' 8). M4 consolidated them in
   **`Subtitle`** text · **`Trailing`** Pill INSTANCE_SWAP + **`HasTrailing`** bool.
 - **Mono subtitle** (e.g. PMOption's `op://` ref) = per-instance font override on the subtitle, _not_ a
   property (font is overridable on instances — keeps the matrix small).
+- **Adopt reclaim registry (2026-06-21):** the `FoundDen` reclaim list is `SelectRow` rows
+  (Title = env label · Subtitle = OS · last-synced), the live-looking row using the **`Trailing` swap →
+  `Pill Tone=Amber` "Looks active"** to flag it ([returning-environment](./screens/returning-environment.md)
+  → _Adopt enforcement_).
 - **Replaced:** `RadioRow`, `PMOption` (radio + Green/Neutral trailing Pill + mono ref),
   `WorkspaceRow` (checkbox lead). The "raw Option/workspace rows" in the old spec turned out to be
   screen-frame instances, not detached rows.
@@ -276,6 +280,13 @@ mirroring `<AppShell left center right />` in React:
 The default panes assemble the [signature screen](./screens/signature-screen.md); the
 [conflict resolver](./screens/conflict-resolver.md) flow adds its own flow-specific panes
 (`ConflictFiles`/`Merge`/`Resolve`); the [commit flow](./screens/commit.md) adds **`AppPane/Commit`**.
+
+> **Adopt four-bucket apply (2026-06-21).** The apply list `AppPane/ChangeList` `Mode=Apply`
+> (`826:1562`, shared with daily-receive) gained two **adopt-only** buckets in its list body — a
+> **NEEDS A PATH** group (`ListRow State=Warn`, path + a **Set a path** affordance) and a **collapsed
+> OTHER SYSTEMS ONLY** disclosure — kept `visible=false` on non-adopt `Mode=Apply` instances. The
+> completeness gate lives on `AppPane/Apply` `State=Disabled` (`GateHint` "N items still need you" +
+> disabled Apply). See [returning-environment](./screens/returning-environment.md) → _Adopt enforcement_.
 
 - **`AppPane/Commit`** SET `State=Pending|Committed` (right slot, 320w, `sidebar` bg) — the commit
   composer. **Pending:** git-commit header + "N files ready" + `StatusTag` count summary +

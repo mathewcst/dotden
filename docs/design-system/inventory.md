@@ -244,14 +244,19 @@ _Phase 5 build complete (Batch G was the finale). **Feature 1 (Diagnostics, [ADR
 
 ## Onboarding & Returning screens
 
-| Page                               | Section                               | Holds                                                                      | Spec                                                        |
-| ---------------------------------- | ------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| 04 · Screens — Onboarding (`71:2`) | First environment `108:750`           | 7 `OnboardingShell` instances                                              | [onboarding](./screens/onboarding.md)                       |
-| 04 · Screens — Onboarding (`71:2`) | First environment — V1 `615:746`      | 7 V1-Lean `OnboardingShell` instances                                      | [onboarding](./screens/onboarding.md)                       |
-| 04 · Screens — Onboarding (`71:2`) | **v1.1 · Onboarding gate** `703:1333` | C2 refuse `703:1334` · C1 adopt `713:1414` · gh CredentialError `717:9517` | [onboarding](./screens/onboarding.md) (_v1.1 surfaces_)     |
-| 05 · Screens — Returning (`210:4`) | Second environment `221:331`          | 3 shell instances + Review&Apply (on page 03)                              | [returning-environment](./screens/returning-environment.md) |
+| Page                               | Section                               | Holds                                                                                                                                          | Spec                                                                              |
+| ---------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| 04 · Screens — Onboarding (`71:2`) | First environment `108:750`           | 7 `OnboardingShell` instances                                                                                                                  | [onboarding](./screens/onboarding.md)                                             |
+| 04 · Screens — Onboarding (`71:2`) | First environment — V1 `615:746`      | 7 V1-Lean `OnboardingShell` instances                                                                                                          | [onboarding](./screens/onboarding.md)                                             |
+| 04 · Screens — Onboarding (`71:2`) | **v1.1 · Onboarding gate** `703:1333` | C2 refuse `703:1334` · C1 adopt `713:1414` · gh CredentialError `717:9517`                                                                     | [onboarding](./screens/onboarding.md) (_v1.1 surfaces_)                           |
+| 05 · Screens — Returning (`210:4`) | Second environment `221:331`          | 3 shell instances + Review&Apply (on page 03)                                                                                                  | [returning-environment](./screens/returning-environment.md)                       |
+| 05 · Screens — Returning (`210:4`) | Second environment — V1 `620:329`     | 01 Connect `620:330` · 02 Found Den `620:426` · **02b Reclaim `870:606`** · **02c "Looks active" warning `872:681`** · 03 Workspaces `620:586` | [returning-environment](./screens/returning-environment.md) (_adopt enforcement_) |
 
 Component defs now live on `02 · Components` (`37:2`) — **Onboarding** section (`371:979`) and **Returning** section (`371:980`).
+`OBContent/FoundDen` (`216:71`) now carries a hidden-by-default **`ReclaimRegistry`** block (`867:1608`,
+`SelectRow` rows + amber "Looks active" `Pill`); `AppPane/ChangeList` `Mode=Apply` (`826:1562`) carries
+two adopt-only buckets (NEEDS A PATH `ListRow Warn` + collapsed OTHER SYSTEMS ONLY), `visible=false` on
+non-adopt instances. See [returning-environment](./screens/returning-environment.md) → _Adopt enforcement_.
 
 > Batch-E reconciliation: the discovery row's hard `Blocked` state became a soft **`Warn`** (real
 > unchecked checkbox + amber) — no longer a hard exclude. In M4 the row itself folded into `ListRow`, so

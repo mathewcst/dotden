@@ -434,6 +434,14 @@ The earlier "_Moving a `SECTION` does NOT move its children_" gotcha did **not**
   didn't follow.) Also note `get_metadata` reports section-child coords relative to the section, which
   matches the plugin getter — but page-level sections report absolute.
 
+**Corollary — `clone()` of a section child lands on the PAGE, not the section (2026-06-21).** Cloning a
+screen that lives in a section parents the clone to the **page**, so its `x`/`y` become **page-absolute**
+and it renders **behind the section's fill** (looks "missing"/blank where you expected it). Always
+`section.appendChild(clone)` **first**, _then_ set section-relative coords (and `resizeWithoutConstraints`
+the section to make room — it won't auto-grow). Symptom: a freshly-cloned screen whose `parent` is the
+page and whose `absoluteBoundingBox` sits inside the section box yet shows nothing on canvas. Bit us
+adding the adopt reclaim screens (02b/02c) to `Second environment — V1` (`620:329`).
+
 ### Add a new variant VALUE to a live COMPONENT_SET via detach → promote → append
 
 To add `State=CredentialErrorGhCli` to the live `OBContent/ConnectURL` set: instance the closest existing

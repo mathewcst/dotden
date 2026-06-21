@@ -14,6 +14,6 @@ A cross-platform desktop GUI that wraps **chezmoi**, letting a user manage and s
 
 ## Ground rules
 
-- Stay a **faithful chezmoi wrapper** (ADR 0003): every concept maps to a real chezmoi concept; rename only for presentation.
+- **chezmoi is a tool, not a mandate** (ADR 0038, revising ADR 0003): use chezmoi where it does the job best (attributes, templating, secrets, idempotent apply); own transport, source-state merge, and anything interactive (git directly + dotden's `ConflictModel`). The repo still stays a valid chezmoi setup and vocabulary still maps to chezmoi where chezmoi owns the concept.
 - **Never fail silently** — surface what happened and the fix; empty/fallback states are first-class UI.
 - Public OSS: **over-comment rather than under** (ADR 0021).

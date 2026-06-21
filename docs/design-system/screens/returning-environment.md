@@ -95,3 +95,41 @@ components.
 - **Section fill matches onboarding's** raw `{0.163,0.146,0.121}`; sections don't auto-fit → sized +
   positioned manually before appending children ([architecture](../architecture.md)).
 - White-fill + unresolved-binding audits pass clean on pages 06 + 07 and the new App-page section.
+
+## Adopt enforcement (journey 03 — 2026-06-21)
+
+Enforcing [journey 03 · second-environment-adopt](../../user-flow/journeys/03-second-environment-adopt.md)
+onto Figma. Three additions; all reuse existing components (no new merge/onboarding components),
+white-fill + binding audits clean.
+
+**1 · Claim → reclaim registry (`OBContent/FoundDen` `216:71`).** The claim card gained a
+hidden-by-default **`ReclaimRegistry`** block (`867:1608`) inserted under the new/returning radio
+Options: `SelectRow` rows reading **label · OS · last-synced**, the recently-synced row flagged with
+an **amber `Pill` "Looks active"** (trailing swap → `Pill Tone=Amber`). Revealed when "Returning
+environment" is chosen; the **Name-this-environment** input hides (reclaim inherits the label). Two
+demo screens added to the V1 section (`620:329`):
+
+- **`02b · Reclaim an existing environment`** (`870:606`) — reclaim radio selected (ember border
+  moved off "New environment", a static stroke on the raw Option frame), `work-laptop` row Selected,
+  registry shown.
+- **`02c · "Looks active" warning`** (`872:681`) — a wrapper frame holding the screen + a 0.55-black
+  **scrim** + a **`Dialog Tone=Destructive`** (`266:732`): title "work-laptop may still be running",
+  body = the corrupt-sync caution, actions **Keep separate** (safe default, outline) / **Reclaim
+  anyway** (red). Never hard-blocks ([ADR 0008] sibling rule: surface risk + safe default, allow
+  override). (Composed in a wrapper because the screen is an `OnboardingShell` _instance_ — can't take
+  ad-hoc children.)
+
+**2 · Four-bucket Apply list (`AppPane/ChangeList` `Mode=Apply`, master `826:1562`).** The apply list
+(rebuilt by the operation-surface pass; shared with daily-receive) grouped CONFLICTS / APPLIES CLEANLY
+only. Added, into the list body, a **NEEDS A PATH** group (a `ListRow` `State=Warn` row — path + a
+single **Set a path** affordance; the Set-a-path/Don't-pull choice resolves in the detail pane, like
+Conflicts) and a **collapsed OTHER SYSTEMS ONLY** disclosure (Lucide `ChevronRight` + count). Both
+groups are adopt-only, so they're **`visible=false` on every non-adopt `Mode=Apply` instance**
+(Conflict-resolver `I126:649`/`I129:832`, Secret-&-errors `360:6986`); the adopt screen `228:1153`
+shows them with coherent counts (2 conflicts · 70 clean · 1 needs-a-path = 73, + 3 other-systems).
+
+**3 · Completeness gate (`AppPane/Apply` `State=Disabled`, set `833:1633`).** Already present from the
+operation-surface pass; retoned to the spec's running counter — `GateHint` → **"N items still need
+you"** (conflicts + needs-a-path), disabled-Apply subtitle → "…once every **item** is resolved."
+
+[ADR 0008]: ../../adr/0008-invariant-ownership.md
