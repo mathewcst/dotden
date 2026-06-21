@@ -27,33 +27,10 @@
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import type { PollCadenceProfile, SyncSettings } from '../../../shared/settings.js'
 
 /** Relative filename of the local sync-settings file inside the userData dir. */
 const SYNC_FILE = 'sync-settings.json'
-
-/**
- * How aggressively the TrayPoller checks the Remote (issue 2-08, maps onto {@link PollCadence}).
- *
- * - `fast` — the lively profile (≈2–5 min active · 15–30 min idle, scope-v1 "Poll cadence");
- *   the default, so incoming changes are noticed promptly.
- * - `relaxed` — a slower, battery-friendlier ceiling for a machine the user wants to keep quiet.
- *
- * Only the named *profile* is stored (never raw millisecond bounds), so the concrete cadence
- * numbers stay owned by the poller and can evolve without rewriting users' settings files.
- */
-export type PollCadenceProfile = 'fast' | 'relaxed'
-
-/**
- * The environment-local Sync preferences the Sync tab reads/writes (never synced — ADR 0024).
- */
-export interface SyncSettings {
-  /** Whether the always-on TrayPoller runs on this environment (default: on). */
-  readonly pollerEnabled: boolean
-  /** How aggressively the poller checks the Remote (default: `fast`). */
-  readonly cadence: PollCadenceProfile
-  /** Whether dotden starts at login so the tray/watcher is present (default: off). */
-  readonly startOnLogin: boolean
-}
 
 /**
  * The SAFE defaults for a fresh environment with no settings file yet.

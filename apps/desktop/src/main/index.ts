@@ -32,18 +32,18 @@ import {
 import { EnvironmentRegistry } from './foundation/environments/environment-registry.js'
 import { computeLaunchState, type LaunchState } from './foundation/environments/launch-state.js'
 import { OperationTracer } from './foundation/platform/operation-tracer.js'
-import type { PrivacySettings } from './foundation/settings/privacy-settings.js'
+import type { PrivacySettings } from '../shared/settings.js'
 import {
   readPrivacySettings,
   writePrivacySettings,
 } from './foundation/settings/privacy-settings.js'
 import { RemoteClient } from './foundation/sync/remote-client.js'
-import type { UnsubscribeDisposition } from './foundation/settings/subscription-settings.js'
+import type { UnsubscribeDisposition } from '../shared/settings.js'
 import {
   readUnsubscribeDisposition,
   writeUnsubscribeDisposition,
 } from './foundation/settings/subscription-settings.js'
-import type { PollCadenceProfile, SyncSettings } from './foundation/settings/sync-settings.js'
+import type { PollCadenceProfile, SyncSettings } from '../shared/settings.js'
 import { readSyncSettings, writeSyncSettings } from './foundation/settings/sync-settings.js'
 import { resolveBundledTools } from './foundation/platform/tools.js'
 import {

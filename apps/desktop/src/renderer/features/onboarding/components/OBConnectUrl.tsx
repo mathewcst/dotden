@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { GitBranch, Loader2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/ui/button'
-import type { ConnectResult } from '../../../../main/foundation/sync/remote-client'
+import type { ConnectResult } from '@shared/remote'
 
 /**
  * The connect-URL preflight states, mirroring the design spec's `ConnectURL` `State`

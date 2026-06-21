@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Loader2, Shield } from 'lucide-react'
 import { Switch } from '@/ui/switch'
-import type { PrivacySettings } from '../../../../main/foundation/settings/privacy-settings'
+import type { PrivacySettings } from '@shared/settings'
 
 /**
  * PrivacyTab — the Settings → Privacy & telemetry tab (issue 2-14, stories 43–44; design:

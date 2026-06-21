@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { GitBranch, KeyRound, Loader2, Lock, RefreshCw, Shield, TriangleAlert } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
 import type { ConnectedRemote } from '../../../../main/foundation/den-service'
-import type { PreflightResult } from '../../../../main/foundation/sync/remote-client'
+import type { PreflightResult } from '@shared/remote'
 import type { DetectedPasswordManager } from '../../../../main/foundation/secrets/pm-detect'
 
 /**

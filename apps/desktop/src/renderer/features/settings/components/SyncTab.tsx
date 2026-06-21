@@ -2,10 +2,7 @@ import { useEffect, useState } from 'react'
 import { Cloud, Loader2 } from 'lucide-react'
 import { Switch } from '@/ui/switch'
 import { cn } from '@/shared/lib/utils'
-import type {
-  PollCadenceProfile,
-  SyncSettings,
-} from '../../../../main/foundation/settings/sync-settings'
+import type { PollCadenceProfile, SyncSettings } from '@shared/settings'
 
 /**
  * SyncTab — the Settings → Sync & polling tab (issue 2-08, stories 37–39; design:

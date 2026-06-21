@@ -17,16 +17,7 @@
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-
-/**
- * What to do with the Files of a Workspace this environment just un-subscribed from.
- *
- * - `keep` — leave the Files on disk as untracked orphans (chezmoi simply stops managing
- *   them); nothing is deleted. Safe default.
- * - `remove` — explicitly delete the Files from this environment's disk (a `chezmoi forget`
- *   + target-remove), because `.chezmoiignore` alone never removes them.
- */
-export type UnsubscribeDisposition = 'keep' | 'remove'
+import type { UnsubscribeDisposition } from '../../../shared/settings.js'
 
 /** The safe default: keep the Files on disk (never delete unless the user asked, issue 1-13). */
 export const DEFAULT_UNSUBSCRIBE_DISPOSITION: UnsubscribeDisposition = 'keep'

@@ -52,10 +52,11 @@ import type { AutomationLevel } from '../../shared/apply.js'
 import type { Os, Scope } from '../../shared/scope.js'
 import { PushQueue } from './sync/push-queue.js'
 import { isOfflineError } from './sync/offline.js'
-import type { UnsubscribeDisposition } from './settings/subscription-settings.js'
+import type { UnsubscribeDisposition } from '../../shared/settings.js'
 import { scanForSecrets, type SecretFinding } from './secrets/secret-scanner.js'
 import { partitionFindings, type SecretAllowlist } from './secrets/secret-allowlist.js'
-import { parseFileHistory, shortSha, type FileVersion } from './file-history/file-history.js'
+import { parseFileHistory, shortSha } from './file-history/file-history.js'
+import type { FileVersion } from '../../shared/history.js'
 import { parseRemoteLocation } from './sync/remote-client.js'
 import {
   detectPasswordManagers,

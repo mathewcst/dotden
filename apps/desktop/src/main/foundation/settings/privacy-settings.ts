@@ -35,33 +35,10 @@
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import type { PrivacySettings } from '../../../shared/settings.js'
 
 /** Relative filename of the local privacy-settings file inside the userData dir. */
 const PRIVACY_FILE = 'privacy-settings.json'
-
-/**
- * The environment-local telemetry-consent flags the Privacy tab reads/writes (never synced —
- * ADR 0024). INDEPENDENT opt-ins, all OFF by default so nothing leaves the environment unless
- * the user opts in.
- */
-export interface PrivacySettings {
-  /**
-   * Consent to send anonymous, allowlisted usage **wide events** (ADR 0007). By construction
-   * these can only carry the bounded Allowlisted attribute key set — never paths/contents/
-   * secrets/repo URLs. Default: **off** (no usage data leaves the environment).
-   */
-  readonly analyticsEnabled: boolean
-  /**
-   * Consent to send a crash/error report (stack + app version) on an unexpected failure, so bugs
-   * are diagnosable. Default: **off** (no crash report leaves the environment).
-   */
-  readonly crashReportsEnabled: boolean
-  /**
-   * Consent to attach anonymized diagnostic logs to a crash report so a hard-to-reproduce failure
-   * is debuggable (same allowlisted-key discipline as analytics). Default: **off**.
-   */
-  readonly diagnosticLogsEnabled: boolean
-}
 
 /**
  * The SAFE defaults for a fresh environment with no privacy-settings file yet: **all consents

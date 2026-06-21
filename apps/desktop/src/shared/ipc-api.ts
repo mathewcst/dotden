@@ -20,7 +20,7 @@
  *   the renderer's `Bundler` resolution accepts it too, so the single file
  *   typechecks under both `tsconfig.node.json` and `tsconfig.web.json`.
  */
-import type { ConnectResult, PreflightResult } from '../main/foundation/sync/remote-client.js'
+import type { ConnectResult, PreflightResult } from './remote.js'
 import type {
   AffectedEnvironment,
   AppearanceState,
@@ -41,12 +41,12 @@ import type {
   YoloSyncResult,
 } from '../main/foundation/den-service.js'
 import type { LaunchState } from '../main/foundation/environments/launch-state.js'
-import type { UnsubscribeDisposition } from '../main/foundation/settings/subscription-settings.js'
+import type { UnsubscribeDisposition } from './settings.js'
 import type { SecretFinding } from '../main/foundation/secrets/secret-scanner.js'
 import type { SecretAllowlist } from '../main/foundation/secrets/secret-allowlist.js'
 import type { DetectedPasswordManager } from '../main/foundation/secrets/pm-detect.js'
 import type { PmPreference } from '../main/foundation/secrets/pm-preference.js'
-import type { FileVersion } from '../main/foundation/file-history/file-history.js'
+import type { FileVersion } from './history.js'
 import type { ResolutionChoice } from './apply.js'
 import type { Group, Workspace } from '../main/foundation/den-store.js'
 import type { Scope } from './scope.js'
@@ -59,8 +59,8 @@ import type {
   DiscoverySuggestion,
 } from '../main/foundation/environments/discovery-scanner.js'
 import type { AutomationLevel } from './apply.js'
-import type { SyncSettings } from '../main/foundation/settings/sync-settings.js'
-import type { PrivacySettings } from '../main/foundation/settings/privacy-settings.js'
+import type { SyncSettings } from './settings.js'
+import type { PrivacySettings } from './settings.js'
 import type { AppearanceOverride, AppearanceSettings } from './appearance-settings.js'
 import type { AppInfo, UpdateCheckResult } from './app-info.js'
 
