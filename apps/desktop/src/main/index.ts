@@ -56,6 +56,10 @@ import {
   writeUnsubscribeDisposition,
 } from './foundation/settings/subscription-settings.js'
 import type { PollCadenceProfile, SyncSettings } from '../shared/settings.js'
+import {
+  DEFAULT_APPEARANCE_SETTINGS,
+  type NotifyOn,
+} from '../shared/appearance-settings.js'
 import { readSyncSettings, writeSyncSettings } from './foundation/settings/sync-settings.js'
 import { resolveBundledTools } from './foundation/platform/tools.js'
 import {
@@ -64,6 +68,7 @@ import {
   type PollCadence,
 } from './foundation/system/tray-poller.js'
 import { noFeed, checkForUpdates as runUpdateCheck } from './foundation/system/update-check.js'
+import { notificationEnabled } from './foundation/system/notification-policy.js'
 import { registerIpcBridge } from './ipc/ipc-bridge.js'
 
 /**
@@ -531,8 +536,39 @@ async function restartTrayPoller(): Promise<void> {
 }
 
 /**
+ * Read the effective notification preferences. If the read fails, fall back to the safe default and
+ * log the failure rather than silently dropping all notifications.
+ */
+async function readNotifyOn(): Promise<NotifyOn> {
+  try {
+    const den = await getDenService()
+    return (await den.appearanceSettings(pollTrace().traceId)).notifyOn
+  } catch (error) {
+    console.error('[dotden] Failed to read notification settings:', error)
+    return DEFAULT_APPEARANCE_SETTINGS.notifyOn
+  }
+}
+
+/** Show one native OS notification if supported. */
+function showNotification(title: string, body: string): void {
+  if (!Notification.isSupported()) return
+  new Notification({ title, body }).show()
+}
+
+/** Gate an OS notification through the user-authored `notifyOn` settings. */
+async function notifyIfEnabled(
+  kind: keyof NotifyOn,
+  title: string,
+  body: string,
+): Promise<void> {
+  const notifyOn = await readNotifyOn()
+  if (!notificationEnabled(notifyOn, kind)) return
+  showNotification(title, body)
+}
+
+/**
  * Fire the detect-only side effects when the TrayPoller sees the Remote move (issue 1-12):
- * an OS {@link Notification} (so the user learns even with the window closed) AND a
+ * a gated OS {@link Notification} (so the user learns even with the window closed) AND a
  * `tray-poller:incoming` push to an open window (so it can refresh its Incoming banner).
  *
  * Detect-only: this NEVER applies anything (ADR 0006/0008). It surfaces awareness; the
@@ -540,16 +576,35 @@ async function restartTrayPoller(): Promise<void> {
  * without notification support simply skips the toast and still pushes to the window.
  */
 function notifyIncoming(): void {
-  // OS notification (functional chrome only; native macOS polish is issue 3-06/3-07).
-  if (Notification.isSupported()) {
-    new Notification({
-      title: 'dotden — incoming changes',
-      body: 'Another environment changed your Den. Open dotden to review and Apply.',
-    }).show()
-  }
+  void notifyIfEnabled(
+    'incoming',
+    'dotden — incoming changes',
+    'Another environment changed your Den. Open dotden to review and Apply.',
+  )
   // Nudge an open window to re-check the Remote so its in-app banner stays in step.
   mainWindow?.webContents.send('tray-poller:incoming')
 }
+
+/** Notify that a Conflict appeared, respecting the user's `notifyOn.conflict` switch. */
+function notifyConflict(): void {
+  void notifyIfEnabled(
+    'conflict',
+    'dotden — conflict needs review',
+    'Two environments changed the same File. Open dotden to resolve it.',
+  )
+}
+
+/** Notify that Auto-apply applied changes, respecting the user's `notifyOn.applied` switch. */
+function notifyApplied(fileCount: number): void {
+  void notifyIfEnabled(
+    'applied',
+    'dotden — changes applied',
+    fileCount === 1 ? 'Applied 1 File.' : `Applied ${fileCount} Files.`,
+  )
+}
+
+/** Main-process notification surface. Conflict/applied are used by follow-up automation hooks. */
+const desktopNotifier = { notifyIncoming, notifyConflict, notifyApplied }
 
 /**
  * Arm the always-on {@link TrayPoller} (issue 1-12): a system-tray presence keeps the app
@@ -591,7 +646,7 @@ async function armTrayPoller(): Promise<void> {
       // provider-agnostic git primitive, no Provider API, no clone, no rate-limit cost.
       readLatestSha: (signal) =>
         client.latestRemoteSha(remoteUrl, 'main', { _trace: pollTrace(), signal }),
-      notifier: { notifyIncoming },
+      notifier: desktopNotifier,
       // The cadence the user picked in the Sync tab (issue 2-08): `fast` (default) or `relaxed`.
       cadence: cadenceForProfile(syncSettings.cadence),
       // Real one-shot timers; the poller owns clearing/re-arming.
