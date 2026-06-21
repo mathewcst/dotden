@@ -8,9 +8,9 @@
  * WITHOUT a `_trace` fails loudly (never silently emit an uncorrelated Operation).
  */
 import { describe, expect, it, vi } from 'vitest'
-import { registerIpcBridge, traceId, type IpcRegistrar } from '../../ipc/ipc-bridge.js'
-import type { SyncSettings } from '../settings/sync-settings.js'
-import type { PrivacySettings } from '../settings/privacy-settings.js'
+import { registerIpcBridge, traceId, type IpcRegistrar } from '../ipc-bridge.js'
+import type { SyncSettings } from '../../foundation/settings/sync-settings.js'
+import type { PrivacySettings } from '../../foundation/settings/privacy-settings.js'
 
 /** A fake registrar that captures channel→handler so tests can invoke them directly. */
 function fakeRegistrar() {
