@@ -4,8 +4,8 @@
  * Exercises `boot()` and navigation with a fake injected API and a spy theme fn — no React, no DOM.
  */
 import { describe, expect, it, vi } from 'vitest'
-import type { AppearanceSettings } from '../../../../../shared/appearance-settings'
-import type { DotdenApi } from '../../../../../shared/ipc-api'
+import type { AppearanceSettings } from '@shared/appearance-settings'
+import type { DotdenApi } from '@shared/ipc-api'
 import { createLaunchStore } from '../launch-store'
 
 function makeApi(over: Record<string, unknown> = {}): DotdenApi {

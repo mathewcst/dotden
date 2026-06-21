@@ -6,7 +6,7 @@ import {
   isUpdateCheckUnavailable,
   type AppInfo,
   type UpdateCheckResult,
-} from '../../../../shared/app-info'
+} from '@shared/app-info'
 
 /**
  * AboutTab — the Settings → About tab (issue 2-16, stories 52–53; design: screens/settings.md

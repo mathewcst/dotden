@@ -6,7 +6,7 @@ import {
   DEFAULT_COMMIT_MESSAGE_TEMPLATE,
   renderCommitTemplate,
   type CommitTemplateData,
-} from '../../../../shared/commit-template'
+} from '@shared/commit-template'
 
 /**
  * CommitTab — the Settings → Commit tab (issue 2-09, stories 34–36; design: screens/settings.md

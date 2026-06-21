@@ -9,7 +9,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { createDenSessionStore, type Role } from '../den-session-store'
-import type { DotdenApi } from '../../../../../shared/ipc-api'
+import type { DotdenApi } from '@shared/ipc-api'
 
 /** A managed File tree entry — only the fields the session actions read are load-bearing. */
 function entry(targetPath: string, over: Partial<Record<string, unknown>> = {}) {

@@ -25,6 +25,13 @@ export default defineConfig(async ({ mode }) => {
       resolve: {
         alias: [
           { find: '@', replacement: resolve(__dirname, 'src/renderer') },
+          // `@shared/*` → the cross-process IPC contract (`src/shared`): types + pure
+          // helpers shared by main and renderer. Distinct from `@/shared`
+          // (renderer-internal). The renderer reaches the contract ONLY through this
+          // alias and must never deep-import `../../main/**` (ADR 0030). Safe to place
+          // after `@`: rollup string aliases require a `/` boundary, so `@` never
+          // swallows `@shared/…`.
+          { find: '@shared', replacement: resolve(__dirname, 'src/shared') },
           // Trim Shiki to dotden's config languages (issue 1-07): `@pierre/diffs`
           // imports `bundledLanguages` from the bare `shiki` specifier, which is a
           // map of ~330 lazy grammar imports — Rollup can't tree-shake it, so the

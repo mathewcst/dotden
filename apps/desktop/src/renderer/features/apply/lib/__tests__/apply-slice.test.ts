@@ -4,7 +4,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { createDenSessionStore } from '../../../shell/lib/den-session-store'
-import type { DotdenApi } from '../../../../../shared/ipc-api'
+import type { DotdenApi } from '@shared/ipc-api'
 
 function makeApi(over: Record<string, unknown> = {}): DotdenApi {
   return {

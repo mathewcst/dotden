@@ -13,7 +13,7 @@
  * its Commit through the commit slice's `setCommitOutcome` and refreshes the tree/incoming — all
  * via `get()`. The IPC surface is injected for node-testability.
  */
-import type { DotdenApi } from '../../../../shared/ipc-api'
+import type { DotdenApi } from '@shared/ipc-api'
 import type { SecretFinding } from '../../../../main/foundation/secrets/secret-scanner'
 import type { ConvertSecretRequest } from '../../../../main/foundation/den-service'
 import type { DetectedPasswordManager } from '../../../../main/foundation/secrets/pm-detect'

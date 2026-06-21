@@ -7,7 +7,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { createDenSessionStore } from '../../../shell/lib/den-session-store'
-import type { DotdenApi } from '../../../../../shared/ipc-api'
+import type { DotdenApi } from '@shared/ipc-api'
 import type { SecretFinding } from '../../../../../main/foundation/secrets/secret-scanner'
 
 function finding(file: string): SecretFinding {

@@ -11,7 +11,7 @@
  * `list` (env B Detect) and the review surfaces' close handlers reach the session slice via
  * `get()` (selectFile, reloadTree). The IPC surface is injected for node-testability.
  */
-import type { DotdenApi } from '../../../../shared/ipc-api'
+import type { DotdenApi } from '@shared/ipc-api'
 import type { IncomingReviewItem, RemoteAxisMarker } from '../../../../main/foundation/den-service'
 import type { DenSessionGet, DenSessionSet } from '../../shell/lib/den-session-store'
 

@@ -15,7 +15,7 @@
  * The IPC surface is INJECTED (`api`) rather than read off `window.dotden`, so the slice runs
  * in vitest's node environment with a fake API — no DOM, no `window` (see the slice tests).
  */
-import type { DotdenApi } from '../../../../shared/ipc-api'
+import type { DotdenApi } from '@shared/ipc-api'
 import type { AffectedEnvironment, FileTreeEntry } from '../../../../main/foundation/den-service'
 import type { Workspace as WorkspaceModel } from '../../../../main/foundation/den-store'
 import type { Scope } from '../../../../main/foundation/platform/os-scope'

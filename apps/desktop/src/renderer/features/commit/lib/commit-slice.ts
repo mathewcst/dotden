@@ -12,7 +12,7 @@
  * come from the session slice; opening the secret warn step calls the secrets slice; an auto-pushed
  * Commit refreshes the apply slice's incoming. The IPC surface is injected for node-testability.
  */
-import type { DotdenApi } from '../../../../shared/ipc-api'
+import type { DotdenApi } from '@shared/ipc-api'
 import type { SecretFinding } from '../../../../main/foundation/secrets/secret-scanner'
 import type { DenSessionGet, DenSessionSet } from '../../shell/lib/den-session-store'
 

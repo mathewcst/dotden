@@ -2,7 +2,8 @@
   "extends": "@dotden/typescript-config/vite-app.json",
   "compilerOptions": {
     "paths": {
-      "@/*": ["./src/renderer/*"]
+      "@/*": ["./src/renderer/*"],
+      "@shared/*": ["./src/shared/*"]
     },
     // The shared DotdenApi contract links to the foundation result types
     // (PreflightResult/ConnectResult), so the renderer typecheck transitively

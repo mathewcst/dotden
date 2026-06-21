@@ -19,7 +19,7 @@
  * are pure, node-testable decisions — the slice tests build a store with a fake API, no DOM.
  */
 import { createStore, type StoreApi } from 'zustand/vanilla'
-import type { DotdenApi } from '../../../../shared/ipc-api'
+import type { DotdenApi } from '@shared/ipc-api'
 // Cross-feature slice imports stay RELATIVE, not `@/` (the convention everywhere else). This file
 // and the slices are value-imported by the node-env slice tests, and vitest runs with no `@/` alias
 // (there is deliberately no vitest config — it keeps the slices testable in plain Node). `@/` would

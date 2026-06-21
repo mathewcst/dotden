@@ -10,8 +10,8 @@
  * node-testable with a fake API and a spy theme fn — no DOM required in tests.
  */
 import { createStore, type StoreApi } from 'zustand/vanilla'
-import type { ThemeId } from '../../../../shared/appearance-settings'
-import type { DotdenApi } from '../../../../shared/ipc-api'
+import type { ThemeId } from '@shared/appearance-settings'
+import type { DotdenApi } from '@shared/ipc-api'
 import { applyTheme } from '../../../shared/lib/apply-theme'
 
 /** The top-level route between boot splash, setup flows, Settings, and the den window. */

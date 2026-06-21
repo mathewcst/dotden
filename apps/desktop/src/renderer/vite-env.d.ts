@@ -11,5 +11,5 @@ declare module '@fontsource-variable/geist-mono'
 // (a top-level `import` would turn it into a module and silently drop the global
 // `Window` augmentation along with the ambient `declare module`s above).
 interface Window {
-  dotden: import('../shared/ipc-api').DotdenApi
+  dotden: import('@shared/ipc-api').DotdenApi
 }
