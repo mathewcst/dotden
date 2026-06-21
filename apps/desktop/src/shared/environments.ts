@@ -1,5 +1,5 @@
 /**
- * environments — IPC contract types shared by main + renderer (ADR 0030).
+ * environments — IPC contract types shared by main + renderer (ADR 0031).
  * Moved out of foundation so the renderer speaks them without importing main.
  */
 

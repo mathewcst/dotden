@@ -6,7 +6,7 @@
  * main process (which compiles Scope into native `.chezmoiignore` rules — see
  * `foundation/platform/os-scope.ts`) and the renderer (the Scope editor UI) speak them.
  * Keeping them in the Electron-free, node-free contract is what lets the renderer import
- * the Scope vocabulary without reaching into `main/**` (ADR 0030) or pulling in node types.
+ * the Scope vocabulary without reaching into `main/**` (ADR 0031) or pulling in node types.
  *
  * The operations on these types (`intersectScope`, `effectiveScope`, `scopedOutPaths`, …)
  * stay in `foundation/platform/os-scope.ts`: they are main-side behavior, not contract.

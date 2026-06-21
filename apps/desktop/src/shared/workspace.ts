@@ -1,5 +1,5 @@
 /**
- * workspace — IPC contract types shared by main + renderer (ADR 0030).
+ * workspace — IPC contract types shared by main + renderer (ADR 0031).
  * Moved out of foundation so the renderer speaks them without importing main.
  */
 import type { Scope } from './scope.js'

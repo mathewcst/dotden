@@ -29,7 +29,7 @@
 
 // The Os + Scope TYPES are the cross-process contract — they moved to
 // `src/shared/scope.ts` so the renderer can speak Scope without reaching into
-// `main/**` (ADR 0030). The OPERATIONS on them stay here (main-side behavior).
+// `main/**` (ADR 0031). The OPERATIONS on them stay here (main-side behavior).
 import type { Os, Scope } from '../../../shared/scope.js'
 
 /**

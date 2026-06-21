@@ -28,7 +28,7 @@ export default defineConfig(async ({ mode }) => {
           // `@shared/*` → the cross-process IPC contract (`src/shared`): types + pure
           // helpers shared by main and renderer. Distinct from `@/shared`
           // (renderer-internal). The renderer reaches the contract ONLY through this
-          // alias and must never deep-import `../../main/**` (ADR 0030). Safe to place
+          // alias and must never deep-import `../../main/**` (ADR 0031). Safe to place
           // after `@`: rollup string aliases require a `/` boundary, so `@` never
           // swallows `@shared/…`.
           { find: '@shared', replacement: resolve(__dirname, 'src/shared') },
