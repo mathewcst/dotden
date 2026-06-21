@@ -6,12 +6,16 @@ import tseslint from 'typescript-eslint'
 export const config = tseslint.config(
   {
     ignores: [
+      // Build output (electron-vite `out/`, astro `dist/`/`.astro/`) and the
+      // electron-builder `release/` artifacts are generated, never linted.
       'out/**',
       'dist/**',
       '.astro/**',
       'node_modules/**',
       'release/**',
-      'resources/bin/**',
+      // `resources/` is vendored binaries + static assets (chezmoi/git
+      // distributions fetched at build time), not source — ignore the whole tree.
+      'resources/**',
     ],
   },
   {

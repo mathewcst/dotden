@@ -1,0 +1,19 @@
+# Prettier does NOT read .gitignore — these must be listed here explicitly, or the
+# root `format` script (prettier --write "**/*.{ts,tsx,astro,css,md,json}") rewrites
+# generated output and vendored assets. Patterns use .gitignore syntax: a bare name
+# matches at any depth, so `out/` covers apps/*/out, etc.
+
+# Build output
+out/
+dist/
+.astro/
+.turbo/
+
+# electron-builder packaged artifacts
+release/
+
+# Vendored binaries + static assets (chezmoi/git distributions fetched at build)
+resources/
+
+# Lockfile and generated package manager state
+pnpm-lock.yaml
