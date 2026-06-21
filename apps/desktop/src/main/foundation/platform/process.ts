@@ -8,6 +8,8 @@
  */
 import { spawn } from 'node:child_process'
 
+import type { DiagnosticsSink } from '../diagnostics/command-log.js'
+
 /**
  * Grace period between the polite SIGTERM and the unconditional SIGKILL.
  *
@@ -96,6 +98,11 @@ export interface RunCommandOptions {
   readonly timeoutMs?: number
   /** Caller cancellation; the child is killed and the promise rejects with CommandAbortedError. */
   readonly signal?: AbortSignal
+  /**
+   * Optional Diagnostics capture sink. Defaults to no-op so this primitive remains easy
+   * to test and existing transports keep their signatures unchanged (ADR 0030).
+   */
+  readonly diagnosticsSink?: DiagnosticsSink
 }
 
 /**
@@ -151,6 +158,19 @@ export async function runCommand(
     const finish = (exitCode: number | null) => {
       cleanup()
       const result = { command, args, cwd: options.cwd, exitCode: exitCode ?? 1, stdout, stderr }
+      try {
+        options.diagnosticsSink?.record({
+          command,
+          args,
+          exitCode: result.exitCode,
+          stdout,
+          stderr,
+          timestamp: Date.now(),
+        })
+      } catch (error) {
+        reject(error)
+        return
+      }
       // Preserve a separate error class for caller-driven termination so higher layers can
       // distinguish "git says credentials failed" from "dotden killed a hung credential prompt".
       if (aborted) reject(new CommandAbortedError(aborted, result))

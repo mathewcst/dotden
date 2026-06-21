@@ -11,7 +11,14 @@
  * and a clean zero-exit command resolves with the expected {@link CommandResult}.
  */
 import { describe, expect, it } from 'vitest'
-import { CommandAbortedError, type CommandResult, runCommand } from '../process.js'
+import { CommandLog } from '../../diagnostics/command-log.js'
+import { REDACTED_TOKEN } from '../../diagnostics/redactor.js'
+import {
+  CommandAbortedError,
+  CommandFailedError,
+  type CommandResult,
+  runCommand,
+} from '../process.js'
 
 // The Node interpreter running this test suite — a long-running, cross-platform child
 // with no external deps. `-e <script>` runs an inline program so we control its lifetime.
@@ -63,5 +70,38 @@ describe('runCommand termination guarantees', () => {
       stdout: 'ok',
       stderr: '',
     })
+  })
+
+  it('writes exactly one redacted diagnostics record for a clean zero exit', async () => {
+    const log = new CommandLog()
+
+    await runCommand(
+      node,
+      ['-e', 'process.stdout.write("ghp_1234567890abcdefghijklmnopqrstuvwxyzABCD")'],
+      {
+        diagnosticsSink: log,
+      },
+    )
+
+    const records = log.records()
+    expect(records).toHaveLength(1)
+    expect(records[0]?.exitCode).toBe(0)
+    expect(records[0]?.stdout).toBe(REDACTED_TOKEN)
+  })
+
+  it('writes exactly one redacted diagnostics record for a non-zero exit', async () => {
+    const log = new CommandLog()
+    const secret = 'ghp_1234567890abcdefghijklmnopqrstuvwxyzABCD'
+
+    const promise = runCommand(node, ['-e', `process.stderr.write("${secret}"); process.exit(7)`], {
+      diagnosticsSink: log,
+    })
+
+    await expect(promise).rejects.toBeInstanceOf(CommandFailedError)
+    const records = log.records()
+    expect(records).toHaveLength(1)
+    expect(records[0]?.exitCode).toBe(7)
+    expect(records[0]?.stderr).toBe(REDACTED_TOKEN)
+    expect(JSON.stringify(records)).not.toContain(secret)
   })
 })
