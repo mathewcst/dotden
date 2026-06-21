@@ -29,6 +29,8 @@ function fakeRegistrar() {
 describe('IpcBridge', () => {
   it('routes diagnostics channels and exposes only redacted record DTOs (PRD4)', async () => {
     const openDiagnosticsLogLocation = vi.fn(async () => undefined)
+    const getDiagnosticsSettings = vi.fn(async () => ({ consoleEnabled: false }))
+    const setDiagnosticsSettings = vi.fn(async (settings: { consoleEnabled: boolean }) => settings)
     const diagnosticsRecordsFor = vi.fn(async () => [
       {
         command: 'git',
@@ -75,6 +77,8 @@ describe('IpcBridge', () => {
       openDiagnosticsLogLocation,
       diagnosticsRecordsFor,
       copyDiagnostics,
+      getDiagnosticsSettings,
+      setDiagnosticsSettings,
     })
 
     await handlers.get('diagnostics:open-log-location')?.({}, {
@@ -100,6 +104,18 @@ describe('IpcBridge', () => {
       } as never),
     ).resolves.toEqual({ recordCount: 1 })
     expect(copyDiagnostics).toHaveBeenCalledWith('trace-a')
+    await expect(
+      handlers.get('diagnostics:get-settings')?.({}, {
+        _trace: { traceId: 'diag-4' },
+      } as never),
+    ).resolves.toEqual({ consoleEnabled: false })
+    await expect(
+      handlers.get('diagnostics:set-settings')?.({}, {
+        settings: { consoleEnabled: true },
+        _trace: { traceId: 'diag-5' },
+      } as never),
+    ).resolves.toEqual({ consoleEnabled: true })
+    expect(setDiagnosticsSettings).toHaveBeenCalledWith({ consoleEnabled: true })
     await expect(handlers.get('diagnostics:open-log-location')?.({}, {} as never)).rejects.toThrow(
       'without a _trace envelope',
     )

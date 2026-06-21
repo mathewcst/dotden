@@ -46,6 +46,9 @@ function makeApi(over: Record<string, unknown> = {}): DotdenApi {
     diagnostics: {
       recordsFor: vi.fn(async () => []),
       openLogLocation: vi.fn(async () => undefined),
+      copyDiagnostics: vi.fn(async () => ({ recordCount: 0 })),
+      getSettings: vi.fn(async () => ({ consoleEnabled: false })),
+      setSettings: vi.fn(async (settings) => settings),
       ...(over.diagnostics ?? {}),
     },
     automation: {
@@ -74,6 +77,7 @@ describe('session slice — the reset guarantee (key={role} remount proven at th
     expect(s.diagnosticsPanelMode).toBe('console')
     expect(s.diagnosticsPanelTraceId).toBeNull()
     expect(s.diagnosticsRecords).toEqual([])
+    expect(s.diagnosticsClearedAt).toBeNull()
     // apply-slice session state is part of the same fresh store.
     expect(s.incoming).toEqual([])
     expect(s.remoteAxis.size).toBe(0)
@@ -187,6 +191,22 @@ describe('session slice — Diagnostics panel', () => {
     expect(store.getState().diagnosticsErrorCount).toBe(1)
   })
 
+  it('loads the persisted Console setting and opens the standing Console when enabled', async () => {
+    const api = makeApi({
+      diagnostics: {
+        getSettings: vi.fn(async () => ({ consoleEnabled: true })),
+        recordsFor: vi.fn(async () => []),
+      },
+    })
+    const store = createDenSessionStore('a', api)
+
+    await store.getState().loadDiagnosticsConsoleSetting()
+
+    expect(store.getState().diagnosticsConsoleEnabled).toBe(true)
+    expect(store.getState().diagnosticsPanelOpen).toBe(true)
+    expect(store.getState().diagnosticsPanelMode).toBe('console')
+  })
+
   it('re-clicking the Diagnostics badge collapses the panel', async () => {
     const store = freshStore('a')
     await store.getState().toggleDiagnosticsPanel()
@@ -218,6 +238,58 @@ describe('session slice — Diagnostics panel', () => {
 
     expect(store.getState().diagnosticsRecords).toEqual([])
     expect(store.getState().diagnosticsErrorCount).toBe(1)
+  })
+
+  it('keeps Console clear as a view cutoff while preserving the persisted badge count', async () => {
+    let now = 10
+    const dateNow = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const api = makeApi({
+      diagnostics: {
+        recordsFor: vi
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              command: 'git',
+              args: ['status'],
+              exitCode: 0,
+              redactedStdout: '',
+              redactedStderr: '',
+              timestamp: 5,
+            },
+          ])
+          .mockResolvedValueOnce([
+            {
+              command: 'git',
+              args: ['status'],
+              exitCode: 0,
+              redactedStdout: '',
+              redactedStderr: '',
+              timestamp: 5,
+            },
+            {
+              command: 'git',
+              args: ['push'],
+              exitCode: 128,
+              redactedStdout: '',
+              redactedStderr: 'failed',
+              timestamp: 11,
+            },
+          ]),
+      },
+    })
+    const store = createDenSessionStore('a', api)
+
+    await store.getState().openDiagnosticsPanel()
+    now = 10
+    store.getState().clearDiagnosticsView()
+    await store.getState().refreshDiagnosticsConsole()
+    expect(store.getState().diagnosticsRecords.map((record) => record.timestamp)).toEqual([])
+
+    store.setState({ diagnosticsConsoleEnabled: true })
+    await store.getState().refreshDiagnosticsConsole()
+    expect(store.getState().diagnosticsRecords.map((record) => record.timestamp)).toEqual([11])
+    expect(store.getState().diagnosticsErrorCount).toBe(1)
+    dateNow.mockRestore()
   })
 })
 

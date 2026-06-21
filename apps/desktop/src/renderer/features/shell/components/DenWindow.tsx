@@ -79,6 +79,8 @@ export function DenWindow({
   const reviewing = useDenSession((s) => s.reviewing)
   const resolving = useDenSession((s) => s.resolving)
   const diagnosticsPanelOpen = useDenSession((s) => s.diagnosticsPanelOpen)
+  const diagnosticsPanelMode = useDenSession((s) => s.diagnosticsPanelMode)
+  const diagnosticsConsoleEnabled = useDenSession((s) => s.diagnosticsConsoleEnabled)
   const error = useDenSession((s) => s.error)
 
   const selectFile = useDenSession((s) => s.selectFile)
@@ -89,6 +91,8 @@ export function DenWindow({
   const refreshPushQueued = useDenSession((s) => s.refreshPushQueued)
   const flushQueuedPush = useDenSession((s) => s.flushQueuedPush)
   const refreshDiagnosticsStatus = useDenSession((s) => s.refreshDiagnosticsStatus)
+  const loadDiagnosticsConsoleSetting = useDenSession((s) => s.loadDiagnosticsConsoleSetting)
+  const refreshDiagnosticsConsole = useDenSession((s) => s.refreshDiagnosticsConsole)
   const openDiagnosticsPanel = useDenSession((s) => s.openDiagnosticsPanel)
   const setReviewing = useDenSession((s) => s.setReviewing)
   const setResolving = useDenSession((s) => s.setResolving)
@@ -155,6 +159,24 @@ export function DenWindow({
   useEffect(() => {
     void refreshDiagnosticsStatus()
   }, [refreshDiagnosticsStatus])
+
+  useEffect(() => {
+    void loadDiagnosticsConsoleSetting()
+  }, [loadDiagnosticsConsoleSetting])
+
+  useEffect(() => {
+    if (!diagnosticsConsoleEnabled || !diagnosticsPanelOpen || diagnosticsPanelMode !== 'console') {
+      return
+    }
+    void refreshDiagnosticsConsole()
+    const interval = window.setInterval(() => void refreshDiagnosticsConsole(), 1500)
+    return () => window.clearInterval(interval)
+  }, [
+    diagnosticsConsoleEnabled,
+    diagnosticsPanelMode,
+    diagnosticsPanelOpen,
+    refreshDiagnosticsConsole,
+  ])
 
   // Returning onboarding hands off directly to the reviewed Apply surface. The ReviewApply
   // component fetches its own incoming summary on mount, so the shell only needs to flip the route.

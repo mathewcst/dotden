@@ -21,7 +21,7 @@ import type { EnvironmentRegistry } from '../foundation/environments/environment
 import type { LaunchState } from '../../shared/environments.js'
 import type { RemoteClient } from '../foundation/sync/remote-client.js'
 import type { AutomationLevel } from '../../shared/apply.js'
-import type { SyncSettings } from '../../shared/settings.js'
+import type { DiagnosticsSettings, SyncSettings } from '../../shared/settings.js'
 import type { PrivacySettings } from '../../shared/settings.js'
 import type { Scope } from '../../shared/scope.js'
 import type { UnsubscribeDisposition } from '../../shared/settings.js'
@@ -156,6 +156,12 @@ export interface IpcBridgeDeps {
   readonly diagnosticsRecordsFor?: (traceId?: string) => Promise<readonly RedactedCommandRecord[]>
   /** Copy a redacted diagnostics bundle to the clipboard. */
   readonly copyDiagnostics?: (traceId?: string) => Promise<CopyDiagnosticsResult>
+  /** Read this environment's Diagnostics settings. */
+  readonly getDiagnosticsSettings?: () => Promise<DiagnosticsSettings>
+  /** Persist this environment's Diagnostics settings. */
+  readonly setDiagnosticsSettings?: (
+    settings: DiagnosticsSettings,
+  ) => Promise<DiagnosticsSettings>
 }
 
 /**
@@ -222,6 +228,21 @@ export function registerIpcBridge(registrar: IpcRegistrar, deps: IpcBridgeDeps):
     }
     const { traceId: requestedTraceId } = payload as TracedPayload & { traceId?: string }
     return deps.copyDiagnostics(requestedTraceId)
+  })
+  registrar.handle('diagnostics:get-settings', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    if (!deps.getDiagnosticsSettings) {
+      throw new Error('Diagnostics settings IPC is not wired')
+    }
+    return deps.getDiagnosticsSettings()
+  })
+  registrar.handle('diagnostics:set-settings', async (_event, payload: TracedPayload) => {
+    traceId(payload)
+    if (!deps.setDiagnosticsSettings) {
+      throw new Error('Diagnostics settings IPC is not wired')
+    }
+    const { settings } = payload as TracedPayload & { settings: DiagnosticsSettings }
+    return deps.setDiagnosticsSettings(settings)
   })
 
   // ── Remote channels (issue 1-03), kept here so ALL IPC carries _trace uniformly ──

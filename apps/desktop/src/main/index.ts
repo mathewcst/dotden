@@ -37,11 +37,16 @@ import { EnvironmentRegistry } from './foundation/environments/environment-regis
 import { computeLaunchState } from './foundation/environments/launch-state.js'
 import type { LaunchState } from '../shared/environments.js'
 import { OperationTracer } from './foundation/platform/operation-tracer.js'
+import type { DiagnosticsSettings } from '../shared/settings.js'
 import type { PrivacySettings } from '../shared/settings.js'
 import {
   readPrivacySettings,
   writePrivacySettings,
 } from './foundation/settings/privacy-settings.js'
+import {
+  readDiagnosticsSettings,
+  writeDiagnosticsSettings,
+} from './foundation/settings/diagnostics-settings.js'
 import { RemoteClient } from './foundation/sync/remote-client.js'
 import type { UnsubscribeDisposition } from '../shared/settings.js'
 import {
@@ -373,6 +378,19 @@ function getPrivacySettings(): Promise<PrivacySettings> {
  */
 async function setPrivacySettings(settings: PrivacySettings): Promise<PrivacySettings> {
   await writePrivacySettings(app.getPath('userData'), settings)
+  return settings
+}
+
+// ── Diagnostics settings: standing Console opt-in (PRD4 issue 4-07, ADR 0024) ──
+
+function getDiagnosticsSettings(): Promise<DiagnosticsSettings> {
+  return readDiagnosticsSettings(app.getPath('userData'))
+}
+
+async function setDiagnosticsSettings(
+  settings: DiagnosticsSettings,
+): Promise<DiagnosticsSettings> {
+  await writeDiagnosticsSettings(app.getPath('userData'), settings)
   return settings
 }
 
@@ -757,6 +775,8 @@ if (!app.requestSingleInstanceLock()) {
       setSyncSettings,
       getPrivacySettings,
       setPrivacySettings,
+      getDiagnosticsSettings,
+      setDiagnosticsSettings,
       getAppInfo,
       checkForUpdates,
       controlWindow,

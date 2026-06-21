@@ -54,7 +54,7 @@ import type { ClaimSuggestion, EnvironmentWithAttribution } from './environments
 import type { DiscoveryScanResult } from './environments.js'
 import type { DiscoverySuggestion } from './environments.js'
 import type { AutomationLevel } from './apply.js'
-import type { SyncSettings } from './settings.js'
+import type { DiagnosticsSettings, SyncSettings } from './settings.js'
 import type { PrivacySettings } from './settings.js'
 import type { AppearanceOverride, AppearanceSettings } from './appearance-settings.js'
 import type { AppInfo, UpdateCheckResult } from './app-info.js'
@@ -113,6 +113,10 @@ export interface DotdenApi {
     recordsFor(traceId?: string): Promise<readonly RedactedCommandRecord[]>
     /** Copy a redacted diagnostics bundle to the OS clipboard. */
     copyDiagnostics(traceId?: string): Promise<CopyDiagnosticsResult>
+    /** Read this environment's Diagnostics settings. */
+    getSettings(): Promise<DiagnosticsSettings>
+    /** Persist this environment's Diagnostics settings. */
+    setSettings(settings: DiagnosticsSettings): Promise<DiagnosticsSettings>
   }
   /** Remote-connection operations, each forwarded to a `remote:*` IPC channel. */
   readonly remote: {

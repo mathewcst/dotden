@@ -13,6 +13,16 @@ export function BottomPanel() {
   const clear = useDenSession((s) => s.clearDiagnosticsView)
   const tabLabel = mode === 'details' ? 'Details' : 'Console'
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [failuresOnly, setFailuresOnly] = useState(false)
+  const [traceFilter, setTraceFilter] = useState('')
+  const filtersEnabled = mode === 'console'
+  const visibleRecords = records.filter((record) => {
+    if (!filtersEnabled) return true
+    if (failuresOnly && record.exitCode === 0) return false
+    if (traceFilter.trim() && !record.traceId?.includes(traceFilter.trim())) return false
+    return true
+  })
 
   async function copyDiagnostics() {
     setCopyState('idle')
@@ -25,7 +35,13 @@ export function BottomPanel() {
   }
 
   return (
-    <section className="border-border bg-card grid min-h-0 grid-rows-[36px_minmax(0,1fr)] border-t">
+    <section
+      className={
+        filtersOpen && filtersEnabled
+          ? 'border-border bg-card grid min-h-0 grid-rows-[36px_auto_minmax(0,1fr)] border-t'
+          : 'border-border bg-card grid min-h-0 grid-rows-[36px_minmax(0,1fr)] border-t'
+      }
+    >
       <header className="border-border bg-sidebar flex items-center border-b">
         <div className="flex h-full items-stretch">
           <button
@@ -33,7 +49,7 @@ export function BottomPanel() {
             className="border-dd-ember-500 text-foreground bg-card flex items-center gap-2 border-t-2 px-3 text-xs font-medium"
           >
             {tabLabel}
-            <span className="text-muted-foreground font-mono">{records.length}</span>
+            <span className="text-muted-foreground font-mono">{visibleRecords.length}</span>
           </button>
           <button
             type="button"
@@ -64,7 +80,12 @@ export function BottomPanel() {
           <IconButton aria-label="Copy diagnostics" onClick={() => void copyDiagnostics()}>
             <Copy />
           </IconButton>
-          <IconButton aria-label="Filter diagnostics records" disabled>
+          <IconButton
+            aria-label="Filter diagnostics records"
+            aria-pressed={filtersOpen}
+            disabled={!filtersEnabled}
+            onClick={() => setFiltersOpen((open) => !open)}
+          >
             <Filter />
           </IconButton>
           <IconButton aria-label="Clear diagnostics view" onClick={clear}>
@@ -79,9 +100,31 @@ export function BottomPanel() {
         </div>
       </header>
 
+      {filtersOpen && filtersEnabled ? (
+        <div className="border-border bg-background flex items-center gap-3 border-b px-3 py-2 text-xs">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={failuresOnly}
+              onChange={(event) => setFailuresOnly(event.currentTarget.checked)}
+            />
+            Failures
+          </label>
+          <label className="flex min-w-0 items-center gap-2">
+            <span className="text-muted-foreground">traceId</span>
+            <input
+              value={traceFilter}
+              onChange={(event) => setTraceFilter(event.currentTarget.value)}
+              className="border-border bg-card text-foreground h-7 w-56 rounded border px-2 font-mono"
+              placeholder="filter trace"
+            />
+          </label>
+        </div>
+      ) : null}
+
       <div className="min-h-0 overflow-auto">
-        {records.length > 0 ? (
-          records.map((record, index) => (
+        {visibleRecords.length > 0 ? (
+          visibleRecords.map((record, index) => (
             <CommandRecord
               key={`${record.timestamp}-${record.command}-${record.traceId ?? 'no-trace'}-${index}`}
               record={record}

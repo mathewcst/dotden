@@ -25,6 +25,7 @@ import {
   Monitor,
   Palette,
   Shield,
+  SquareTerminal,
   type LucideIcon,
 } from 'lucide-react'
 const AutomationTab = lazy(() =>
@@ -44,6 +45,9 @@ const AccountTab = lazy(() =>
 )
 const PrivacyTab = lazy(() =>
   import('../components/PrivacyTab').then((module) => ({ default: module.PrivacyTab })),
+)
+const DiagnosticsTab = lazy(() =>
+  import('../components/DiagnosticsTab').then((module) => ({ default: module.DiagnosticsTab })),
 )
 const EnvironmentsTab = lazy(() =>
   import('../components/EnvironmentsTab').then((module) => ({ default: module.EnvironmentsTab })),
@@ -100,6 +104,14 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   // Privacy (2-14): opt-in telemetry consent toggles (analytics · crash reports · diagnostic
   // logs), all OFF by default. Control surface only — persists consent; egress is PRD 3.
   { id: 'privacy', label: 'Privacy', icon: Shield, status: 'live', Content: PrivacyTab },
+  // Diagnostics (PRD4): standing Console opt-in + copy/open redacted local Command log actions.
+  {
+    id: 'diagnostics',
+    label: 'Diagnostics',
+    icon: SquareTerminal,
+    status: 'live',
+    Content: DiagnosticsTab,
+  },
   // Environments (2-15): the registry + claim/reassign/retire lifecycle — list every
   // environment with label/OS/status + rename, and reassign/retire from each row's ⋯ menu.
   {

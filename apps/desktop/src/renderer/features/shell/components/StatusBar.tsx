@@ -33,7 +33,7 @@ export function StatusBar() {
   }, [])
 
   const diagnosticsState = consoleEnabled
-    ? 'Console on'
+    ? 'Console-on'
     : diagnosticsErrorCount > 0
       ? String(diagnosticsErrorCount)
       : 'Idle'

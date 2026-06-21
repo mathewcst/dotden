@@ -90,6 +90,8 @@ export interface SessionSlice {
   diagnosticsPanelTraceId: string | null
   /** Completed, already-redacted Command records shown in the bottom panel. */
   diagnosticsRecords: readonly RedactedCommandRecord[]
+  /** Console-only view cutoff set by Clear; persisted records are not deleted. */
+  diagnosticsClearedAt: number | null
   /** Failure count from the persisted Command log, independent of the current panel view. */
   diagnosticsErrorCount: number
   /** Whether the standing Console is enabled. Full Settings control lands in issue 4-07. */
@@ -131,6 +133,10 @@ export interface SessionSlice {
   clearDiagnosticsView(): void
   /** Refresh the Diagnostics badge state from the persisted Command log. */
   refreshDiagnosticsStatus(): Promise<void>
+  /** Load the persisted standing Console setting and open the Console if enabled. */
+  loadDiagnosticsConsoleSetting(): Promise<void>
+  /** Refresh Console records without changing Details mode. */
+  refreshDiagnosticsConsole(): Promise<void>
   /** env A boot load: automation level, offline-queue state, the tree, and incoming (issue 1-04/09). */
   init(): Promise<void>
 }
@@ -157,6 +163,7 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
     diagnosticsPanelMode: 'console',
     diagnosticsPanelTraceId: null,
     diagnosticsRecords: [],
+    diagnosticsClearedAt: null,
     diagnosticsErrorCount: 0,
     diagnosticsConsoleEnabled: false,
 
@@ -338,7 +345,11 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
           diagnosticsPanelOpen: true,
           diagnosticsPanelMode: traceId ? 'details' : 'console',
           diagnosticsPanelTraceId: traceId ?? null,
-          diagnosticsRecords: records,
+          diagnosticsClearedAt: traceId ? get().diagnosticsClearedAt : null,
+          diagnosticsRecords:
+            traceId || get().diagnosticsClearedAt === null
+              ? records
+              : records.filter((record) => record.timestamp > (get().diagnosticsClearedAt ?? 0)),
           diagnosticsErrorCount: traceId
             ? get().diagnosticsErrorCount
             : records.filter((record) => record.exitCode !== 0).length,
@@ -363,7 +374,11 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
       await get().openDiagnosticsPanel()
     },
 
-    clearDiagnosticsView: () => set({ diagnosticsRecords: [] }),
+    clearDiagnosticsView: () =>
+      set({
+        diagnosticsRecords: [],
+        diagnosticsClearedAt: get().diagnosticsPanelMode === 'console' ? Date.now() : null,
+      }),
 
     refreshDiagnosticsStatus: async () => {
       try {
@@ -372,6 +387,34 @@ export function createSessionSlice(role: Role, api: DotdenApi) {
       } catch {
         // The panel itself surfaces load failures. The status badge should not turn a
         // startup diagnostics read hiccup into a global app error.
+      }
+    },
+
+    loadDiagnosticsConsoleSetting: async () => {
+      try {
+        const settings = await api.diagnostics.getSettings()
+        set({ diagnosticsConsoleEnabled: settings.consoleEnabled })
+        if (settings.consoleEnabled) await get().openDiagnosticsPanel()
+      } catch {
+        // Diagnostics settings are non-critical. The Settings tab surfaces write/read failures;
+        // the shell keeps the default OFF state on a startup read hiccup.
+      }
+    },
+
+    refreshDiagnosticsConsole: async () => {
+      if (!get().diagnosticsConsoleEnabled || get().diagnosticsPanelMode !== 'console') return
+      try {
+        const records = await api.diagnostics.recordsFor()
+        set({
+          diagnosticsRecords:
+            get().diagnosticsClearedAt === null
+              ? records
+              : records.filter((record) => record.timestamp > (get().diagnosticsClearedAt ?? 0)),
+          diagnosticsErrorCount: records.filter((record) => record.exitCode !== 0).length,
+        })
+      } catch {
+        // The explicit panel-open path surfaces failures. Background tail refresh should not
+        // replace the user's current app error with a transient diagnostics read.
       }
     },
 

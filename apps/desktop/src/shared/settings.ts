@@ -51,6 +51,12 @@ export interface PrivacySettings {
   readonly diagnosticLogsEnabled: boolean
 }
 
+/** Environment-local Diagnostics preferences (never synced — ADR 0024). */
+export interface DiagnosticsSettings {
+  /** Whether the standing Diagnostics Console is enabled. Default: off. */
+  readonly consoleEnabled: boolean
+}
+
 /**
  * What to do with the Files of a Workspace this environment just un-subscribed from.
  *

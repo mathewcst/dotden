@@ -90,6 +90,19 @@ const api: DotdenApi = {
         _trace: trace(),
       }) as ReturnType<DotdenApi['diagnostics']['copyDiagnostics']>
     },
+    // → IPC channel 'diagnostics:get-settings' (standing Console preference)
+    getSettings() {
+      return ipcRenderer.invoke('diagnostics:get-settings', {
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['diagnostics']['getSettings']>
+    },
+    // → IPC channel 'diagnostics:set-settings' (persist standing Console preference)
+    setSettings(settings) {
+      return ipcRenderer.invoke('diagnostics:set-settings', {
+        settings,
+        _trace: trace(),
+      }) as ReturnType<DotdenApi['diagnostics']['setSettings']>
+    },
   },
   remote: {
     // → IPC channel 'remote:preflight'
