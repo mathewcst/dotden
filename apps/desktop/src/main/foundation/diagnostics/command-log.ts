@@ -58,4 +58,14 @@ export class CommandLog implements DiagnosticsSink {
   records(): readonly CommandRecord[] {
     return [...this.buffer]
   }
+
+  /**
+   * Snapshot only records correlated to `traceId`.
+   *
+   * Uncorrelated startup/probe commands are ignored, and the returned array is a
+   * defensive copy for the Details surface that will consume this filter.
+   */
+  recordsFor(traceId: string): readonly CommandRecord[] {
+    return this.buffer.filter((record) => record.traceId === traceId)
+  }
 }

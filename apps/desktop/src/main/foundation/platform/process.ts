@@ -9,6 +9,7 @@
 import { spawn } from 'node:child_process'
 
 import type { DiagnosticsSink } from '../diagnostics/command-log.js'
+import { currentTraceId } from '../diagnostics/trace-context.js'
 
 /**
  * Grace period between the polite SIGTERM and the unconditional SIGKILL.
@@ -165,6 +166,7 @@ export async function runCommand(
           exitCode: result.exitCode,
           stdout,
           stderr,
+          traceId: currentTraceId(),
           timestamp: Date.now(),
         })
       } catch (error) {

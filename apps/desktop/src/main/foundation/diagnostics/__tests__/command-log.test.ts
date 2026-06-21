@@ -64,6 +64,43 @@ describe('CommandLog', () => {
     expect(log.records()).toHaveLength(1)
   })
 
+  it('recordsFor() returns only matching trace records as a defensive copy', () => {
+    const log = new CommandLog({ capacity: 4 })
+    log.record({
+      command: 'git',
+      args: ['status'],
+      exitCode: 0,
+      stdout: 'one',
+      stderr: '',
+      traceId: 'trace-a',
+      timestamp: 1,
+    })
+    log.record({
+      command: 'git',
+      args: ['status'],
+      exitCode: 0,
+      stdout: 'two',
+      stderr: '',
+      traceId: 'trace-b',
+      timestamp: 2,
+    })
+    log.record({
+      command: 'git',
+      args: ['status'],
+      exitCode: 0,
+      stdout: 'three',
+      stderr: '',
+      traceId: 'trace-a',
+      timestamp: 3,
+    })
+
+    const records = log.recordsFor('trace-a') as unknown as unknown[]
+    expect(records.map((record) => (record as { timestamp: number }).timestamp)).toEqual([1, 3])
+
+    records.push({ tampered: true })
+    expect(log.recordsFor('trace-a')).toHaveLength(2)
+  })
+
   it('redacts before appending to the buffer', () => {
     const log = new CommandLog({ capacity: 4 })
     const rawSecret = 'ghp_1234567890abcdefghijklmnopqrstuvwxyzABCD'

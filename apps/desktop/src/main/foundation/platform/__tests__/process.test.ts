@@ -13,6 +13,7 @@
 import { describe, expect, it } from 'vitest'
 import { CommandLog } from '../../diagnostics/command-log.js'
 import { REDACTED_TOKEN } from '../../diagnostics/redactor.js'
+import { OperationTracer } from '../operation-tracer.js'
 import {
   CommandAbortedError,
   CommandFailedError,
@@ -103,5 +104,26 @@ describe('runCommand termination guarantees', () => {
     expect(records[0]?.exitCode).toBe(7)
     expect(records[0]?.stderr).toBe(REDACTED_TOKEN)
     expect(JSON.stringify(records)).not.toContain(secret)
+  })
+
+  it('stamps diagnostics records with the ambient traceId', async () => {
+    const log = new CommandLog()
+    const tracer = new OperationTracer()
+
+    const span = tracer.startOperation('commit', 'trace-command')
+    await runCommand(node, ['-e', 'process.stdout.write("ok")'], { diagnosticsSink: log })
+    span.end('ok')
+
+    expect(log.records()).toHaveLength(1)
+    expect(log.records()[0]?.traceId).toBe('trace-command')
+  })
+
+  it('leaves diagnostics records unstamped outside an Operation context', async () => {
+    const log = new CommandLog()
+
+    await runCommand(node, ['-e', 'process.stdout.write("ok")'], { diagnosticsSink: log })
+
+    expect(log.records()).toHaveLength(1)
+    expect(log.records()[0]?.traceId).toBeUndefined()
   })
 })

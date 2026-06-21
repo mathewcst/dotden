@@ -9,6 +9,7 @@
  * non-allowlisted key is a compile error.
  */
 import { describe, expect, it } from 'vitest'
+import { currentTraceId, runWithTraceId } from '../../diagnostics/trace-context.js'
 import { OperationTracer } from '../operation-tracer.js'
 
 describe('OperationTracer', () => {
@@ -82,5 +83,21 @@ describe('OperationTracer', () => {
     snapshot.push({ tampered: true })
 
     expect(tracer.events()).toHaveLength(1)
+  })
+
+  it('establishes and restores the ambient diagnostics trace context', async () => {
+    const tracer = new OperationTracer()
+
+    await runWithTraceId('outer-trace', async () => {
+      const span = tracer.startOperation('commit', 'inner-trace')
+      expect(currentTraceId()).toBe('inner-trace')
+      await Promise.resolve()
+      expect(currentTraceId()).toBe('inner-trace')
+
+      span.end('ok')
+      expect(currentTraceId()).toBe('outer-trace')
+    })
+
+    expect(currentTraceId()).toBeUndefined()
   })
 })

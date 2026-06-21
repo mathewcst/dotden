@@ -26,6 +26,8 @@ export interface CommandRecord {
   readonly stdout: string
   /** Buffered stderr. */
   readonly stderr: string
+  /** Operation correlation id, present only when captured inside an Operation context. */
+  readonly traceId?: string
   /** Capture time in ms since epoch. */
   readonly timestamp: number
 }

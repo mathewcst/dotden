@@ -16,6 +16,7 @@
  * wide event because the type forbids the keys), so the privacy invariant lives in
  * the type system, exactly like ADR 0007 requires.
  */
+import { enterTraceId } from '../diagnostics/trace-context.js'
 
 /**
  * The compile-time-restricted set of attribute keys permitted on a wide event.
@@ -175,6 +176,7 @@ export class OperationTracer {
     const attributes: Partial<Record<AllowlistedAttributeKey, AllowlistedAttributeValue>> = {}
     const append = (event: WideEvent) => this.append(event)
     const clock = this.now
+    const restoreTrace = enterTraceId(traceId)
     return {
       traceId,
       setAttribute(key, value) {
@@ -194,6 +196,7 @@ export class OperationTracer {
           attributes: { ...attributes, durationMs },
         }
         append(event)
+        restoreTrace()
         return event
       },
     }
