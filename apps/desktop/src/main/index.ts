@@ -31,7 +31,7 @@ import { computeLaunchState, type LaunchState } from './foundation/environments/
 import { OperationTracer } from './foundation/platform/operation-tracer.js'
 import type { PrivacySettings } from './foundation/privacy-settings.js'
 import { readPrivacySettings, writePrivacySettings } from './foundation/privacy-settings.js'
-import { RemoteClient } from './foundation/remote-client.js'
+import { RemoteClient } from './foundation/sync/remote-client.js'
 import type { UnsubscribeDisposition } from './foundation/subscription-settings.js'
 import {
   readUnsubscribeDisposition,

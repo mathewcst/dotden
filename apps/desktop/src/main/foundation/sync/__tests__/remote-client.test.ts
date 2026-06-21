@@ -15,7 +15,7 @@ import {
   CommandFailedError,
   type CommandResult,
   type RunCommandOptions,
-} from '../platform/process.js'
+} from '../../platform/process.js'
 import { RemoteClient, RemoteConnectError, RemotePreflightError } from '../remote-client.js'
 
 const trace = { traceId: 'trace-remote-client-test' }

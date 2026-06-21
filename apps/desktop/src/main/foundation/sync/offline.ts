@@ -27,7 +27,7 @@
  * It is pure + Electron-free (ADR 0023): it inspects only the captured stderr of a
  * {@link CommandFailedError}, so the whole classification is unit-testable in plain Node.
  */
-import { CommandAbortedError, CommandFailedError } from './platform/process.js'
+import { CommandAbortedError, CommandFailedError } from '../platform/process.js'
 
 /**
  * Stderr fragments git's transports print when the **network is unreachable** — i.e. the

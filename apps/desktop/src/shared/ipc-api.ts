@@ -20,7 +20,7 @@
  *   the renderer's `Bundler` resolution accepts it too, so the single file
  *   typechecks under both `tsconfig.node.json` and `tsconfig.web.json`.
  */
-import type { ConnectResult, PreflightResult } from '../main/foundation/remote-client.js'
+import type { ConnectResult, PreflightResult } from '../main/foundation/sync/remote-client.js'
 import type {
   AffectedEnvironment,
   AppearanceState,

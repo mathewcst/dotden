@@ -11,7 +11,7 @@
  * renderer also consumes, so preload and renderer can never silently drift.
  */
 import { contextBridge, ipcRenderer } from 'electron'
-import type { TraceEnvelope } from '../main/foundation/remote-client.js'
+import type { TraceEnvelope } from '../main/foundation/sync/remote-client.js'
 import type { DotdenApi } from '../shared/ipc-api.js'
 
 /** Mint a fresh correlation id per user action so each operation is independently traceable. */

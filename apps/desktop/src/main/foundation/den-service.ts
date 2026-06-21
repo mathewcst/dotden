@@ -38,7 +38,7 @@ import {
   type WorkspacesDoc,
 } from './den-store.js'
 import type { OperationTracer } from './platform/operation-tracer.js'
-import { SyncEngine, type AutoApplyHoldReason, type IncomingFile } from './sync-engine.js'
+import { SyncEngine, type AutoApplyHoldReason, type IncomingFile } from './sync/sync-engine.js'
 import type { ApplyChangeKind } from './apply-planner.js'
 import { ConflictModel, type ResolutionChoice } from './conflict-model.js'
 import {
@@ -52,13 +52,13 @@ import {
   type AutomationLevel,
 } from './automation-policy.js'
 import type { Os, Scope } from './platform/os-scope.js'
-import { PushQueue } from './push-queue.js'
-import { isOfflineError } from './offline.js'
+import { PushQueue } from './sync/push-queue.js'
+import { isOfflineError } from './sync/offline.js'
 import type { UnsubscribeDisposition } from './subscription-settings.js'
 import { scanForSecrets, type SecretFinding } from './secret-scanner.js'
 import { partitionFindings, type SecretAllowlist } from './secret-allowlist.js'
 import { parseFileHistory, shortSha, type FileVersion } from './file-history.js'
-import { parseRemoteLocation } from './remote-client.js'
+import { parseRemoteLocation } from './sync/remote-client.js'
 import {
   detectPasswordManagers,
   type DetectedPasswordManager,
