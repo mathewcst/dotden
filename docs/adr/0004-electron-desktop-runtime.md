@@ -11,5 +11,7 @@
 **Consequences:**
 
 - The self-contained-app machinery is first-class in Electron: bundle the chezmoi binary as an extra resource and drive it via `child_process`; tray, native notifications, OS keychain (`safeStorage`), autostart, and auto-update (`electron-updater`).
-- Standard Electron security hygiene is mandatory (contextIsolation on, nodeIntegration off, strict IPC surface) since we shell out to a binary and touch the filesystem/keychain.
+- Standard Electron security hygiene is mandatory (contextIsolation on, nodeIntegration off, `sandbox` on, strict IPC surface, CSP) since we shell out to a binary and touch the filesystem/keychain. As defense-in-depth atop that, the single BrowserWindow denies outbound navigation and new-window creation (`will-navigate` + `setWindowOpenHandler`, routing real links to the OS browser via `shell.openExternal`) — the renderer is a fixed local app and should never leave it.
+- A **single-instance lock** (`app.requestSingleInstanceLock`) is required, not optional: dotden is a sync app with an always-on TrayPoller and a login-item, so a second launch must focus the existing window rather than spawn a rival process that would double-poll and race git/chezmoi writes against the same Den + userData.
+- Native-chrome identity: `app.setAppUserModelId` (matching the electron-builder `appId`) is set before any `Notification` so Windows attributes toasts/taskbar to dotden; the window stays hidden until `ready-to-show` to avoid flashing an unpainted frame on cold start.
 - Main-process logic is TypeScript/Node.

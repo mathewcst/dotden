@@ -12,6 +12,7 @@ import {
   nativeImage,
   Notification,
   powerMonitor,
+  shell,
   Tray,
 } from 'electron'
 import { autoUpdater } from 'electron-updater'
@@ -568,6 +569,11 @@ async function flushQueuedPushes(): Promise<void> {
  * Renderer source is chosen by build context: in dev (`!app.isPackaged`) it
  * loads the Vite dev-server URL for HMR; in a packaged build it loads the
  * bundled `index.html` from disk.
+ *
+ * The window stays hidden (`show: false`) until the renderer paints its first
+ * frame (`ready-to-show`) to avoid flashing unpainted chrome, and its web
+ * contents are pinned to the local app — outbound navigation and new windows are
+ * denied as defense-in-depth atop the sandbox + CSP.
  */
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -579,6 +585,9 @@ function createWindow(): void {
     backgroundColor: '#050505',
     roundedCorners: true,
     darkTheme: true,
+    // Stay hidden until `ready-to-show` fires so the user never sees an unpainted
+    // frame on a cold/slow start; `backgroundColor` covers the gap until then.
+    show: false,
     frame: false,
     webPreferences: {
       // Preload is the ONLY trusted bridge: it runs with the privileges below
@@ -603,6 +612,22 @@ function createWindow(): void {
     if (mainWindow === window) mainWindow = null
   })
 
+  // Reveal only once the renderer has painted, so a cold start never shows an empty
+  // frame (P3 anti-flash). Registered before load so we never miss the event.
+  window.once('ready-to-show', () => window.show())
+
+  // Navigation hardening (Electron security checklist, defense-in-depth atop
+  // `sandbox` + `contextIsolation` + CSP): the renderer is a fixed local app that
+  // should never navigate away or spawn its own Electron windows. Deny both, and
+  // hand any real outbound link (e.g. a docs/account URL) to the OS browser instead.
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  window.webContents.on('will-navigate', (event, url) => {
+    if (url !== window.webContents.getURL()) event.preventDefault()
+  })
+
   // Dev vs. packaged: prefer the live Vite dev server (HMR) when running
   // unpackaged with ELECTRON_RENDERER_URL set; otherwise load the built file.
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
@@ -612,57 +637,81 @@ function createWindow(): void {
   }
 }
 
-// App bootstrap: spin up the window once Electron is ready, then arm the
-// updater and the macOS re-activation handler.
-app.whenReady().then(() => {
-  // The IpcBridge owns the renderer↔main surface: it forwards each call's `_trace`
-  // id into the foundation. AbortSignal-based cancellation is not yet wired across
-  // IPC (a signal cannot cross Electron's structured-clone boundary), so v1 relies
-  // on the foundation's per-call timeouts as the guarantee against a hung call.
-  registerIpcBridge(ipcMain, {
-    remoteClient: getRemoteClient,
-    denService: getDenService,
-    launchState: denLaunchState,
-    discoveryScanner: getDiscoveryScanner,
-    environmentRegistry: getEnvironmentRegistry,
-    getAutomationLevel,
-    setAutomationLevel,
-    claimEnvironment,
-    getUnsubscribeDisposition,
-    setUnsubscribeDisposition,
-    getSyncSettings,
-    setSyncSettings,
-    getPrivacySettings,
-    setPrivacySettings,
-    getAppInfo,
-    checkForUpdates,
-    controlWindow,
-  })
-  createWindow()
-
-  // Reconcile the OS login-item with this environment's saved start-on-login preference (issue
-  // 2-08) on each launch, so a setting changed while the app was closed (or out of sync with the
-  // OS) is re-applied. Best-effort; the helper never throws.
-  void getSyncSettings().then((settings) => applyLoginItemSetting(settings.startOnLogin))
-
-  // Arm the always-on TrayPoller (issue 1-12): it watches the Remote on the cheap
-  // ls-remote SHA cadence and notifies on incoming, independent of Auto-sync and even
-  // with the window closed. Best-effort — it never blocks startup.
-  void armTrayPoller()
-
-  // Scaffold has no published update feed, so this resolves/rejects with nothing
-  // actionable. The call is kept so real auto-update wiring is a config change,
-  // not a code change; the rejection is swallowed to avoid an unhandled promise.
-  autoUpdater.checkForUpdatesAndNotify().catch(() => {
-    // No published feed exists in the scaffold. Update wiring is intentionally inert.
+// Single-instance guard (P1): dotden is a sync app — a second launch must focus the
+// window we already have, never spawn a rival process. Two instances would run two
+// TrayPollers and race git/chezmoi writes against the same Den + userData. If we lose
+// the race for the lock, another instance owns the app; hand off and exit immediately.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  // A second launch fired instead of starting fresh: surface the existing window
+  // (restoring it if minimized), or re-create one if it was closed to the tray.
+  app.on('second-instance', () => {
+    if (!mainWindow) {
+      createWindow()
+      return
+    }
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
   })
 
-  // macOS convention: clicking the dock icon with no open windows should
-  // re-open one rather than do nothing.
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  // App bootstrap: spin up the window once Electron is ready, then arm the
+  // updater and the macOS re-activation handler.
+  app.whenReady().then(() => {
+    // Windows toast/taskbar identity (P2): notifications and the tray only attribute
+    // to dotden's name + icon when the AppUserModelId matches the installed appId
+    // (see electron-builder.yml). No-op on macOS/Linux. Set before any Notification.
+    app.setAppUserModelId('app.dotden.desktop')
+
+    // The IpcBridge owns the renderer↔main surface: it forwards each call's `_trace`
+    // id into the foundation. AbortSignal-based cancellation is not yet wired across
+    // IPC (a signal cannot cross Electron's structured-clone boundary), so v1 relies
+    // on the foundation's per-call timeouts as the guarantee against a hung call.
+    registerIpcBridge(ipcMain, {
+      remoteClient: getRemoteClient,
+      denService: getDenService,
+      launchState: denLaunchState,
+      discoveryScanner: getDiscoveryScanner,
+      environmentRegistry: getEnvironmentRegistry,
+      getAutomationLevel,
+      setAutomationLevel,
+      claimEnvironment,
+      getUnsubscribeDisposition,
+      setUnsubscribeDisposition,
+      getSyncSettings,
+      setSyncSettings,
+      getPrivacySettings,
+      setPrivacySettings,
+      getAppInfo,
+      checkForUpdates,
+      controlWindow,
+    })
+    createWindow()
+
+    // Reconcile the OS login-item with this environment's saved start-on-login preference (issue
+    // 2-08) on each launch, so a setting changed while the app was closed (or out of sync with the
+    // OS) is re-applied. Best-effort; the helper never throws.
+    void getSyncSettings().then((settings) => applyLoginItemSetting(settings.startOnLogin))
+
+    // Arm the always-on TrayPoller (issue 1-12): it watches the Remote on the cheap
+    // ls-remote SHA cadence and notifies on incoming, independent of Auto-sync and even
+    // with the window closed. Best-effort — it never blocks startup.
+    void armTrayPoller()
+
+    // Scaffold has no published update feed, so this resolves/rejects with nothing
+    // actionable. The call is kept so real auto-update wiring is a config change,
+    // not a code change; the rejection is swallowed to avoid an unhandled promise.
+    autoUpdater.checkForUpdatesAndNotify().catch(() => {
+      // No published feed exists in the scaffold. Update wiring is intentionally inert.
+    })
+
+    // macOS convention: clicking the dock icon with no open windows should
+    // re-open one rather than do nothing.
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    })
   })
-})
+}
 
 // Lifecycle with the always-on watcher (issue 1-12): closing the last window must NOT quit
 // while the TrayPoller is armed — that is the whole point of "keeps watching the Remote
