@@ -55,22 +55,22 @@ import type { Os, Scope } from './platform/os-scope.js'
 import { PushQueue } from './sync/push-queue.js'
 import { isOfflineError } from './sync/offline.js'
 import type { UnsubscribeDisposition } from './subscription-settings.js'
-import { scanForSecrets, type SecretFinding } from './secret-scanner.js'
-import { partitionFindings, type SecretAllowlist } from './secret-allowlist.js'
+import { scanForSecrets, type SecretFinding } from './secrets/secret-scanner.js'
+import { partitionFindings, type SecretAllowlist } from './secrets/secret-allowlist.js'
 import { parseFileHistory, shortSha, type FileVersion } from './file-history/file-history.js'
 import { parseRemoteLocation } from './sync/remote-client.js'
 import {
   detectPasswordManagers,
   type DetectedPasswordManager,
   type DetectPasswordManagersOptions,
-} from './pm-detect.js'
+} from './secrets/pm-detect.js'
 import {
   isSecretReferenceResolutionFailure,
   renderSecretReferenceTemplate,
   sourceTemplateName,
   type SecretReferenceRequest,
-} from './secret-reference.js'
-import { readPmPreference, writePmPreference, type PmPreference } from './pm-preference.js'
+} from './secrets/secret-reference.js'
+import { readPmPreference, writePmPreference, type PmPreference } from './secrets/pm-preference.js'
 import { CommandFailedError } from './platform/process.js'
 import {
   DEFAULT_COMMIT_MESSAGE_TEMPLATE,

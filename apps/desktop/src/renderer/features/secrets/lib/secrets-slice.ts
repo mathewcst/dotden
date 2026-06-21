@@ -14,10 +14,10 @@
  * via `get()`. The IPC surface is injected for node-testability.
  */
 import type { DotdenApi } from '../../../../shared/ipc-api'
-import type { SecretFinding } from '../../../../main/foundation/secret-scanner'
+import type { SecretFinding } from '../../../../main/foundation/secrets/secret-scanner'
 import type { ConvertSecretRequest } from '../../../../main/foundation/den-service'
-import type { DetectedPasswordManager } from '../../../../main/foundation/pm-detect'
-import type { PmPreference } from '../../../../main/foundation/pm-preference'
+import type { DetectedPasswordManager } from '../../../../main/foundation/secrets/pm-detect'
+import type { PmPreference } from '../../../../main/foundation/secrets/pm-preference'
 import type { DenSessionGet, DenSessionSet } from '../../shell/lib/den-session-store'
 
 /** The pending commit-time secret warn step: the findings to caution about + the paths Committed. */

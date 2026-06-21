@@ -26,8 +26,8 @@ import {
   addAllowlistEntry,
   EMPTY_SECRET_ALLOWLIST,
   type SecretAllowlist,
-} from './secret-allowlist.js'
-import type { SecretFinding } from './secret-scanner.js'
+} from './secrets/secret-allowlist.js'
+import type { SecretFinding } from './secrets/secret-scanner.js'
 import { DEFAULT_COMMIT_MESSAGE_TEMPLATE } from '../../shared/commit-template.js'
 import {
   type AppearanceSettings,

@@ -16,7 +16,7 @@
  * PATH probe ({@link cliOnPath}), which runs `which`/`where` through the no-shell
  * {@link runCommand} primitive (no shell = no injection surface; a non-zero exit = not found).
  */
-import { runCommand } from './platform/process.js'
+import { runCommand } from '../platform/process.js'
 import {
   PASSWORD_MANAGERS,
   type PasswordManagerId,

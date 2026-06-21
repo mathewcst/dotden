@@ -1,7 +1,7 @@
 import { AlertDialog } from '@base-ui/react/alert-dialog'
 import { AlertTriangle } from 'lucide-react'
 import { useState } from 'react'
-import type { SecretFinding } from '../../../../main/foundation/secret-scanner'
+import type { SecretFinding } from '../../../../main/foundation/secrets/secret-scanner'
 import { Button } from '@/ui/button'
 
 /** The two deliberate paths Step 1 of the secret flow offers (secret-and-errors screen spec). */
@@ -36,7 +36,7 @@ export interface SecretWarningProps {
  * SecretWarning — Step 1 of the secret flow: the commit-time **warn step** with the deliberate
  * two-option choice (issues 2-03 + 2-04, secret-and-errors screen spec).
  *
- * The PURE {@link import('../../main/foundation/secret-scanner.js').scanForSecrets} detector
+ * The PURE {@link import('../../main/foundation/secrets/secret-scanner.js').scanForSecrets} detector
  * runs on the about-to-be-Committed Files; when it finds anything NOT already on the synced
  * allowlist, the renderer shows THIS modal before the Commit completes. It is a **caution**,
  * not a hard block — the Commit can always proceed (warn-never-block, ADR 0001) — so it is

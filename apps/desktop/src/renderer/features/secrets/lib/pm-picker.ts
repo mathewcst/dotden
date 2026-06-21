@@ -11,8 +11,11 @@
  * - {@link canConvert} — whether the Convert action is enabled (a selectable manager + a non-empty
  *   reference), so the user can't fire a conversion that would produce an unresolvable template.
  */
-import type { DetectedPasswordManager, PasswordManagerId } from '../../../../main/foundation/pm-detect'
-import type { PmPreference } from '../../../../main/foundation/pm-preference'
+import type {
+  DetectedPasswordManager,
+  PasswordManagerId,
+} from '../../../../main/foundation/secrets/pm-detect'
+import type { PmPreference } from '../../../../main/foundation/secrets/pm-preference'
 
 /**
  * Decide which manager is selected when the picker opens.
