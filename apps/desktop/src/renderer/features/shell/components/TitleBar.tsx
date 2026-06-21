@@ -1,4 +1,4 @@
-import { useDenSession } from '@/features/shell/components/DenSessionProvider'
+import { useDenSession } from '@/den-session'
 import { syncStatus } from '@/features/shell/lib/sync-status'
 import { WindowTitleBar, windowNoDragRegionStyle } from '@/shared/components/WindowControls'
 import { IconButton } from '@/ui/icon-button'

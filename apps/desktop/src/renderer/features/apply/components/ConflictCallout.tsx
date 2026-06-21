@@ -1,5 +1,5 @@
 import { Button } from '@/ui/button'
-import { useDenSession } from '@/features/shell/components/DenSessionProvider'
+import { useDenSession } from '@/den-session'
 import { AlertTriangle, GitMerge } from 'lucide-react'
 
 /**

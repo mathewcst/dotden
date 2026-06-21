@@ -1,4 +1,4 @@
-import { useDenSession } from '@/features/shell/components/DenSessionProvider'
+import { useDenSession } from '@/den-session'
 
 /**
  * LastCommitSection — the inspector's outbound-status block (env A): the honest "nothing to commit"

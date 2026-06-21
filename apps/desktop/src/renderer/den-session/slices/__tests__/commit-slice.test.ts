@@ -6,10 +6,10 @@
  * fake API, dispatch, assert state) in vitest's node environment — no React, no DOM.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createDenSessionStore } from '../../../shell/lib/den-session-store'
+import { createDenSessionStore } from '../../store'
 import type { DotdenApi } from '@shared/ipc-api'
 import type { SecretFinding } from '@shared/secrets'
-import { clearToasts, getToasts } from '../../../../ui/toast-store'
+import { clearToasts, getToasts } from '../../../lib/toast'
 
 afterEach(() => {
   clearToasts()

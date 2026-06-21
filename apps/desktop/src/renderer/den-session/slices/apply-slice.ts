@@ -13,8 +13,8 @@
  */
 import type { DotdenApi } from '@shared/ipc-api'
 import type { IncomingReviewItem, RemoteAxisMarker } from '@shared/den'
-import type { DenSessionGet, DenSessionSet } from '../../shell/lib/den-session-store'
-import { operationError } from '../../shell/lib/operation-error'
+import type { DenSessionGet, DenSessionSet } from '../store'
+import { operationError } from '../../lib/operation-error'
 
 /** The `apply` slice's state + actions (combined into {@link DenSession}). */
 export interface ApplySlice {

@@ -1,4 +1,4 @@
-import { useDenSession } from '@/features/shell/components/DenSessionProvider'
+import { useDenSession } from '@/den-session'
 
 /**
  * GroupSection — the inspector's "GROUP" organize control (issue 1-14): file the selected File into

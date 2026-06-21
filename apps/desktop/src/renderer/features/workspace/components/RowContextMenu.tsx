@@ -1,13 +1,10 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { ContextMenu } from '@base-ui/react/context-menu'
 import { ArrowUpFromLine, Download, EyeOff, GitCommitVertical, Trash2 } from 'lucide-react'
-
-/**
- * The four row verbs offered on a right-click (issue 1-08), in menu order. Commit and
- * Apply are the everyday verbs; **Untrack** (`forget`) and **Delete everywhere**
- * (`destroy`) are the lifecycle/destructive verbs this slice introduces.
- */
-export type RowVerb = 'commit' | 'apply' | 'untrack' | 'delete-everywhere'
+// `RowVerb` (the four right-click verbs, in menu order: Commit/Apply everyday, Untrack=`forget` /
+// Delete-everywhere=`destroy` destructive) is defined in the den-session leaf — the session slice's
+// `onRowVerb` routes them, and a shared leaf can't import this feature for the type (ADR 0033/0034).
+import type { RowVerb } from '@/den-session'
 
 /** Props for {@link RowContextMenu}. */
 export interface RowContextMenuProps {

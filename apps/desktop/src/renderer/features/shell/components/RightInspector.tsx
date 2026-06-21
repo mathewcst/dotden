@@ -4,7 +4,7 @@ import { LastCommitSection } from '@/features/commit/components/LastCommitSectio
 import { ScopeEditor } from '@/features/scope/components/ScopeEditor'
 import { FileInfoSection } from '@/features/workspace/components/FileInfoSection'
 import { GroupSection } from '@/features/workspace/components/GroupSection'
-import { useDenSession } from '@/features/shell/components/DenSessionProvider'
+import { useDenSession } from '@/den-session'
 
 /**
  * RightInspector — the den window's right column. Composes the per-feature inspector sections in the

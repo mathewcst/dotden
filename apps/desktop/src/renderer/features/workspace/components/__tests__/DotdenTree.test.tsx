@@ -16,7 +16,7 @@ import {
   buildWorkspaceTreeModel,
   type DotdenTreeModel,
   type DotdenTreeNode,
-} from '../../lib/tree-node-model'
+} from '@/den-session'
 
 afterEach(cleanup)
 

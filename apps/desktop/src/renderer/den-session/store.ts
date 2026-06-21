@@ -20,15 +20,15 @@
  */
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import type { DotdenApi } from '@shared/ipc-api'
-// Cross-feature slice imports stay RELATIVE, not `@/` (the convention everywhere else). This file
-// and the slices are value-imported by node-env slice tests; keeping the slice cluster relative
-// makes those tests independent of renderer alias wiring. See docs/conventions.md.
-import { createSessionSlice, type Role, type SessionSlice } from './session-slice'
-import { createCommitSlice, type CommitSlice } from '../../commit/lib/commit-slice'
-import { createSecretsSlice, type SecretsSlice } from '../../secrets/lib/secrets-slice'
-import { createApplySlice, type ApplySlice } from '../../apply/lib/apply-slice'
+// The slices live beside this store in `den-session/slices/` (ADR 0034) — one shared-state leaf,
+// no longer scattered across feature folders. Imports stay relative within the den-session leaf so
+// the node-env slice tests run without renderer alias wiring (see docs/conventions.md).
+import { createSessionSlice, type Role, type SessionSlice } from './slices/session-slice'
+import { createCommitSlice, type CommitSlice } from './slices/commit-slice'
+import { createSecretsSlice, type SecretsSlice } from './slices/secrets-slice'
+import { createApplySlice, type ApplySlice } from './slices/apply-slice'
 
-export type { Role } from './session-slice'
+export type { Role } from './slices/session-slice'
 
 /** The full den-session state: the intersection of every feature slice. */
 export type DenSession = SessionSlice & CommitSlice & SecretsSlice & ApplySlice

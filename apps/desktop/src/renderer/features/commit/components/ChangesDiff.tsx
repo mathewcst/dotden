@@ -1,6 +1,6 @@
 import { PatchDiff } from '@pierre/diffs/react'
 import { Loader2 } from 'lucide-react'
-import { useDenSession } from '@/features/shell/components/DenSessionProvider'
+import { useDenSession } from '@/den-session'
 
 /**
  * ChangesDiff — the center pane's everyday "Changes" body (issue 1-07): the real `chezmoi diff`

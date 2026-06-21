@@ -1,7 +1,7 @@
 import { ChangesDiff } from '@/features/commit/components/ChangesDiff'
 import { StatusTag, type FileStatus } from '@/shared/components/StatusTag'
 import { Button } from '@/ui/button'
-import { useDenSession } from '@/features/shell/components/DenSessionProvider'
+import { useDenSession } from '@/den-session'
 import {
   Download,
   FilePlus2,

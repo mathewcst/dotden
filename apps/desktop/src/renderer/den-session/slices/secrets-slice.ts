@@ -18,7 +18,7 @@ import type { SecretFinding } from '@shared/secrets'
 import type { ConvertSecretRequest } from '@shared/den'
 import type { DetectedPasswordManager } from '@shared/secrets'
 import type { PmPreference } from '@shared/secrets'
-import type { DenSessionGet, DenSessionSet } from '../../shell/lib/den-session-store'
+import type { DenSessionGet, DenSessionSet } from '../store'
 
 /** The pending commit-time secret warn step: the findings to caution about + the paths Committed. */
 export interface SecretWarnState {

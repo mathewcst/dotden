@@ -1,4 +1,4 @@
-import { useDenSession } from '@/features/shell/components/DenSessionProvider'
+import { useDenSession } from '@/den-session'
 import { useEffect, useState } from 'react'
 import type { EnvironmentWithAttribution } from '@shared/environments'
 import type { FileVersion } from '@shared/history'

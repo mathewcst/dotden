@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Monitor, TerminalSquare } from 'lucide-react'
 import type { EnvironmentWithAttribution } from '@shared/environments'
-import { useDenSession } from '@/features/shell/components/DenSessionProvider'
+import { useDenSession } from '@/den-session'
 import { syncStatus } from '@/features/shell/lib/sync-status'
 import { cn } from '@/shared/lib/utils'
 

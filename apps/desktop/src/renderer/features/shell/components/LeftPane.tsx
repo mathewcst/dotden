@@ -1,6 +1,6 @@
 import { DotdenTree, type DotdenHeadlessTree } from '@/features/workspace/components/DotdenTree'
 import { AddInline, WorkspacesHeader } from '@/features/workspace/components/WorkspaceSidebar'
-import { useDenSession } from '@/features/shell/components/DenSessionProvider'
+import { useDenSession } from '@/den-session'
 import { FolderPlus, Loader2 } from 'lucide-react'
 
 /**

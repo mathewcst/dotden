@@ -8,7 +8,7 @@
  * `remote-axis`/`pm-picker` prior-art tests).
  */
 import { describe, expect, it, vi } from 'vitest'
-import { createDenSessionStore, type Role } from '../den-session-store'
+import { createDenSessionStore, type Role } from '../../store'
 import type { DotdenApi } from '@shared/ipc-api'
 import type { FileTreeEntry } from '@shared/den'
 

@@ -1,7 +1,7 @@
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import { SecretPicker } from '@/features/secrets/components/SecretPicker'
 import { SecretWarning } from '@/features/secrets/components/SecretWarning'
-import { useDenSession } from '@/features/shell/components/DenSessionProvider'
+import { useDenSession } from '@/den-session'
 
 /**
  * DialogLayer — the den window's shared dialog orchestration (ADR 0027: the shell owns dialogs).

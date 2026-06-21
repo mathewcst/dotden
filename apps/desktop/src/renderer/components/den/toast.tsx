@@ -1,16 +1,8 @@
 import { AlertTriangle, CheckCircle2, Info, OctagonAlert, X } from 'lucide-react'
 import { useEffect, useSyncExternalStore } from 'react'
-import { Button } from './button'
-import { cn } from '../shared/lib/utils'
-import {
-  clearToasts,
-  dismissToast,
-  getToasts,
-  subscribeToasts,
-  type ToastTone,
-} from './toast-store'
-
-export { clearToasts, dismissToast, getToasts, showToast, toast } from './toast-store'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import { clearToasts, dismissToast, getToasts, subscribeToasts, type ToastTone } from '@/lib/toast'
 
 function useToasts() {
   return useSyncExternalStore(subscribeToasts, getToasts, getToasts)

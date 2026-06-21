@@ -6,17 +6,13 @@ import { LeftPane } from '@/features/shell/components/LeftPane'
 import { RightInspector } from '@/features/shell/components/RightInspector'
 import { StatusBar } from '@/features/shell/components/StatusBar'
 import { TitleBar } from '@/features/shell/components/TitleBar'
-import { useDenSession } from '@/features/shell/components/DenSessionProvider'
+import { useDenSession } from '@/den-session'
 import { IncomingBanner } from '@/features/sync/components/IncomingBanner'
 import { OfflineBanner } from '@/features/sync/components/OfflineBanner'
 import { syncStatus } from '@/features/shell/lib/sync-status'
 import { WindowTitleBar } from '@/shared/components/WindowControls'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/ui/resizable'
-import {
-  buildIncomingTreeModel,
-  buildWorkspaceTreeModel,
-  type DotdenTreeNode,
-} from '@/features/workspace/lib/tree-node-model'
+import { buildIncomingTreeModel, buildWorkspaceTreeModel, type DotdenTreeNode } from '@/den-session'
 import {
   hotkeysCoreFeature,
   searchFeature,

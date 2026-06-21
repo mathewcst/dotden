@@ -1,6 +1,6 @@
 import type { RemoteAxisMarker } from '@shared/den'
-import type { Busy } from './session-slice'
-import type { OperationError } from './operation-error'
+import type { Busy } from '@/den-session'
+import type { OperationError } from '@/lib/operation-error'
 
 export type SyncStatusKind = 'syncing' | 'up-to-date' | 'incoming' | 'push' | 'offline' | 'error'
 
@@ -42,7 +42,9 @@ export function syncStatus(input: SyncStatusInput): SyncStatus {
     }
   }
   if (input.remoteAxis.size > 0) {
-    const conflicts = [...input.remoteAxis.values()].filter((marker) => marker === 'conflict').length
+    const conflicts = [...input.remoteAxis.values()].filter(
+      (marker) => marker === 'conflict',
+    ).length
     return {
       kind: 'incoming',
       label:

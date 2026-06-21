@@ -1,10 +1,10 @@
 import { useState, type ComponentProps, type CSSProperties, type DragEvent } from 'react'
 import { ChevronRight, File, Folder, FolderPlus, Layers, LayoutGrid, Plus } from 'lucide-react'
 import { useTree } from '@headless-tree/react'
-import type { DotdenTreeNode } from '@/features/workspace/lib/tree-node-model'
+import type { DotdenTreeNode } from '@/den-session'
 import { RowContextMenu } from '@/features/workspace/components/RowContextMenu'
 import { AddInline, WorkspaceActionsMenu } from '@/features/workspace/components/WorkspaceSidebar'
-import { remoteAxisDecoration } from '@/features/shell/lib/remote-axis'
+import { remoteAxisDecoration } from '@/den-session'
 import { cn } from '@/shared/lib/utils'
 
 export type DotdenHeadlessTree = ReturnType<typeof useTree<DotdenTreeNode>>

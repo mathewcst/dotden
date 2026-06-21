@@ -6,7 +6,7 @@
  * Commit — through the store seam, node environment, no DOM.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { createDenSessionStore } from '../../../shell/lib/den-session-store'
+import { createDenSessionStore } from '../../store'
 import type { DotdenApi } from '@shared/ipc-api'
 import type { SecretFinding } from '@shared/secrets'
 

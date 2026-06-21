@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { clearToasts, dismissToast, getToasts, showToast } from '../toast-store'
+import { clearToasts, dismissToast, getToasts, showToast } from '../toast'
 
 afterEach(() => {
   clearToasts()

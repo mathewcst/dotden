@@ -10,13 +10,13 @@ import {
   Trash2,
 } from 'lucide-react'
 import { Button } from '@/ui/button'
-import { toast } from '@/ui/toast'
+import { toast } from '@/lib/toast'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import { WindowTitleBar } from '@/shared/components/WindowControls'
 import { StatusTag } from '@/shared/components/StatusTag'
 import { ErrorBanner } from '@/features/shell/components/ErrorBanner'
-import { useDenSession } from '@/features/shell/components/DenSessionProvider'
-import { operationError, type OperationError } from '@/features/shell/lib/operation-error'
+import { useDenSession } from '@/den-session'
+import { operationError, type OperationError } from '@/lib/operation-error'
 import type { ApplyFileResult, IncomingReviewItem, IncomingSummary } from '@shared/den'
 
 /**

@@ -14,9 +14,9 @@
  */
 import type { DotdenApi } from '@shared/ipc-api'
 import type { SecretFinding } from '@shared/secrets'
-import type { DenSessionGet, DenSessionSet } from '../../shell/lib/den-session-store'
-import { operationError } from '../../shell/lib/operation-error'
-import { toast } from '../../../ui/toast-store'
+import type { DenSessionGet, DenSessionSet } from '../store'
+import { operationError } from '../../lib/operation-error'
+import { toast } from '../../lib/toast'
 
 /** The commit-result fields shared by a plain Commit and a Secret conversion's Commit. */
 export interface CommitOutcome {
