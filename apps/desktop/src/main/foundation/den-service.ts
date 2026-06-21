@@ -51,7 +51,7 @@ import {
   DEFAULT_AUTOMATION_LEVEL,
   type AutomationLevel,
 } from './apply/automation-policy.js'
-import type { Os, Scope } from './platform/os-scope.js'
+import type { Os, Scope } from '../../shared/scope.js'
 import { PushQueue } from './sync/push-queue.js'
 import { isOfflineError } from './sync/offline.js'
 import type { UnsubscribeDisposition } from './settings/subscription-settings.js'

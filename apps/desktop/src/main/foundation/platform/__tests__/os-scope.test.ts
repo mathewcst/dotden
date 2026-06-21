@@ -19,9 +19,8 @@ import {
   narrowScope,
   scopeAppliesOn,
   scopedOutPaths,
-  type Os,
-  type Scope,
 } from '../os-scope.js'
+import type { Os, Scope } from '../../../../shared/scope.js'
 
 /** The three desktop OSes dotden v1 scopes between, for the randomized property runs. */
 const OSES: readonly Os[] = ['darwin', 'linux', 'win32']

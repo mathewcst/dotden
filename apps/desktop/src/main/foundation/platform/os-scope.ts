@@ -27,45 +27,10 @@
  * which renders from {@link scopedOutPaths}.
  */
 
-/**
- * The OS values dotden scopes to — the platform identifiers a File/Folder can apply on.
- *
- * Structurally a subset of Node's `process.platform` union (mirrors the shared
- * {@link import('../../shared/ipc-api.js').Platform}); declared locally so this pure
- * module needs no `@types/node` and the renderer can import the type without pulling in
- * node types. dotden's v1 cares about the three desktop OSes, but the model is the full
- * string union so an unusual `process.platform` is never silently dropped.
- */
-export type Os =
-  | 'aix'
-  | 'android'
-  | 'darwin'
-  | 'freebsd'
-  | 'haiku'
-  | 'linux'
-  | 'openbsd'
-  | 'sunos'
-  | 'win32'
-  | 'cygwin'
-  | 'netbsd'
-
-/**
- * A **Scope**: the set of OSes a File or Folder applies on, or `null` for the universal
- * (unrestricted) Scope.
- *
- * The distinction is deliberate and load-bearing:
- * - `null` ⇒ **applies everywhere** (the default for a freshly Tracked File — dotden never
- *   silently scopes a File out). It is the identity for intersection: narrowing anything by
- *   `null` leaves it unchanged, and a child under a `null`-Scoped Folder inherits no
- *   restriction.
- * - a concrete array ⇒ **applies only on these OSes** (a narrowing). An **empty** array is
- *   a real, representable Scope meaning "applies nowhere" — the floor a narrowing can reach
- *   (e.g. a Linux-only child under a Windows-only Folder), never a silent error.
- *
- * Stored as a plain readonly array (not a Set) so it serializes directly into the synced
- * `.dotden/` JSON (ADR 0024) and produces small, human-readable git diffs.
- */
-export type Scope = readonly Os[] | null
+// The Os + Scope TYPES are the cross-process contract — they moved to
+// `src/shared/scope.ts` so the renderer can speak Scope without reaching into
+// `main/**` (ADR 0030). The OPERATIONS on them stay here (main-side behavior).
+import type { Os, Scope } from '../../../shared/scope.js'
 
 /**
  * Intersect two Scopes — the one primitive the whole "narrowable, never broadenable"

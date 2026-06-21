@@ -49,7 +49,7 @@ import type { PmPreference } from '../main/foundation/secrets/pm-preference.js'
 import type { FileVersion } from '../main/foundation/file-history/file-history.js'
 import type { ResolutionChoice } from '../main/foundation/apply/conflict-model.js'
 import type { Group, Workspace } from '../main/foundation/den-store.js'
-import type { Scope } from '../main/foundation/platform/os-scope.js'
+import type { Scope } from './scope.js'
 import type {
   ClaimSuggestion,
   EnvironmentWithAttribution,

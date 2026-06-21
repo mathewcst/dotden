@@ -20,7 +20,8 @@ import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, relative, resolve } from 'node:path'
 import { parseChezmoiStatus } from './chezmoi-status.js'
 import { resolveContainedPath } from '../platform/path-safety.js'
-import { scopedOutPaths, type Os, type Scope } from '../platform/os-scope.js'
+import { scopedOutPaths } from '../platform/os-scope.js'
+import type { Os, Scope } from '../../../shared/scope.js'
 import { renderSubscriptionIgnore } from '../settings/subscription-ignore.js'
 import {
   renderSecretReferenceTemplate,

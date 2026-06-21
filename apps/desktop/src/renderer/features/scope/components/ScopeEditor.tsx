@@ -1,5 +1,5 @@
 import { cn } from '@/shared/lib/utils'
-import type { Os, Scope } from '../../../../main/foundation/platform/os-scope'
+import type { Os, Scope } from '@shared/scope'
 
 /**
  * The three desktop OSes dotden v1 scopes between, with their user-facing labels (issue

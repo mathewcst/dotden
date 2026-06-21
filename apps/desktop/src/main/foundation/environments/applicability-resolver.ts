@@ -16,13 +16,8 @@
  * the unsafe state"), not merely "remembered to check".
  */
 import type { EnvironmentEntry, WorkspacesDoc } from '../den-store.js'
-import {
-  effectiveScope,
-  narrowScope,
-  scopeAppliesOn,
-  type Os,
-  type Scope,
-} from '../platform/os-scope.js'
+import { effectiveScope, narrowScope, scopeAppliesOn } from '../platform/os-scope.js'
+import type { Os, Scope } from '../../../shared/scope.js'
 
 /**
  * Module-private brand symbol. It is a REAL runtime symbol (so the witness can
