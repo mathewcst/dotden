@@ -80,6 +80,23 @@ export class RemoteConnectError extends Error {
 }
 
 /**
+ * Thrown by {@link RemoteClient.latestRemoteSha} when the background SHA read fails.
+ *
+ * The tray poller reads a STORED Remote URL every tick, so a raw `CommandFailedError` here would
+ * (a) embed the full URL in `.message` (`git ls-remote <url> ... exited 128: <stderr>`) and dump
+ * it into logs, and (b) lose the credential hint the interactive path already gives. This carries
+ * the SAME sanitized, URL-free {@link RemoteDiagnostics} as preflight — including the
+ * "Repository not found may mean no access" hint — so the poller can log a concise, actionable
+ * line instead of a stack dump. `super(diagnostics.help)` makes `.message` the host-only help text.
+ */
+export class RemotePollError extends Error {
+  /** Sanitized diagnostics suitable for log display; never contains the raw URL. */
+  constructor(readonly diagnostics: RemoteDiagnostics) {
+    super(diagnostics.help)
+  }
+}
+
+/**
  * Provider-agnostic Remote connector for dotden's V1-Lean auth model.
  *
  * Public methods map directly to the underlying git/chezmoi primitives:
@@ -241,11 +258,19 @@ export class RemoteClient {
     // can smuggle `--upload-pack=<local-script>` and execute code on the local/file transport.
     if (!isPlausibleRemoteUrl(url)) throw new Error('Invalid Remote URL')
     const gitCommand = await this.effectiveGitCommand(request.signal)
-    const result = await this.runGit(
-      gitCommand,
-      ['ls-remote', '--end-of-options', url, `refs/heads/${branch}`],
-      request.signal,
-    )
+    let result: CommandResult
+    try {
+      result = await this.runGit(
+        gitCommand,
+        ['ls-remote', '--end-of-options', url, `refs/heads/${branch}`],
+        request.signal,
+      )
+    } catch (error) {
+      // The poller passes a stored URL, so a raw CommandFailedError would leak that URL into logs
+      // and drop the credential hint. Route through the shared sanitizer so the surfaced error is
+      // host/scheme-only and carries the "Repository not found may mean no access" guidance.
+      throw new RemotePollError(diagnosticsFromError(url, error))
+    }
     const [sha] = result.stdout.trim().split(/\s+/)
     return isFullSha(sha) ? sha : null
   }

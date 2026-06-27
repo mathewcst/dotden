@@ -16,7 +16,12 @@ import {
   type CommandResult,
   type RunCommandOptions,
 } from '../../platform/process.js'
-import { RemoteClient, RemoteConnectError, RemotePreflightError } from '../remote-client.js'
+import {
+  RemoteClient,
+  RemoteConnectError,
+  RemotePollError,
+  RemotePreflightError,
+} from '../remote-client.js'
 
 const trace = { traceId: 'trace-remote-client-test' }
 
@@ -297,6 +302,36 @@ describe('RemoteClient', () => {
     ).resolves.toMatchObject({ reachable: false })
     // The guard short-circuits before any ls-remote spawn.
     expect(lsRemoteCalls).toEqual([])
+  })
+
+  it('surfaces a sanitized RemotePollError with the credential hint when latestRemoteSha fails', async () => {
+    // GitHub returns "Repository not found" for both a missing repo AND a private repo the user's
+    // credentials cannot see — the poller must carry that hint, not a raw URL-leaking dump.
+    const client = createClient(async (command, args) => {
+      if (command === '/bin/chezmoi') return result(command, args, '')
+      throw new CommandFailedError({
+        command,
+        args,
+        exitCode: 128,
+        stdout: '',
+        stderr: 'remote: Repository not found.\n',
+      })
+    })
+
+    const url = 'https://github.com/owner/private.git'
+    const error = await client
+      .latestRemoteSha(url, 'main', { _trace: trace })
+      .catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(RemotePollError)
+    const pollError = error as RemotePollError
+    expect(pollError.diagnostics.host).toBe('github.com')
+    expect(pollError.diagnostics.exitCode).toBe(128)
+    // The hint explains the ambiguous "Repository not found" so a private-repo access gap is clear.
+    expect(pollError.diagnostics.help).toContain('your credentials may not have access')
+    // No raw URL survives on the message or diagnostics.
+    const surfaced = `${pollError.message} ${JSON.stringify(pollError.diagnostics)}`
+    expect(surfaced).not.toContain('github.com/owner/private.git')
   })
 
   it('throws on a leading-dash Remote URL in latestRemoteSha (defense in depth)', async () => {

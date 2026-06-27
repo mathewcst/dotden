@@ -83,7 +83,7 @@ and where it leads**. Read both for a complete picture.
 - **Returning** — [returning/](screens/returning/) (claim identity → pick Workspaces → Review & Apply)
 - **Operations (Commit · Apply)** — [operation surface](screens/operation-surface.md) (shared `ChangeList | Diff | OperationPanel` skeleton; Commit + Review & Apply variants) · [conflict resolver](screens/conflict-resolver.md) (in-center resolution)
 - **File history** — [file history & restore](screens/file-history.md)
-- **Secrets & errors** — [secret detection & references](screens/secrets-and-errors.md)
+- **Secrets & errors** — [secret detection & references](../design-system/screens/secret-and-errors.md)
 - **Settings** — [settings/](screens/settings/) (Automation · Commit · Sync & polling · Repository · Privacy · Environments · Diagnostics · About)
 - **Tray & notifications** — [tray & OS notifications](screens/tray-and-notifications.md)
 - **Diagnostics** — [diagnostics console](screens/diagnostics.md)

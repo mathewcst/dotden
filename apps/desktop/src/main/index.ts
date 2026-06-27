@@ -55,17 +55,14 @@ import {
   readDiagnosticsSettings,
   writeDiagnosticsSettings,
 } from './foundation/settings/diagnostics-settings.js'
-import { RemoteClient } from './foundation/sync/remote-client.js'
+import { RemoteClient, RemotePollError } from './foundation/sync/remote-client.js'
 import type { UnsubscribeDisposition } from '../shared/settings.js'
 import {
   readUnsubscribeDisposition,
   writeUnsubscribeDisposition,
 } from './foundation/settings/subscription-settings.js'
 import type { PollCadenceProfile, SyncSettings } from '../shared/settings.js'
-import {
-  DEFAULT_APPEARANCE_SETTINGS,
-  type NotifyOn,
-} from '../shared/appearance-settings.js'
+import { DEFAULT_APPEARANCE_SETTINGS, type NotifyOn } from '../shared/appearance-settings.js'
 import { readSyncSettings, writeSyncSettings } from './foundation/settings/sync-settings.js'
 import { resolveBundledTools } from './foundation/platform/tools.js'
 import {
@@ -74,7 +71,10 @@ import {
   type PollCadence,
 } from './foundation/system/tray-poller.js'
 import { dispatchIncomingAutomation } from './foundation/sync/automation-dispatch.js'
-import { checkForUpdates as runUpdateCheck, type UpdateFeed } from './foundation/system/update-check.js'
+import {
+  checkForUpdates as runUpdateCheck,
+  type UpdateFeed,
+} from './foundation/system/update-check.js'
 import { readUpdateSettings, writeUpdateSettings } from './foundation/system/update-settings.js'
 import { notificationEnabled } from './foundation/system/notification-policy.js'
 import { registerIpcBridge } from './ipc/ipc-bridge.js'
@@ -426,9 +426,7 @@ function getDiagnosticsSettings(): Promise<DiagnosticsSettings> {
   return readDiagnosticsSettings(app.getPath('userData'))
 }
 
-async function setDiagnosticsSettings(
-  settings: DiagnosticsSettings,
-): Promise<DiagnosticsSettings> {
+async function setDiagnosticsSettings(settings: DiagnosticsSettings): Promise<DiagnosticsSettings> {
   await writeDiagnosticsSettings(app.getPath('userData'), settings)
   return settings
 }
@@ -824,8 +822,22 @@ async function armTrayPoller(): Promise<void> {
       },
       // Seed with this environment's HEAD so the first Remote SHA == HEAD is "nothing new".
       knownSha: snapshot.headSha,
-      // Surface a poll error without crashing the watcher (never fail silently).
-      onError: (error) => console.error('[dotden] TrayPoller read failed:', error),
+      // Surface a poll error without crashing the watcher (never fail silently). A RemotePollError
+      // already carries sanitized, URL-free diagnostics with an actionable hint (e.g. "Repository
+      // not found" may mean the user's git credentials lack access), so log that concise line
+      // rather than dumping the raw CommandFailedError object; fall back to the raw error otherwise.
+      onError: (error) => {
+        if (error instanceof RemotePollError) {
+          const { host, exitCode, help } = error.diagnostics
+          console.error(
+            `[dotden] TrayPoller couldn't read ${host}` +
+              (exitCode !== undefined ? ` (git exited ${exitCode})` : '') +
+              `: ${help}`,
+          )
+        } else {
+          console.error('[dotden] TrayPoller read failed:', error)
+        }
+      },
     })
     trayPoller.start()
 

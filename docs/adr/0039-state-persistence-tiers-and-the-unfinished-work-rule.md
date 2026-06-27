@@ -74,7 +74,7 @@ its persistence is designed). See the fallback below.
 | **Commit composer — message draft** | **②** backup-snapshot | genuinely authored, byte-exact restorable; persisted via renderer zustand `persist` (localStorage), `partialize`d to the message + `version`ed; restores as **editable** text, shown with a notice if the selection no longer matches |
 | **Onboarding / pick-Workspaces partial selections** | **③** drop-with-notice (+ **①** for view-steps) | setup inputs are the most likely to be stale/invalid on relaunch (un-connected Remote, half-auth'd Provider, files changed on disk); restart the flow and say why. Any step that's a pure view over real state (the Den file scan, git status) is **re-derived**, never snapshotted — so "drop" only ever costs a few clicks |
 | **View state** (last environment, tree expansion, sidebar, last route) | **Tier 1** | not unfinished-work; persist freely |
-| **Secret migration mid-flight** (J05, not yet mapped) | **deferred** | classify when J05 is designed; until then the fallback governs it |
+| **Secret migration mid-flight** (J05) | **①** re-derive | no parallel "conversion in progress" store; vault + disk + git are the record. The vault-first, value-preserving Convert order (write vault → confirm → rewrite File → commit; reuse an existing vault item) makes every crash point idempotently recoverable by re-running the scan/Convert at the next Commit — half-written item reused, templated-uncommitted File is a normal `git status` edit. Mapped in [`journeys/05-secrets.md`](../user-flow/journeys/05-secrets.md) |
 
 ## Fallback for un-tabled surfaces
 

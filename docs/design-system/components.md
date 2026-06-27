@@ -255,8 +255,13 @@ A file carries **two independent status axes**, rendered together on the tree ro
   density; drive it with `renderRowDecoration` returning a text glyph — **no `unsafeCSS`, no
   `setGitStatus` overload**. `renderRowDecoration` is a separate lane
   (`[data-item-section='decoration']`, `flex:1; justify-content:flex-end`); per-row actions use
-  `renderContextMenu` (Commit/Apply/Untrack/Delete everywhere). Verified against
-  `@pierre/trees@1.0.0-beta.4`.
+  `renderContextMenu` (Commit/Apply/Untrack/Delete everywhere). _(This spike was verified against the
+  former `@pierre/trees`; the tree has since moved to `@headless-tree/react`
+  ([ADR 0032](../adr/0032-tree-library-headless-tree-over-pierre.md)) and to the one-node **Nook** model
+  ([ADR 0040](../adr/0040-one-organizational-node-the-nook.md)). The `renderRowDecoration` /
+  `renderContextMenu` / `setGitStatus` names above are pierre-specific and must be re-expressed against
+  `@headless-tree`; reconcile this whole tree section in the design pass — see
+  [`user-flow/screens/file-tree.md`](../user-flow/screens/file-tree.md).)_
 
 ## AppShell & default panes (the main-app scaffold)
 
