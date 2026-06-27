@@ -17,3 +17,17 @@ A cross-platform desktop GUI that wraps **chezmoi**, letting a user manage and s
 - **chezmoi is a tool, not a mandate** (ADR 0038, revising ADR 0003): use chezmoi where it does the job best (attributes, templating, secrets, idempotent apply); own transport, source-state merge, and anything interactive (git directly + dotden's `ConflictModel`). The repo still stays a valid chezmoi setup and vocabulary still maps to chezmoi where chezmoi owns the concept.
 - **Never fail silently** — surface what happened and the fix; empty/fallback states are first-class UI.
 - Public OSS: **over-comment rather than under** (ADR 0021).
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs live as local markdown files under `.scratch/<feature>/` (no remote tracker). See [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
+
+### Triage labels
+
+Five canonical triage roles, default strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md).
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See [`docs/agents/domain.md`](docs/agents/domain.md).
